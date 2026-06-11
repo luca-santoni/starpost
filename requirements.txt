@@ -1,0 +1,7 @@
+# Runtime dependencies. For development install, prefer:  pip install -e ".[dev]"
+PySide6>=6.6
+pyqtgraph>=0.13
+matplotlib>=3.8
+pandas>=2.1
+PyYAML>=6.0
+Jinja2>=3.1

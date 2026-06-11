@@ -1,0 +1,28 @@
+/* starpost custom theme (placeholder). The UI is fully custom via QSS; iterate
+   on this file. Kept intentionally light so the scaffold is legible. */
+
+QWidget {
+    font-size: 13px;
+}
+
+QPushButton {
+    padding: 4px 10px;
+    border: 1px solid #4e79a7;
+    border-radius: 4px;
+    background: #f4f7fb;
+}
+QPushButton:hover { background: #e7eef7; }
+QPushButton:pressed { background: #d8e3f0; }
+
+QProgressBar {
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk { background: #4e79a7; }
+
+QPlainTextEdit {
+    font-family: monospace;
+    background: #1e1e1e;
+    color: #d4d4d4;
+}
