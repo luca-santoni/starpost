@@ -1,0 +1,26 @@
+# Default settings, copied to ~/.config/starpost/settings.yaml on first run.
+# User edits the copy (or via the in-app Settings dialog), not this file.
+
+# Path to the starccm+ executable. TODO: set the team's default install path.
+starccm_path: ""
+
+license:
+  # mode: "podkey_server" (default) | "license_file"
+  mode: podkey_server
+  podkey: ""                 # Power-on-Demand key  -> -power -podkey <KEY>
+  licpath: ""                # license server       -> -licpath <port>@<server>
+  license_file: ""           # used only when mode == license_file -> -licpath <file>
+
+# Default folder for exports (CSV/JPG/PDF). Chosen per-run in the UI; this is the
+# starting location of the picker. Empty = user's home.
+default_output_dir: ""
+
+# Extra arguments appended verbatim to every starccm+ invocation.
+extra_args: []
+
+# Plot axis classification heuristics. A monitor plot whose name matches a
+# residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
+# can be overridden per-plot in the UI or pinned in a profile.
+plot_classification:
+  residual_keywords: [residual, residuals]
+  force_keywords: [force, drag, lift, moment, "cd", "cl"]

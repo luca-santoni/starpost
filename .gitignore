@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# App runtime artifacts
+*.sim          # never commit simulation files (large / licensed)
+/tmp_macros/
+*.log
+
+# OS
+.DS_Store
