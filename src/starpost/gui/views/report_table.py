@@ -5,9 +5,21 @@ import numbers
 
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, Qt
-from PySide6.QtWidgets import QTableView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMenu, QTableView, QVBoxLayout, QWidget
 
 from starpost.data.models import SimResult
+
+# Per-file report columns and the sort options offered on the header menu:
+# (label, column, ascending).
+_SORT_OPTIONS = [
+    ("Name (A–Z)", "report", True),
+    ("Name (Z–A)", "report", False),
+    ("Value (ascending)", "value", True),
+    ("Value (descending)", "value", False),
+    ("Units (A–Z)", "units", True),
+    ("Units (Z–A)", "units", False),
+]
+_SINGLE_COLUMNS = {"report", "value", "units"}
 
 
 class _DataFrameModel(QAbstractTableModel):
@@ -56,6 +68,12 @@ class ReportTable(QWidget):
         self._decimals = decimals
         self._zero_threshold = zero_threshold
         self._df: pd.DataFrame | None = None
+        self._sort: tuple[str, bool] | None = None  # (column, ascending)
+
+        header = self._table.horizontalHeader()
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_header_menu)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self._table)
 
@@ -77,11 +95,47 @@ class ReportTable(QWidget):
         self._table.setModel(None)
 
     def show_dataframe(self, df: pd.DataFrame) -> None:
+        # Keep the source frame; display a sorted view if a sort is active.
         self._df = df
         self._table.setModel(
-            _DataFrameModel(df, self._decimals, self._zero_threshold)
+            _DataFrameModel(self._sorted(df), self._decimals, self._zero_threshold)
         )
         self._table.resizeColumnsToContents()
+
+    # --- sorting (per-file view) ----------------------------------------
+    def _sorted(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply the active sort, if the column exists (per-file view only)."""
+        if self._sort is None:
+            return df
+        column, ascending = self._sort
+        if column not in df.columns:
+            return df  # e.g. comparison wide view has no report/value/units columns
+        # Names/units sort case-insensitively; values sort numerically.
+        key = (lambda s: s.str.lower()) if column in ("report", "units") else None
+        return df.sort_values(
+            by=column, ascending=ascending, kind="stable", key=key, na_position="last"
+        ).reset_index(drop=True)
+
+    def set_sort(self, column: str, ascending: bool) -> None:
+        """Set the active sort and re-render the current table."""
+        self._sort = (column, ascending)
+        if self._df is not None:
+            self.show_dataframe(self._df)
+
+    def _show_header_menu(self, pos) -> None:
+        # Sorting applies to the per-file report view (report/value/units).
+        if self._df is None or not _SINGLE_COLUMNS.issubset(self._df.columns):
+            return
+        menu = QMenu(self)
+        actions = {}
+        for label, column, ascending in _SORT_OPTIONS:
+            act = menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(self._sort == (column, ascending))  # tick the active sort
+            actions[act] = (column, ascending)
+        chosen = menu.exec(self._table.horizontalHeader().mapToGlobal(pos))
+        if chosen in actions:
+            self.set_sort(*actions[chosen])
 
     def show_single(
         self, result: SimResult, hide_zero: bool = False, selected: set[str] | None = None
