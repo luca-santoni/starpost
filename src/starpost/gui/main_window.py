@@ -140,11 +140,6 @@ class MainWindow(QMainWindow):
         self._sim_picker.currentTextChanged.connect(lambda _: self._on_view_changed())
         tb.addWidget(self._sim_picker)
 
-        tb.addWidget(QLabel(" Plot: "))
-        self._plot_picker = QComboBox()
-        self._plot_picker.currentTextChanged.connect(lambda _: self._render_plot())
-        tb.addWidget(self._plot_picker)
-
         tb.addSeparator()
         self._clear_btn = QPushButton("Clear data")
         self._clear_btn.setObjectName("clearDataButton")
@@ -318,7 +313,6 @@ class MainWindow(QMainWindow):
         plot_union = sorted({n for r in results for n in r.plot_names()})
         self.selection.populate(report_union, plot_union)
 
-        self._sync_plot_picker()
         self._refresh_views()
 
     def _on_view_changed(self) -> None:
@@ -328,24 +322,16 @@ class MainWindow(QMainWindow):
         self._refresh_views()
 
     def _on_selection_changed(self) -> None:
-        # A report/plot checkbox toggled: keep the plot picker in step with the
-        # currently selected plots, then redraw.
-        self._sync_plot_picker()
+        # A report/plot checkbox toggled: redraw.
         self._refresh_views()
 
-    def _sync_plot_picker(self) -> None:
-        """Repopulate the Plot picker from the selected plots, keeping the
-        current choice if it's still selected."""
+    def _selected_plot_name(self) -> str:
+        """The monitor plot to display: the first checked one (sorted)."""
         results = [r for r in self.store.all() if r.error is None]
         plot_union = sorted({n for r in results for n in r.plot_names()})
-        available = [p for p in plot_union if p in self.selection.selected_plots()]
-        current = self._plot_picker.currentText()
-        self._plot_picker.blockSignals(True)
-        self._plot_picker.clear()
-        self._plot_picker.addItems(available)
-        if current in available:
-            self._plot_picker.setCurrentText(current)
-        self._plot_picker.blockSignals(False)
+        selected = self.selection.selected_plots()
+        available = [p for p in plot_union if p in selected]
+        return available[0] if available else ""
 
     def _refresh_views(self) -> None:
         self._render_reports()
@@ -372,10 +358,10 @@ class MainWindow(QMainWindow):
 
     def _render_plot(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
-        plot_name = self._plot_picker.currentText()
+        plot_name = self._selected_plot_name()
         if not plot_name:
-            # No plot selected (e.g. the last one was just unchecked): blank the
-            # view rather than leaving the previously drawn plot on screen.
+            # No monitor plot selected (e.g. the last one was just unchecked):
+            # blank the view rather than leaving the previous plot on screen.
             self.plot_view.clear()
             return
         if self._mode.currentText() == "Comparison":
