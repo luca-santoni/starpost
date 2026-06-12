@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._build_toolbar()
 
-        self.selection.selection_changed.connect(self._refresh_views)
+        self.selection.selection_changed.connect(self._on_selection_changed)
         self._refresh_from_store()
 
     # --- layout ----------------------------------------------------------
@@ -211,12 +211,28 @@ class MainWindow(QMainWindow):
         self._sim_picker.addItems([r.sim_name for r in results])
         self._sim_picker.blockSignals(False)
 
+        self._sync_plot_picker()
+        self._refresh_views()
+
+    def _on_selection_changed(self) -> None:
+        # A report/plot checkbox toggled: keep the plot picker in step with the
+        # currently selected plots, then redraw.
+        self._sync_plot_picker()
+        self._refresh_views()
+
+    def _sync_plot_picker(self) -> None:
+        """Repopulate the Plot picker from the selected plots, keeping the
+        current choice if it's still selected."""
+        results = [r for r in self.store.all() if r.error is None]
+        plot_union = sorted({n for r in results for n in r.plot_names()})
+        available = [p for p in plot_union if p in self.selection.selected_plots()]
+        current = self._plot_picker.currentText()
         self._plot_picker.blockSignals(True)
         self._plot_picker.clear()
-        self._plot_picker.addItems([p for p in plot_union if p in self.selection.selected_plots()])
+        self._plot_picker.addItems(available)
+        if current in available:
+            self._plot_picker.setCurrentText(current)
         self._plot_picker.blockSignals(False)
-
-        self._refresh_views()
 
     def _refresh_views(self) -> None:
         self._render_reports()

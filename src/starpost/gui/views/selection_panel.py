@@ -26,7 +26,14 @@ from starpost.core.settings import Profile, list_profiles
 class _CheckList(QListWidget):
     changed = Signal()
 
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        # Connect once. User-driven check toggles emit `changed`; programmatic
+        # updates below block signals to avoid storms and emit explicitly.
+        self.itemChanged.connect(lambda _: self.changed.emit())
+
     def set_items(self, names: list[str], checked: bool = True) -> None:
+        self.blockSignals(True)
         self.clear()
         state = Qt.Checked if checked else Qt.Unchecked
         for n in names:
@@ -34,12 +41,14 @@ class _CheckList(QListWidget):
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(state)
             self.addItem(item)
-        self.itemChanged.connect(lambda _: self.changed.emit())
+        self.blockSignals(False)
 
     def set_checked(self, names: set[str]) -> None:
+        self.blockSignals(True)
         for i in range(self.count()):
             it = self.item(i)
             it.setCheckState(Qt.Checked if it.text() in names else Qt.Unchecked)
+        self.blockSignals(False)
 
     def checked(self) -> list[str]:
         return [
@@ -49,9 +58,11 @@ class _CheckList(QListWidget):
         ]
 
     def set_all(self, state: bool) -> None:
+        self.blockSignals(True)
         s = Qt.Checked if state else Qt.Unchecked
         for i in range(self.count()):
             self.item(i).setCheckState(s)
+        self.blockSignals(False)
 
 
 class SelectionPanel(QWidget):
