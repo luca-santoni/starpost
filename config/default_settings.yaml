@@ -33,6 +33,13 @@ hide_empty_reports: true
 # hidden when hide_empty_reports is on).
 zero_threshold: 1.0e-5
 
+# Hide monitor plots whose values are all ~0 from the plot view.
+hide_empty_monitors: true
+
+# Monitors whose values are all below this absolute magnitude are treated as 0
+# (and hidden when hide_empty_monitors is on).
+monitor_zero_threshold: 1.0e-5
+
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.

@@ -58,6 +58,8 @@ class Settings:
     report_decimals: int = 4      # decimal places shown for report values
     hide_empty_reports: bool = True   # hide reports whose value is ~0
     zero_threshold: float = 1e-5  # |value| below this is treated as 0
+    hide_empty_monitors: bool = True  # hide monitor plots whose values are all ~0
+    monitor_zero_threshold: float = 1e-5  # |value| below this is treated as 0
     plot_classification: dict = field(
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
@@ -98,6 +100,8 @@ class Settings:
             report_decimals=int(d.get("report_decimals", 4)),
             hide_empty_reports=bool(d.get("hide_empty_reports", True)),
             zero_threshold=float(d.get("zero_threshold", 1e-5)),
+            hide_empty_monitors=bool(d.get("hide_empty_monitors", True)),
+            monitor_zero_threshold=float(d.get("monitor_zero_threshold", 1e-5)),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
         )
@@ -120,6 +124,8 @@ class Settings:
             "report_decimals": self.report_decimals,
             "hide_empty_reports": self.hide_empty_reports,
             "zero_threshold": self.zero_threshold,
+            "hide_empty_monitors": self.hide_empty_monitors,
+            "monitor_zero_threshold": self.monitor_zero_threshold,
             "plot_classification": self.plot_classification,
         }
 

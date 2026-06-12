@@ -5,9 +5,10 @@ that group's individual settings. On Save, the values are written back into the
 Settings object and persisted via Settings.save().
 
 Covers everything in settings.yaml:
-  - STAR-CCM+:           starccm_path, default_output_dir, extra_args
-  - License:             mode, podkey, licpath, license_file
-  - Plot classification: residual_keywords, force_keywords
+  - STAR-CCM+:  starccm_path, default_output_dir, extra_args
+  - License:    mode, podkey, licpath, license_file
+  - Reports:    report_decimals, hide_empty_reports, zero_threshold
+  - Plots:      hide_empty_monitors, monitor_zero_threshold, classification keywords
 """
 from __future__ import annotations
 
@@ -81,7 +82,7 @@ class SettingsDialog(QDialog):
         self._add_page("STAR-CCM+", self._build_starccm_page())
         self._add_page("License", self._build_license_page())
         self._add_page("Reports", self._build_reports_page())
-        self._add_page("Plot classification", self._build_plots_page())
+        self._add_page("Plots", self._build_plots_page())
         self._add_page("Appearance", self._build_appearance_page())
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
@@ -196,12 +197,34 @@ class SettingsDialog(QDialog):
         return self._wrap(form)
 
     def _build_plots_page(self) -> QWidget:
+        self._hide_empty_monitors = QCheckBox("Hide empty monitors")
+
+        self._monitor_zero_threshold = QLineEdit()
+        self._monitor_zero_threshold.setFixedWidth(110)
+        validator = QDoubleValidator(0.0, 1e12, 15)
+        validator.setNotation(QDoubleValidator.ScientificNotation)
+        self._monitor_zero_threshold.setValidator(validator)
+        self._monitor_zero_threshold.setPlaceholderText("1e-05")
+
         self._residual = QLineEdit()
         self._residual.setPlaceholderText("residual, residuals")
         self._force = QLineEdit()
         self._force.setPlaceholderText("force, drag, lift, moment, cd, cl")
 
         form = QFormLayout()
+        form.addRow("", self._hide_empty_monitors)
+        hide_hint = QLabel("Hide monitors whose values are all ~0 (see Zero threshold).")
+        hide_hint.setObjectName("hint")
+        hide_hint.setWordWrap(True)
+        form.addRow("", hide_hint)
+        form.addRow("Zero threshold", self._monitor_zero_threshold)
+        zt_hint = QLabel(
+            "Monitors whose values are all below this magnitude are treated as 0 "
+            "(and hidden when Hide empty monitors is on)."
+        )
+        zt_hint.setObjectName("hint")
+        zt_hint.setWordWrap(True)
+        form.addRow("", zt_hint)
         form.addRow("Residual keywords", self._residual)
         form.addRow("Force keywords", self._force)
         hint = QLabel(
@@ -352,6 +375,9 @@ class SettingsDialog(QDialog):
         self._hide_empty.setChecked(s.hide_empty_reports)
         self._zero_threshold.setText(f"{s.zero_threshold:g}")
 
+        self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
+        self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
+
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
         self._force.setText(", ".join(pc.get("force_keywords", [])))
@@ -368,6 +394,11 @@ class SettingsDialog(QDialog):
         s.hide_empty_reports = self._hide_empty.isChecked()
         try:
             s.zero_threshold = abs(float(self._zero_threshold.text()))
+        except ValueError:
+            pass  # keep previous value if the field is blank/invalid
+        s.hide_empty_monitors = self._hide_empty_monitors.isChecked()
+        try:
+            s.monitor_zero_threshold = abs(float(self._monitor_zero_threshold.text()))
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
         s.starccm_path = self._exe.text().strip()

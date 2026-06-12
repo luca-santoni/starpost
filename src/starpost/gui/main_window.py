@@ -79,6 +79,9 @@ class MainWindow(QMainWindow):
             zero_threshold=settings.zero_threshold,
         )
         self.plot_view = PlotView()
+        self.plot_view.set_filter(
+            settings.hide_empty_monitors, settings.monitor_zero_threshold
+        )
         self.log_console = LogConsole()
 
         self._build_layout()
@@ -259,6 +262,9 @@ class MainWindow(QMainWindow):
         results = [r for r in self.store.all() if r.error is None]
         plot_name = self._plot_picker.currentText()
         if not plot_name:
+            # No plot selected (e.g. the last one was just unchecked): blank the
+            # view rather than leaving the previously drawn plot on screen.
+            self.plot_view.clear()
             return
         if self._mode.currentText() == "Comparison":
             pairs = []
@@ -301,6 +307,10 @@ class MainWindow(QMainWindow):
             log.info("Settings saved to %s", settings_path())
             self.report_table.set_decimals(self.settings.report_decimals)
             self.report_table.set_zero_threshold(self.settings.zero_threshold)
+            self.plot_view.set_filter(
+                self.settings.hide_empty_monitors,
+                self.settings.monitor_zero_threshold,
+            )
             self._refresh_views()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
