@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -19,11 +21,14 @@ MAX_FILES = 25  # v1 expected ceiling; warn beyond this
 
 class FileListPanel(QWidget):
     files_changed = Signal(list)  # list[Path]
+    open_requested = Signal(Path)  # a single .sim to extract & view
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._list = QListWidget()
         self._list.setSelectionMode(QListWidget.ExtendedSelection)
+        self._list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._list.customContextMenuRequested.connect(self._show_context_menu)
 
         add_files = QPushButton("Add files…")
         add_folder = QPushButton("Add folder…")
@@ -32,7 +37,7 @@ class FileListPanel(QWidget):
         add_files.clicked.connect(self._add_files)
         add_folder.clicked.connect(self._add_folder)
         remove.clicked.connect(self._remove_selected)
-        clear.clicked.connect(self._clear)
+        clear.clicked.connect(self._clear_confirmed)
 
         buttons = QHBoxLayout()
         for b in (add_files, add_folder, remove, clear):
@@ -69,6 +74,33 @@ class FileListPanel(QWidget):
         for item in self._list.selectedItems():
             self._list.takeItem(self._list.row(item))
         self.files_changed.emit(self.files())
+
+    def _show_context_menu(self, pos) -> None:
+        item = self._list.itemAt(pos)
+        if item is None:
+            return
+        # Right-clicking outside the current selection acts on just that item.
+        if not item.isSelected():
+            self._list.setCurrentItem(item)
+        menu = QMenu(self)
+        open_act = menu.addAction("Open")
+        remove_act = menu.addAction("Remove")
+        chosen = menu.exec(self._list.mapToGlobal(pos))
+        if chosen is open_act:
+            self.open_requested.emit(Path(item.text()))
+        elif chosen is remove_act:
+            self._remove_selected()
+
+    def _clear_confirmed(self) -> None:
+        """Clear the list only after the user confirms the warning."""
+        if self._list.count() == 0:
+            return
+        if QMessageBox.warning(
+            self, "Clear files",
+            "This will remove all files from the list. Continue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) == QMessageBox.Yes:
+            self._clear()
 
     def _clear(self) -> None:
         self._list.clear()

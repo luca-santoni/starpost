@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
 
         self.selection.selection_changed.connect(self._on_selection_changed)
+        self.file_list.open_requested.connect(self._open_file)
         self._refresh_from_store()
 
     # --- layout ----------------------------------------------------------
@@ -151,24 +152,47 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._clear_btn)
 
     # --- batch run -------------------------------------------------------
+    def _busy(self) -> bool:
+        return self._thread is not None and self._thread.isRunning()
+
+    def _missing_exe(self) -> bool:
+        """Warn (and return True) when the STAR-CCM+ path isn't configured."""
+        if self.settings.starccm_path:
+            return False
+        QMessageBox.warning(
+            self, "starpost",
+            "Set the STAR-CCM+ executable path in Settings first.",
+        )
+        return True
+
     def _run_batch(self) -> None:
         files = self.file_list.files()
         if not files:
             QMessageBox.information(self, "starpost", "Add at least one .sim file.")
             return
-        if not self.settings.starccm_path:
-            QMessageBox.warning(
-                self, "starpost",
-                "Set the STAR-CCM+ executable path in Settings first.",
-            )
+        if self._missing_exe():
             return
 
         out_dir = Path(
             QFileDialog.getExistingDirectory(self, "Folder for extracted data")
             or (self.settings.default_output_dir or str(Path.home()))
         )
+        self._start_jobs([Job(sim_file=f) for f in files], out_dir)
 
-        jobs = [Job(sim_file=f) for f in files]
+    def _open_file(self, path: Path) -> None:
+        """Extract a single .sim (right-click → Open) and show its data."""
+        if self._busy():
+            QMessageBox.information(self, "starpost", "A run is already in progress.")
+            return
+        if self._missing_exe():
+            return
+        out_dir = Path(self.settings.default_output_dir or str(Path.home()))
+        self._start_jobs([Job(sim_file=path)], out_dir)
+
+    def _start_jobs(self, jobs: list[Job], out_dir: Path) -> None:
+        """Run the given jobs on a worker thread, wiring progress to the UI."""
+        if self._busy():
+            return
         runner = StarRunner(self.settings)
 
         self._thread = QThread()
