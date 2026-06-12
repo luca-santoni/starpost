@@ -71,6 +71,11 @@ class ReportTable(QWidget):
         if self._df is not None:
             self.show_dataframe(self._df)
 
+    def clear(self) -> None:
+        """Blank the table — used when all loaded data is cleared."""
+        self._df = None
+        self._table.setModel(None)
+
     def show_dataframe(self, df: pd.DataFrame) -> None:
         self._df = df
         self._table.setModel(

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QSplitter,
     QTabWidget,
     QToolBar,
@@ -143,6 +144,12 @@ class MainWindow(QMainWindow):
         self._plot_picker.currentTextChanged.connect(lambda _: self._render_plot())
         tb.addWidget(self._plot_picker)
 
+        tb.addSeparator()
+        self._clear_btn = QPushButton("Clear data")
+        self._clear_btn.setObjectName("clearDataButton")
+        self._clear_btn.clicked.connect(self._clear_data)
+        tb.addWidget(self._clear_btn)
+
     # --- batch run -------------------------------------------------------
     def _run_batch(self) -> None:
         files = self.file_list.files()
@@ -198,6 +205,30 @@ class MainWindow(QMainWindow):
                 "The loaded .sim files don't all share the same reports/plots. "
                 "Comparison views may have gaps; selection lists show the union.",
             )
+
+    def _clear_data(self) -> None:
+        """Wipe all loaded sim data after a confirmation, leaving a blank workspace."""
+        if self._thread is not None and self._thread.isRunning():
+            QMessageBox.information(
+                self, "Clear data",
+                "A batch is still running. Stop it before clearing data.",
+            )
+            return
+        if QMessageBox.question(
+            self, "Clear data",
+            "Clear all loaded simulation data? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        # Clear extracted results only; keep the loaded .sim files so they can be
+        # re-run without re-adding them.
+        self.store.clear()
+        self.store.save_cache()  # persist the empty state so it survives restart
+        self.report_table.clear()
+        self.plot_view.clear()
+        self.log_console.clear()
+        self._refresh_from_store()
 
     # --- view refresh ----------------------------------------------------
     def _refresh_from_store(self) -> None:

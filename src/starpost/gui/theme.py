@@ -208,6 +208,18 @@ QGroupBox::title {
 QToolBar { background: $toolbar_bg; border-bottom: 1px solid $border; spacing: 4px; }
 QLabel { color: $text; }
 
+/* Destructive "Clear data" button: themed background (follows dark/light mode),
+   but fixed red text+border independent of the user's accent colour. */
+QPushButton#clearDataButton {
+    background: $btn_bg;
+    color: #e5484d;
+    border: 1px solid #e5484d;
+    border-radius: 4px;
+    padding: 4px 10px;
+}
+QPushButton#clearDataButton:hover { background: $btn_hover; }
+QPushButton#clearDataButton:pressed { background: $btn_pressed; }
+
 QListWidget#settingsNav {
     background: $base_bg;
     border: 1px solid $border;
