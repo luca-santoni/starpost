@@ -23,6 +23,30 @@ from PySide6.QtWidgets import (
 
 from starpost.data.models import MonitorPlot
 
+
+class _StayOpenMenu(QMenu):
+    """A menu that stays open when its items are clicked.
+
+    Lets the user toggle any number of monitors in one go; the menu only
+    closes on the usual dismiss gestures (click the button again, click
+    outside, or press Esc).
+    """
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        action = self.activeAction()
+        if (
+            action is not None
+            and action.isEnabled()
+            and self.actionGeometry(action).contains(event.position().toPoint())
+        ):
+            if action.isCheckable():
+                action.setChecked(not action.isChecked())
+            else:
+                action.trigger()
+            return  # swallow the release so the base class doesn't close the menu
+        super().mouseReleaseEvent(event)
+
+
 # A simple distinct-color cycle for series/sims.
 _COLORS = [
     "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
@@ -70,7 +94,7 @@ class PlotView(QWidget):
         self._monitor_btn.setObjectName("monitorSelect")
         self._monitor_btn.setText("Monitors")
         self._monitor_btn.setPopupMode(QToolButton.InstantPopup)
-        self._monitor_menu = QMenu(self._monitor_btn)
+        self._monitor_menu = _StayOpenMenu(self._monitor_btn)
         self._monitor_btn.setMenu(self._monitor_menu)
         self._series_actions: dict[str, object] = {}
 

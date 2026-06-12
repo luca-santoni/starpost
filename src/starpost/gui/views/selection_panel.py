@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QStyle,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -31,6 +33,34 @@ class _CheckList(QListWidget):
         # Connect once. User-driven check toggles emit `changed`; programmatic
         # updates below block signals to avoid storms and emit explicitly.
         self.itemChanged.connect(lambda _: self.changed.emit())
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # QoL: clicking anywhere on a row toggles its checkbox, not just the
+        # small indicator. The indicator still toggles natively, so we only
+        # toggle here when the click landed elsewhere on the row.
+        pos = event.position().toPoint()
+        item = self.itemAt(pos)
+        if (
+            item is not None
+            and event.button() == Qt.LeftButton
+            and bool(item.flags() & Qt.ItemIsUserCheckable)
+            and not self._on_check_indicator(item, pos)
+        ):
+            item.setCheckState(
+                Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
+            )
+        super().mousePressEvent(event)
+
+    def _on_check_indicator(self, item: QListWidgetItem, pos) -> bool:
+        """Whether `pos` (viewport coords) falls on the item's checkbox indicator."""
+        opt = QStyleOptionViewItem()
+        opt.initFrom(self)
+        opt.rect = self.visualItemRect(item)
+        opt.features |= QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+        rect = self.style().subElementRect(
+            QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, self
+        )
+        return rect.contains(pos)
 
     def set_items(self, names: list[str], checked: bool = True) -> None:
         self.blockSignals(True)
