@@ -132,12 +132,12 @@ class MainWindow(QMainWindow):
         tb.addWidget(QLabel(" View: "))
         self._mode = QComboBox()
         self._mode.addItems(["Per-file", "Comparison"])
-        self._mode.currentTextChanged.connect(lambda _: self._refresh_views())
+        self._mode.currentTextChanged.connect(lambda _: self._on_view_changed())
         tb.addWidget(self._mode)
 
         tb.addWidget(QLabel(" File: "))
         self._sim_picker = QComboBox()
-        self._sim_picker.currentTextChanged.connect(lambda _: self._refresh_views())
+        self._sim_picker.currentTextChanged.connect(lambda _: self._on_view_changed())
         tb.addWidget(self._sim_picker)
 
         tb.addWidget(QLabel(" Plot: "))
@@ -262,21 +262,69 @@ class MainWindow(QMainWindow):
         self._refresh_from_store()
 
     # --- view refresh ----------------------------------------------------
+    def _report_is_empty(self, name: str, results) -> bool:
+        """True when a report is ~0 in every sim that has a value for it.
+
+        Mirrors the comparison-table column drop: a name is empty only if it has
+        at least one value and all of them are below the zero threshold.
+        """
+        threshold = self.settings.zero_threshold
+        present = [
+            rep.value
+            for r in results
+            for rep in r.reports
+            if rep.name == name and rep.value is not None
+        ]
+        return len(present) > 0 and all(abs(v) < threshold for v in present)
+
+    def _emptiness_scope(self, results) -> list:
+        """Which sims decide whether a report is empty for the checkbox list.
+
+        Comparison mode judges across all loaded files; per-file mode judges
+        against the currently selected file only.
+        """
+        if self._mode.currentText() == "Comparison":
+            return results
+        sel = next(
+            (r for r in results if r.sim_name == self._sim_picker.currentText()), None
+        )
+        return [sel] if sel is not None else results
+
+    def _available_report_names(self, results) -> list[str]:
+        """Report names to offer in the checkbox list, dropping empty ones when
+        Hide empty reports is enabled (scope depends on the current view mode)."""
+        names = sorted({n for r in results for n in r.report_names()})
+        if self.settings.hide_empty_reports:
+            scope = self._emptiness_scope(results)
+            names = [n for n in names if not self._report_is_empty(n, scope)]
+        return names
+
+    def _refresh_report_choices(self) -> None:
+        """Update the report checkbox list for the current mode/file, keeping
+        the user's selection."""
+        results = [r for r in self.store.all() if r.error is None]
+        self.selection.set_available_reports(self._available_report_names(results))
+
     def _refresh_from_store(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
-        report_union = sorted({n for r in results for n in r.report_names()})
-        plot_union = sorted({n for r in results for n in r.plot_names()})
 
-        # repopulate selection only when the available set changes
-        if set(report_union) != self.selection.selected_reports() or True:
-            self.selection.populate(report_union, plot_union)
-
+        # Update the file picker first so per-file emptiness uses the right file.
         self._sim_picker.blockSignals(True)
         self._sim_picker.clear()
         self._sim_picker.addItems([r.sim_name for r in results])
         self._sim_picker.blockSignals(False)
 
+        report_union = self._available_report_names(results)
+        plot_union = sorted({n for r in results for n in r.plot_names()})
+        self.selection.populate(report_union, plot_union)
+
         self._sync_plot_picker()
+        self._refresh_views()
+
+    def _on_view_changed(self) -> None:
+        # View mode or selected file changed: which reports count as empty can
+        # differ, so refresh the checkbox list (keeping selection) then redraw.
+        self._refresh_report_choices()
         self._refresh_views()
 
     def _on_selection_changed(self) -> None:
@@ -375,6 +423,10 @@ class MainWindow(QMainWindow):
                 self.settings.hide_empty_monitors,
                 self.settings.monitor_zero_threshold,
             )
+            # The hide-empty/threshold settings change which reports qualify as
+            # empty: refresh the checkbox list (preserving the current selection).
+            results = [r for r in self.store.all() if r.error is None]
+            self.selection.set_available_reports(self._available_report_names(results))
             self._refresh_views()
 
     def createPopupMenu(self):  # noqa: N802 (Qt override)

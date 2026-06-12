@@ -57,6 +57,9 @@ class _CheckList(QListWidget):
             if self.item(i).checkState() == Qt.Checked
         ]
 
+    def texts(self) -> list[str]:
+        return [self.item(i).text() for i in range(self.count())]
+
     def set_all(self, state: bool) -> None:
         self.blockSignals(True)
         s = Qt.Checked if state else Qt.Unchecked
@@ -113,6 +116,20 @@ class SelectionPanel(QWidget):
         # view starts blank (rendering every monitor plot is slow with many).
         self.reports.set_items(sorted(report_names), checked=True)
         self.plots.set_items(sorted(plot_names), checked=False)
+
+    def set_available_reports(self, report_names: list[str]) -> None:
+        """Replace the available report list while preserving check state.
+
+        Used when a setting (e.g. hide-empty-reports) changes the visible set
+        without reloading data — so the user's current selection isn't lost.
+        Names appearing for the first time default to checked.
+        """
+        prev_all = set(self.reports.texts())
+        prev_checked = set(self.reports.checked())
+        names = sorted(report_names)
+        keep = {n for n in names if n in prev_checked or n not in prev_all}
+        self.reports.set_items(names, checked=False)
+        self.reports.set_checked(keep)
 
     def selected_reports(self) -> set[str]:
         return set(self.reports.checked())
