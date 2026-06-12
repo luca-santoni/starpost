@@ -11,10 +11,13 @@ from starpost.data.models import SimResult
 
 
 class _DataFrameModel(QAbstractTableModel):
-    def __init__(self, df: pd.DataFrame, decimals: int = 4) -> None:
+    def __init__(
+        self, df: pd.DataFrame, decimals: int = 4, zero_threshold: float = 1e-5
+    ) -> None:
         super().__init__()
         self._df = df
         self._decimals = decimals
+        self._zero_threshold = zero_threshold
 
     def rowCount(self, parent=None) -> int:
         return len(self._df.index)
@@ -30,7 +33,10 @@ class _DataFrameModel(QAbstractTableModel):
             return ""
         # Format real (non-integer) numbers to the configured precision.
         if isinstance(val, numbers.Real) and not isinstance(val, (bool, numbers.Integral)):
-            return f"{float(val):.{self._decimals}f}"
+            fval = float(val)
+            if abs(fval) < self._zero_threshold:  # round sub-threshold down to 0
+                fval = 0.0
+            return f"{fval:.{self._decimals}f}"
         return str(val)
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -42,10 +48,13 @@ class _DataFrameModel(QAbstractTableModel):
 
 
 class ReportTable(QWidget):
-    def __init__(self, decimals: int = 4, parent=None) -> None:
+    def __init__(
+        self, decimals: int = 4, zero_threshold: float = 1e-5, parent=None
+    ) -> None:
         super().__init__(parent)
         self._table = QTableView()
         self._decimals = decimals
+        self._zero_threshold = zero_threshold
         self._df: pd.DataFrame | None = None
         layout = QVBoxLayout(self)
         layout.addWidget(self._table)
@@ -56,13 +65,28 @@ class ReportTable(QWidget):
         if self._df is not None:
             self.show_dataframe(self._df)
 
+    def set_zero_threshold(self, threshold: float) -> None:
+        """Update the round-to-zero threshold and re-render the current table."""
+        self._zero_threshold = max(0.0, float(threshold))
+        if self._df is not None:
+            self.show_dataframe(self._df)
+
     def show_dataframe(self, df: pd.DataFrame) -> None:
         self._df = df
-        self._table.setModel(_DataFrameModel(df, self._decimals))
+        self._table.setModel(
+            _DataFrameModel(df, self._decimals, self._zero_threshold)
+        )
         self._table.resizeColumnsToContents()
 
-    def show_single(self, result: SimResult) -> None:
+    def show_single(self, result: SimResult, hide_zero: bool = False) -> None:
+        reports = result.reports
+        if hide_zero:
+            # Hide reports at/below the zero threshold (errored/None values stay).
+            reports = [
+                r for r in reports
+                if r.value is None or abs(r.value) >= self._zero_threshold
+            ]
         df = pd.DataFrame(
-            [{"report": r.name, "value": r.value, "units": r.units} for r in result.reports]
+            [{"report": r.name, "value": r.value, "units": r.units} for r in reports]
         )
         self.show_dataframe(df)

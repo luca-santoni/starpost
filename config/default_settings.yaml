@@ -26,6 +26,13 @@ extra_args: []
 # Number of decimal places shown for report values in the table.
 report_decimals: 4
 
+# Hide reports whose value is ~0 from the report table.
+hide_empty_reports: true
+
+# Values whose absolute magnitude is below this are treated as 0 (shown as 0 and
+# hidden when hide_empty_reports is on).
+zero_threshold: 1.0e-5
+
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.

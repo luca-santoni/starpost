@@ -56,6 +56,8 @@ class Settings:
     default_output_dir: str = ""
     extra_args: list[str] = field(default_factory=list)
     report_decimals: int = 4      # decimal places shown for report values
+    hide_empty_reports: bool = True   # hide reports whose value is ~0
+    zero_threshold: float = 1e-5  # |value| below this is treated as 0
     plot_classification: dict = field(
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
@@ -94,6 +96,8 @@ class Settings:
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
             report_decimals=int(d.get("report_decimals", 4)),
+            hide_empty_reports=bool(d.get("hide_empty_reports", True)),
+            zero_threshold=float(d.get("zero_threshold", 1e-5)),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
         )
@@ -114,6 +118,8 @@ class Settings:
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,
             "report_decimals": self.report_decimals,
+            "hide_empty_reports": self.hide_empty_reports,
+            "zero_threshold": self.zero_threshold,
             "plot_classification": self.plot_classification,
         }
 

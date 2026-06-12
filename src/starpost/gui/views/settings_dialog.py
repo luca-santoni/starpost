@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import shlex
 
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QDoubleValidator
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
@@ -164,12 +165,34 @@ class SettingsDialog(QDialog):
         self._decimals.setRange(0, 15)
         self._decimals.setValue(4)
 
+        self._hide_empty = QCheckBox("Hide empty reports")
+
+        self._zero_threshold = QLineEdit()
+        self._zero_threshold.setFixedWidth(110)
+        validator = QDoubleValidator(0.0, 1e12, 15)
+        validator.setNotation(QDoubleValidator.ScientificNotation)
+        self._zero_threshold.setValidator(validator)
+        self._zero_threshold.setPlaceholderText("1e-05")
+
         form = QFormLayout()
         form.addRow("Decimal places", self._decimals)
-        hint = QLabel("Number of decimals shown for report values in the table.")
-        hint.setObjectName("hint")
-        hint.setWordWrap(True)
-        form.addRow("", hint)
+        dec_hint = QLabel("Number of decimals shown for report values in the table.")
+        dec_hint.setObjectName("hint")
+        dec_hint.setWordWrap(True)
+        form.addRow("", dec_hint)
+        form.addRow("", self._hide_empty)
+        hide_hint = QLabel("Hide reports whose value is ~0 (see Zero threshold).")
+        hide_hint.setObjectName("hint")
+        hide_hint.setWordWrap(True)
+        form.addRow("", hide_hint)
+        form.addRow("Zero threshold", self._zero_threshold)
+        zt_hint = QLabel(
+            "Values with magnitude below this are shown as 0 (and hidden when "
+            "Hide empty reports is on)."
+        )
+        zt_hint.setObjectName("hint")
+        zt_hint.setWordWrap(True)
+        form.addRow("", zt_hint)
         return self._wrap(form)
 
     def _build_plots_page(self) -> QWidget:
@@ -326,6 +349,8 @@ class SettingsDialog(QDialog):
         self._licfile.setText(s.license.license_file)
 
         self._decimals.setValue(s.report_decimals)
+        self._hide_empty.setChecked(s.hide_empty_reports)
+        self._zero_threshold.setText(f"{s.zero_threshold:g}")
 
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
@@ -340,6 +365,11 @@ class SettingsDialog(QDialog):
         s.appearance.mode = self._current_mode()
         s.appearance.accent = self._accent
         s.report_decimals = self._decimals.value()
+        s.hide_empty_reports = self._hide_empty.isChecked()
+        try:
+            s.zero_threshold = abs(float(self._zero_threshold.text()))
+        except ValueError:
+            pass  # keep previous value if the field is blank/invalid
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())

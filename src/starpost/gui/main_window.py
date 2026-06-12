@@ -43,6 +43,21 @@ from starpost.utils.logging import get_logger
 log = get_logger("ui")
 
 
+def _drop_zero_report_columns(df, threshold: float = 1e-5):
+    """Drop report columns (wide comparison view) that are ~0 across all sims.
+
+    A column is dropped only if every present value is below `threshold` in
+    magnitude; all-missing columns and columns with any larger value are kept.
+    """
+    keep = []
+    for col in df.columns:
+        present = df[col].dropna()
+        if len(present) > 0 and (present.abs() < threshold).all():
+            continue
+        keep.append(col)
+    return df[keep]
+
+
 class MainWindow(QMainWindow):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
@@ -59,7 +74,10 @@ class MainWindow(QMainWindow):
         # Panels
         self.file_list = FileListPanel()
         self.selection = SelectionPanel()
-        self.report_table = ReportTable(decimals=settings.report_decimals)
+        self.report_table = ReportTable(
+            decimals=settings.report_decimals,
+            zero_threshold=settings.zero_threshold,
+        )
         self.plot_view = PlotView()
         self.log_console = LogConsole()
 
@@ -209,13 +227,17 @@ class MainWindow(QMainWindow):
 
         results = [r for r in self.store.all() if r.error is None]
         selected = self.selection.selected_reports()
+        hide_zero = self.settings.hide_empty_reports
         if self._mode.currentText() == "Comparison":
-            self.report_table.show_dataframe(reports_wide_frame(results, selected))
+            df = reports_wide_frame(results, selected)
+            if hide_zero:
+                df = _drop_zero_report_columns(df, self.settings.zero_threshold)
+            self.report_table.show_dataframe(df)
         else:
             name = self._sim_picker.currentText()
             res = next((r for r in results if r.sim_name == name), None)
             if res:
-                self.report_table.show_single(res)
+                self.report_table.show_single(res, hide_zero=hide_zero)
 
     def _render_plot(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
@@ -262,6 +284,7 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             log.info("Settings saved to %s", settings_path())
             self.report_table.set_decimals(self.settings.report_decimals)
+            self.report_table.set_zero_threshold(self.settings.zero_threshold)
             self._refresh_views()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
