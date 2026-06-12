@@ -227,6 +227,29 @@ QListWidget#settingsNav::item:selected {
     font-weight: bold;
 }
 QLabel#hint { color: $hint; }
+
+/* Monitor selector dropdown beneath the plot */
+QToolButton#monitorSelect {
+    background: $btn_bg;
+    color: $btn_text;
+    border: 1px solid $accent;
+    border-radius: 4px;
+    padding: 3px 10px;
+}
+QToolButton#monitorSelect:hover { background: $btn_hover; }
+QToolButton#monitorSelect:disabled {
+    background: $dis_bg;
+    border-color: $dis_border;
+    color: $dis_text;
+}
+
+QMenu {
+    background: $input_bg;
+    color: $text;
+    border: 1px solid $border;
+}
+QMenu::item { padding: 4px 22px 4px 10px; }
+QMenu::item:selected { background: $accent; color: $on_accent; }
 """
 )
 
