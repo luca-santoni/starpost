@@ -83,15 +83,23 @@ class ReportTable(QWidget):
         )
         self._table.resizeColumnsToContents()
 
-    def show_single(self, result: SimResult, hide_zero: bool = False) -> None:
+    def show_single(
+        self, result: SimResult, hide_zero: bool = False, selected: set[str] | None = None
+    ) -> None:
         reports = result.reports
+        if selected is not None:
+            # Honour the selection panel: only show checked reports.
+            reports = [r for r in reports if r.name in selected]
         if hide_zero:
             # Hide reports at/below the zero threshold (errored/None values stay).
             reports = [
                 r for r in reports
                 if r.value is None or abs(r.value) >= self._zero_threshold
             ]
+        # Pin the columns so an empty result is a 0-row table (with headers)
+        # rather than a column-less frame the table model can't query.
         df = pd.DataFrame(
-            [{"report": r.name, "value": r.value, "units": r.units} for r in reports]
+            [{"report": r.name, "value": r.value, "units": r.units} for r in reports],
+            columns=["report", "value", "units"],
         )
         self.show_dataframe(df)

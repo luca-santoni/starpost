@@ -202,7 +202,10 @@ class MainWindow(QMainWindow):
         self._thread.started.connect(self._worker.run)
         self._worker.log.connect(self.log_console.append)
         self._worker.progress.connect(self.log_console.set_progress)
-        self._worker.sim_done.connect(lambda _r: self._refresh_from_store())
+        # Bound method (not a lambda) so the cross-thread signal is delivered as
+        # a queued connection on the GUI thread; a lambda has no thread affinity
+        # and would run the slot on the worker thread, crashing on widget access.
+        self._worker.sim_done.connect(self._on_sim_done)
         self._worker.finished.connect(self._on_batch_finished)
         self._worker.finished.connect(self._thread.quit)
 
@@ -215,6 +218,10 @@ class MainWindow(QMainWindow):
         if self._worker:
             self._worker.request_stop()
             self._stop_action.setEnabled(False)
+
+    def _on_sim_done(self, _result=None) -> None:
+        """A file finished extracting: refresh views on the GUI thread."""
+        self._refresh_from_store()
 
     def _on_batch_finished(self) -> None:
         self._run_action.setEnabled(True)
@@ -311,7 +318,9 @@ class MainWindow(QMainWindow):
             name = self._sim_picker.currentText()
             res = next((r for r in results if r.sim_name == name), None)
             if res:
-                self.report_table.show_single(res, hide_zero=hide_zero)
+                self.report_table.show_single(
+                    res, hide_zero=hide_zero, selected=selected
+                )
 
     def _render_plot(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
@@ -367,6 +376,11 @@ class MainWindow(QMainWindow):
                 self.settings.monitor_zero_threshold,
             )
             self._refresh_views()
+
+    def createPopupMenu(self):  # noqa: N802 (Qt override)
+        # Suppress the default toolbar/dock right-click menu: its only entry
+        # toggles the toolbar off with no way to restore it without a restart.
+        return None
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.store.save_cache()
