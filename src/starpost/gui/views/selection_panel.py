@@ -26,12 +26,13 @@ from starpost.core.settings import Profile, list_profiles
 class _CheckList(QListWidget):
     changed = Signal()
 
-    def set_items(self, names: list[str]) -> None:
+    def set_items(self, names: list[str], checked: bool = True) -> None:
         self.clear()
+        state = Qt.Checked if checked else Qt.Unchecked
         for n in names:
             item = QListWidgetItem(n)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(state)
             self.addItem(item)
         self.itemChanged.connect(lambda _: self.changed.emit())
 
@@ -97,8 +98,10 @@ class SelectionPanel(QWidget):
 
     # --- data ------------------------------------------------------------
     def populate(self, report_names: list[str], plot_names: list[str]) -> None:
-        self.reports.set_items(sorted(report_names))
-        self.plots.set_items(sorted(plot_names))
+        # Reports default to selected; plots default to *deselected* so the plot
+        # view starts blank (rendering every monitor plot is slow with many).
+        self.reports.set_items(sorted(report_names), checked=True)
+        self.plots.set_items(sorted(plot_names), checked=False)
 
     def selected_reports(self) -> set[str]:
         return set(self.reports.checked())
