@@ -23,6 +23,12 @@ from starpost.utils.paths import (
 # Settings
 # --------------------------------------------------------------------------- #
 @dataclass
+class AppearanceConfig:
+    mode: str = "dark"          # "dark" | "light"
+    accent: str = "#ffc829"     # hex accent colour applied program-wide
+
+
+@dataclass
 class LicenseConfig:
     mode: str = "podkey_server"   # "podkey_server" | "license_file"
     podkey: str = ""
@@ -46,6 +52,7 @@ class LicenseConfig:
 class Settings:
     starccm_path: str = ""
     license: LicenseConfig = field(default_factory=LicenseConfig)
+    appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
     default_output_dir: str = ""
     extra_args: list[str] = field(default_factory=list)
     plot_classification: dict = field(
@@ -70,6 +77,7 @@ class Settings:
     @classmethod
     def from_dict(cls, d: dict) -> "Settings":
         lic = d.get("license", {}) or {}
+        appe = d.get("appearance", {}) or {}
         return cls(
             starccm_path=d.get("starccm_path", ""),
             license=LicenseConfig(
@@ -77,6 +85,10 @@ class Settings:
                 podkey=lic.get("podkey", ""),
                 licpath=lic.get("licpath", ""),
                 license_file=lic.get("license_file", ""),
+            ),
+            appearance=AppearanceConfig(
+                mode=appe.get("mode", "dark"),
+                accent=appe.get("accent", "#ffc829"),
             ),
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
@@ -92,6 +104,10 @@ class Settings:
                 "podkey": self.license.podkey,
                 "licpath": self.license.licpath,
                 "license_file": self.license.license_file,
+            },
+            "appearance": {
+                "mode": self.appearance.mode,
+                "accent": self.appearance.accent,
             },
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,

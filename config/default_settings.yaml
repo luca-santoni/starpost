@@ -11,6 +11,11 @@ license:
   licpath: ""                # license server       -> -licpath <port>@<server>
   license_file: ""           # used only when mode == license_file -> -licpath <file>
 
+# UI appearance. Changeable in-app via Settings -> Appearance.
+appearance:
+  mode: dark                 # "dark" | "light"
+  accent: "#ffc829"          # hex accent colour applied program-wide
+
 # Default folder for exports (CSV/JPG/PDF). Chosen per-run in the UI; this is the
 # starting location of the picker. Empty = user's home.
 default_output_dir: ""

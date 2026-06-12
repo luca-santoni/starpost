@@ -2,27 +2,24 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
 from starpost.core.settings import Settings
 from starpost.gui.main_window import MainWindow
+from starpost.gui.theme import apply_theme
 from starpost.utils.logging import configure
-
-
-def _load_stylesheet() -> str:
-    qss = Path(__file__).resolve().parent / "gui" / "resources" / "theme.qss"
-    return qss.read_text() if qss.exists() else ""
 
 
 def main() -> int:
     configure()
     app = QApplication(sys.argv)
     app.setApplicationName("starpost")
-    app.setStyleSheet(_load_stylesheet())
 
-    window = MainWindow(Settings.load())
+    settings = Settings.load()
+    apply_theme(app, settings.appearance.mode, settings.appearance.accent)
+
+    window = MainWindow(settings)
     window.show()
     return app.exec()
 

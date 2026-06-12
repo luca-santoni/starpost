@@ -255,14 +255,12 @@ class MainWindow(QMainWindow):
             )
 
     def _open_settings(self) -> None:
-        # TODO: a proper settings dialog (exe path, license mode/key/server,
-        # default output dir). For now, point the user at the YAML file.
+        from starpost.gui.views.settings_dialog import SettingsDialog
         from starpost.utils.paths import settings_path
 
-        QMessageBox.information(
-            self, "Settings",
-            f"Edit settings at:\n{settings_path()}\n\n(A GUI settings dialog is a TODO.)",
-        )
+        dlg = SettingsDialog(self.settings, self)
+        if dlg.exec():
+            log.info("Settings saved to %s", settings_path())
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.store.save_cache()
