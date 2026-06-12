@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numbers
+import re
 
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, Qt
@@ -20,6 +21,15 @@ _SORT_OPTIONS = [
     ("Units (Z–A)", "units", False),
 ]
 _SINGLE_COLUMNS = {"report", "value", "units"}
+
+# Comparison-view row labels embed units as "Name [unit]" (see reports_wide_frame).
+_LABEL_RE = re.compile(r"^(.*?)\s*\[([^\]]*)\]\s*$")
+
+
+def _split_label(label: str) -> tuple[str, str]:
+    """Split a "Name [unit]" comparison row label into (name, unit)."""
+    m = _LABEL_RE.match(str(label))
+    return (m.group(1), m.group(2)) if m else (str(label), "")
 
 
 class _DataFrameModel(QAbstractTableModel):
@@ -102,19 +112,42 @@ class ReportTable(QWidget):
         )
         self._table.resizeColumnsToContents()
 
-    # --- sorting (per-file view) ----------------------------------------
+    # --- sorting ---------------------------------------------------------
     def _sorted(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Apply the active sort, if the column exists (per-file view only)."""
+        """Apply the active sort to either layout (per-file long or comparison)."""
         if self._sort is None:
             return df
-        column, ascending = self._sort
-        if column not in df.columns:
-            return df  # e.g. comparison wide view has no report/value/units columns
+        key, ascending = self._sort
+        if _SINGLE_COLUMNS.issubset(df.columns):
+            return self._sorted_single(df, key, ascending)
+        return self._sorted_comparison(df, key, ascending)
+
+    def _sorted_single(self, df: pd.DataFrame, key: str, ascending: bool) -> pd.DataFrame:
+        """Per-file long view: sort rows by the report/value/units column."""
         # Names/units sort case-insensitively; values sort numerically.
-        key = (lambda s: s.str.lower()) if column in ("report", "units") else None
+        keyfn = (lambda s: s.str.lower()) if key in ("report", "units") else None
         return df.sort_values(
-            by=column, ascending=ascending, kind="stable", key=key, na_position="last"
+            by=key, ascending=ascending, kind="stable", key=keyfn, na_position="last"
         ).reset_index(drop=True)
+
+    def _sorted_comparison(
+        self, df: pd.DataFrame, key: str, ascending: bool
+    ) -> pd.DataFrame:
+        """Comparison view: rows are reports ("Name [unit]"), columns are sims."""
+        if df.empty:
+            return df
+        if key == "value":
+            # No single value per report across sims, so order by the row mean.
+            order = df.apply(pd.to_numeric, errors="coerce").mean(axis=1)
+            ordered = order.sort_values(ascending=ascending, na_position="last").index
+        else:
+            part = 0 if key == "report" else 1  # name vs unit from the label
+            ordered = sorted(
+                df.index,
+                key=lambda lbl: _split_label(lbl)[part].lower(),
+                reverse=not ascending,
+            )
+        return df.loc[ordered]
 
     def set_sort(self, column: str, ascending: bool) -> None:
         """Set the active sort and re-render the current table."""
@@ -123,8 +156,9 @@ class ReportTable(QWidget):
             self.show_dataframe(self._df)
 
     def _show_header_menu(self, pos) -> None:
-        # Sorting applies to the per-file report view (report/value/units).
-        if self._df is None or not _SINGLE_COLUMNS.issubset(self._df.columns):
+        # Available in both views: per-file sorts by column, comparison sorts
+        # the report rows (name/unit from the label, value by row mean).
+        if self._df is None:
             return
         menu = QMenu(self)
         actions = {}

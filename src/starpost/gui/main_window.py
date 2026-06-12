@@ -347,7 +347,9 @@ class MainWindow(QMainWindow):
             df = reports_wide_frame(results, selected)
             if hide_zero:
                 df = _drop_zero_report_columns(df, self.settings.zero_threshold)
-            self.report_table.show_dataframe(df)
+            # Display with sims across the top and reports down the side
+            # (reports_wide_frame is sims-as-rows; transpose only for the view).
+            self.report_table.show_dataframe(df.T)
         else:
             name = self._sim_picker.currentText()
             res = next((r for r in results if r.sim_name == name), None)
