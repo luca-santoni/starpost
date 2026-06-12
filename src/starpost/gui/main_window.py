@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
         # Panels
         self.file_list = FileListPanel()
         self.selection = SelectionPanel()
-        self.report_table = ReportTable()
+        self.report_table = ReportTable(decimals=settings.report_decimals)
         self.plot_view = PlotView()
         self.log_console = LogConsole()
 
@@ -261,6 +261,8 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.settings, self)
         if dlg.exec():
             log.info("Settings saved to %s", settings_path())
+            self.report_table.set_decimals(self.settings.report_decimals)
+            self._refresh_views()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.store.save_cache()

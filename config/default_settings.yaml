@@ -23,6 +23,9 @@ default_output_dir: ""
 # Extra arguments appended verbatim to every starccm+ invocation.
 extra_args: []
 
+# Number of decimal places shown for report values in the table.
+report_decimals: 4
+
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.

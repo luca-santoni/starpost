@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -78,6 +79,7 @@ class SettingsDialog(QDialog):
 
         self._add_page("STAR-CCM+", self._build_starccm_page())
         self._add_page("License", self._build_license_page())
+        self._add_page("Reports", self._build_reports_page())
         self._add_page("Plot classification", self._build_plots_page())
         self._add_page("Appearance", self._build_appearance_page())
 
@@ -155,6 +157,19 @@ class SettingsDialog(QDialog):
         form.addRow(
             self._licfile_label, _path_row(self._licfile, self._browse_licfile)
         )
+        return self._wrap(form)
+
+    def _build_reports_page(self) -> QWidget:
+        self._decimals = QSpinBox()
+        self._decimals.setRange(0, 15)
+        self._decimals.setValue(4)
+
+        form = QFormLayout()
+        form.addRow("Decimal places", self._decimals)
+        hint = QLabel("Number of decimals shown for report values in the table.")
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
         return self._wrap(form)
 
     def _build_plots_page(self) -> QWidget:
@@ -310,6 +325,8 @@ class SettingsDialog(QDialog):
         self._licpath.setText(s.license.licpath)
         self._licfile.setText(s.license.license_file)
 
+        self._decimals.setValue(s.report_decimals)
+
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
         self._force.setText(", ".join(pc.get("force_keywords", [])))
@@ -322,6 +339,7 @@ class SettingsDialog(QDialog):
         s = self._settings
         s.appearance.mode = self._current_mode()
         s.appearance.accent = self._accent
+        s.report_decimals = self._decimals.value()
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())

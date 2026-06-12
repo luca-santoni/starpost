@@ -55,6 +55,7 @@ class Settings:
     appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
     default_output_dir: str = ""
     extra_args: list[str] = field(default_factory=list)
+    report_decimals: int = 4      # decimal places shown for report values
     plot_classification: dict = field(
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
@@ -92,6 +93,7 @@ class Settings:
             ),
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
+            report_decimals=int(d.get("report_decimals", 4)),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
         )
@@ -111,6 +113,7 @@ class Settings:
             },
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,
+            "report_decimals": self.report_decimals,
             "plot_classification": self.plot_classification,
         }
 
