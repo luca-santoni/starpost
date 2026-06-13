@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
             settings.hover_x_decimals,
             settings.hover_y_decimals,
         )
+        self.plot_view.apply_theme(settings.appearance.mode)
         self.log_console = LogConsole()
 
         self._build_layout()
@@ -417,6 +418,8 @@ class MainWindow(QMainWindow):
         from starpost.utils.paths import settings_path
 
         dlg = SettingsDialog(self.settings, self)
+        # Live-preview the light/dark switch on the plot too (Cancel reverts it).
+        dlg.preview_changed.connect(self.plot_view.apply_theme)
         if dlg.exec():
             log.info("Settings saved to %s", settings_path())
             self.report_table.set_decimals(self.settings.report_decimals)
@@ -430,6 +433,7 @@ class MainWindow(QMainWindow):
                 self.settings.hover_x_decimals,
                 self.settings.hover_y_decimals,
             )
+            self.plot_view.apply_theme(self.settings.appearance.mode)
             # The hide-empty/threshold settings change which reports qualify as
             # empty: refresh the checkbox list (preserving the current selection).
             results = [r for r in self.store.all() if r.error is None]

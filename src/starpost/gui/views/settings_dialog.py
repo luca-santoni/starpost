@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import shlex
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QDoubleValidator
 from PySide6.QtWidgets import (
     QApplication,
@@ -66,6 +66,10 @@ def _path_row(line: QLineEdit, on_browse) -> QHBoxLayout:
 
 
 class SettingsDialog(QDialog):
+    # Emitted while previewing with the current "dark"/"light" mode whenever it
+    # changes, so non-QSS widgets (e.g. the plot) can follow the live preview.
+    preview_changed = Signal(str)
+
     def __init__(self, settings: Settings, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
@@ -76,6 +80,7 @@ class SettingsDialog(QDialog):
         self._orig_mode = settings.appearance.mode
         self._orig_accent = settings.appearance.accent
         self._accent = normalize_accent(settings.appearance.accent)
+        self._last_preview_mode = self._orig_mode
 
         # Left nav (groups) drives the right stack (individual settings).
         self._nav = QListWidget()
@@ -364,7 +369,12 @@ class SettingsDialog(QDialog):
             self._set_accent(chosen.name())
 
     def _apply_preview(self) -> None:
-        apply_theme(QApplication.instance(), self._current_mode(), self._accent)
+        mode = self._current_mode()
+        apply_theme(QApplication.instance(), mode, self._accent)
+        # Only the mode (not accent) affects non-QSS widgets; notify on change.
+        if mode != self._last_preview_mode:
+            self._last_preview_mode = mode
+            self.preview_changed.emit(mode)
 
     # --- browse helpers -------------------------------------------------
     def _browse_exe(self) -> None:
@@ -462,4 +472,7 @@ class SettingsDialog(QDialog):
     def reject(self) -> None:  # noqa: D401 (Qt override)
         # Cancel: undo any live appearance preview before closing.
         apply_theme(QApplication.instance(), self._orig_mode, self._orig_accent)
+        if self._orig_mode != self._last_preview_mode:
+            self._last_preview_mode = self._orig_mode
+            self.preview_changed.emit(self._orig_mode)
         super().reject()

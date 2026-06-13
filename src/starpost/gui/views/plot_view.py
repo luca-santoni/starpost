@@ -205,7 +205,36 @@ class PlotView(QWidget):
         self._hover_x_decimals = 0
         self._hover_y_decimals = 4
 
+        # Plot colours, kept in sync with the app's light/dark mode by
+        # apply_theme. pyqtgraph isn't styled by the app's QSS, so the plot
+        # background, axes and legend text are coloured here instead.
+        self._fg = "#e6e6e6"
+        self._bg = "#1e1e1e"
+        self._title = ""
+        self._y_axis_label = "Value"
+        self._plot.setBackground(self._bg)
+
     # --- public entry points --------------------------------------------
+    def apply_theme(self, mode: str) -> None:
+        """Match the plot background, axes and legend text to the app's mode."""
+        light = mode == "light"
+        self._fg = "#1f1f1f" if light else "#e6e6e6"
+        self._bg = "#ffffff" if light else "#1e1e1e"
+        self._plot.setBackground(self._bg)
+        for name in ("left", "bottom", "right", "top"):
+            ax = self._plot.getAxis(name)
+            ax.setPen(self._fg)
+            ax.setTextPen(self._fg)
+        self._legend.setLabelTextColor(self._fg)
+        # Recolour the title and axis labels already on screen.
+        self._plot.setTitle(self._title, color=self._fg)
+        self._plot.setLabel("bottom", "Iteration", color=self._fg)
+        self._plot.setLabel("left", self._y_axis_label, color=self._fg)
+        # Rebuild the current plot so its legend entries pick up the new text
+        # colour (existing legend labels aren't recoloured retroactively).
+        if self._mode is not None:
+            self._render()
+
     def set_filter(self, hide_empty: bool, zero_threshold: float) -> None:
         """Configure hiding of empty monitors (those whose values are all ~0).
 
@@ -262,7 +291,8 @@ class PlotView(QWidget):
         self._set_categories([])
         self._plot.clear()
         self._legend.clear()
-        self._plot.setTitle("")
+        self._title = ""
+        self._plot.setTitle("", color=self._fg)
         self._curves = []
         self._hide_hover()
 
@@ -311,10 +341,12 @@ class PlotView(QWidget):
     def _reset(self, title: str, y_log: bool, y_label: str = "Value") -> None:
         self._plot.clear()
         self._legend.clear()  # avoid stale/duplicate legend entries on re-render
-        self._plot.setTitle(title)
+        self._title = title
+        self._y_axis_label = y_label
+        self._plot.setTitle(title, color=self._fg)
         self._plot.setLogMode(x=False, y=y_log)
-        self._plot.setLabel("bottom", "Iteration")
-        self._plot.setLabel("left", y_label)
+        self._plot.setLabel("bottom", "Iteration", color=self._fg)
+        self._plot.setLabel("left", y_label, color=self._fg)
         # clear() drops every item, including the hover overlay — re-add it
         # (hidden) and start collecting the freshly drawn curves.
         self._y_log = y_log
