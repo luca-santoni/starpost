@@ -28,8 +28,11 @@ class FileListPanel(QWidget):
     files_changed = Signal(list)  # list[Path]
     open_requested = Signal(Path)  # a single .sim to extract & view
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, *, show_full_names: bool = False) -> None:
         super().__init__(parent)
+        # Each item stores its full path in Qt.UserRole; the displayed text is
+        # either that path or just the file name, per this flag.
+        self._show_full_names = show_full_names
         self._list = QListWidget()
         self._list.setSelectionMode(QListWidget.ExtendedSelection)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -69,13 +72,39 @@ class FileListPanel(QWidget):
 
     # --- data ------------------------------------------------------------
     def files(self) -> list[Path]:
-        return [Path(self._list.item(i).text()) for i in range(self._list.count())]
+        return [self._item_path(self._list.item(i)) for i in range(self._list.count())]
+
+    def set_show_full_names(self, show_full_names: bool) -> None:
+        """Switch between showing full paths and file names only, re-rendering
+        the existing items' labels (the stored paths are unaffected)."""
+        if show_full_names == self._show_full_names:
+            return
+        self._show_full_names = show_full_names
+        for i in range(self._list.count()):
+            item = self._list.item(i)
+            item.setText(self._label(self._item_path(item)))
+
+    def _label(self, path: Path) -> str:
+        return str(path) if self._show_full_names else path.name
+
+    @staticmethod
+    def _item_path(item: QListWidgetItem) -> Path:
+        return Path(item.data(Qt.UserRole))
+
+    def _make_item(self, path: Path) -> QListWidgetItem:
+        # Display the name or full path; always keep the full path in UserRole
+        # (so it survives a display toggle) and the tooltip (handy when only the
+        # name is shown).
+        item = QListWidgetItem(self._label(path))
+        item.setData(Qt.UserRole, str(path))
+        item.setToolTip(str(path))
+        return item
 
     def _add_paths(self, paths: list[Path]) -> None:
         existing = {p.resolve() for p in self.files()}
         for p in paths:
             if p.suffix == ".sim" and p.resolve() not in existing:
-                self._list.addItem(QListWidgetItem(str(p)))
+                self._list.addItem(self._make_item(p))
         self.files_changed.emit(self.files())
 
     # --- slots -----------------------------------------------------------
@@ -107,7 +136,7 @@ class FileListPanel(QWidget):
         remove_act = menu.addAction("Remove")
         chosen = menu.exec(self._list.mapToGlobal(pos))
         if chosen is open_act:
-            self.open_requested.emit(Path(item.text()))
+            self.open_requested.emit(self._item_path(item))
         elif chosen is remove_act:
             self._remove_selected()
 
@@ -142,4 +171,4 @@ class FileListPanel(QWidget):
         except (json.JSONDecodeError, OSError):
             return
         for p in saved:
-            self._list.addItem(QListWidgetItem(str(p)))
+            self._list.addItem(self._make_item(Path(p)))

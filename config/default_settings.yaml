@@ -23,6 +23,10 @@ default_output_dir: ""
 # Extra arguments appended verbatim to every starccm+ invocation.
 extra_args: []
 
+# Show each loaded .sim with its full path in the Files panel. When false
+# (default), only the file name is shown.
+show_full_file_names: false
+
 # Number of decimal places shown for report values in the table.
 report_decimals: 4
 

@@ -75,7 +75,7 @@ class MainWindow(QMainWindow):
         self._worker: BatchWorker | None = None
 
         # Panels
-        self.file_list = FileListPanel()
+        self.file_list = FileListPanel(show_full_names=settings.show_full_file_names)
         self.selection = SelectionPanel()
         self.report_table = ReportTable(
             decimals=settings.report_decimals,
@@ -430,6 +430,7 @@ class MainWindow(QMainWindow):
         self.selection.refresh_profiles()
         if accepted:
             log.info("Settings saved to %s", settings_path())
+            self.file_list.set_show_full_names(self.settings.show_full_file_names)
             self.report_table.set_decimals(self.settings.report_decimals)
             self.report_table.set_zero_threshold(self.settings.zero_threshold)
             self.plot_view.set_filter(

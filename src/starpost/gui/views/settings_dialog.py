@@ -156,6 +156,7 @@ class SettingsDialog(QDialog):
 
         self._add_page("STAR-CCM+", self._build_starccm_page())
         self._add_page("License", self._build_license_page())
+        self._add_page("Files", self._build_files_page())
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
         self._add_page("Profiles", self._build_profiles_page())
@@ -242,6 +243,20 @@ class SettingsDialog(QDialog):
         form.addRow(
             self._licfile_label, _path_row(self._licfile, self._browse_licfile)
         )
+        return self._wrap(form)
+
+    def _build_files_page(self) -> QWidget:
+        self._show_full_paths = QCheckBox("Show full file names")
+
+        form = QFormLayout()
+        form.addRow("", self._show_full_paths)
+        hint = QLabel(
+            "When off, the Files panel lists each .sim by name only; when on, it "
+            "shows the full path."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
         return self._wrap(form)
 
     def _build_reports_page(self) -> QWidget:
@@ -551,6 +566,8 @@ class SettingsDialog(QDialog):
         self._licpath.setText(s.license.licpath)
         self._licfile.setText(s.license.license_file)
 
+        self._show_full_paths.setChecked(s.show_full_file_names)
+
         self._decimals.setValue(s.report_decimals)
         self._hide_empty.setChecked(s.hide_empty_reports)
         self._zero_threshold.setText(f"{s.zero_threshold:g}")
@@ -573,6 +590,7 @@ class SettingsDialog(QDialog):
         s = self._settings
         s.appearance.mode = self._current_mode()
         s.appearance.accent = self._accent
+        s.show_full_file_names = self._show_full_paths.isChecked()
         s.report_decimals = self._decimals.value()
         s.hide_empty_reports = self._hide_empty.isChecked()
         try:
