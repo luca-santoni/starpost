@@ -229,6 +229,15 @@ class SelectionPanel(QWidget):
                 f"“{DEFAULT_PROFILE_NAME}” is a reserved profile name.",
             )
             return
+        # Saving over an existing profile silently replaces it, so confirm first.
+        if name.strip() in list_profiles():
+            confirm = QMessageBox.question(
+                self, "Save profile",
+                f"A profile named “{name.strip()}” already exists. "
+                "Would you like to overwrite it?",
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
         # Save the monitor selection only for the plots in this profile.
         plots = self.selected_plots()
         all_monitors = self._monitor_getter() if self._monitor_getter else {}
