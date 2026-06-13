@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shlex
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QDoubleValidator
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,12 +26,14 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -108,8 +111,15 @@ class SettingsDialog(QDialog):
 
     # --- page construction ----------------------------------------------
     def _add_page(self, name: str, widget: QWidget) -> None:
+        # Wrap every page in a scroll area so tall pages (e.g. Plots) stay fully
+        # reachable instead of being clipped by the dialog height.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(widget)
         self._nav.addItem(name)
-        self._stack.addWidget(widget)
+        self._stack.addWidget(scroll)
 
     @staticmethod
     def _wrap(form: QFormLayout) -> QWidget:
