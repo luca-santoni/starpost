@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         self.plot_view.set_filter(
             settings.hide_empty_monitors, settings.monitor_zero_threshold
         )
+        self.plot_view.set_hover_options(settings.hover_show_monitor_name)
         self.log_console = LogConsole()
 
         self._build_layout()
@@ -325,13 +326,12 @@ class MainWindow(QMainWindow):
         # A report/plot checkbox toggled: redraw.
         self._refresh_views()
 
-    def _selected_plot_name(self) -> str:
-        """The monitor plot to display: the first checked one (sorted)."""
+    def _selected_plot_names(self) -> list[str]:
+        """The monitor plots to display: every checked one (sorted)."""
         results = [r for r in self.store.all() if r.error is None]
         plot_union = sorted({n for r in results for n in r.plot_names()})
         selected = self.selection.selected_plots()
-        available = [p for p in plot_union if p in selected]
-        return available[0] if available else ""
+        return [p for p in plot_union if p in selected]
 
     def _refresh_views(self) -> None:
         self._render_reports()
@@ -360,27 +360,35 @@ class MainWindow(QMainWindow):
 
     def _render_plot(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
-        plot_name = self._selected_plot_name()
-        if not plot_name:
+        plot_names = self._selected_plot_names()
+        if not plot_names:
             # No monitor plot selected (e.g. the last one was just unchecked):
             # blank the view rather than leaving the previous plot on screen.
             self.plot_view.clear()
             return
         if self._mode.currentText() == "Comparison":
-            pairs = []
-            for r in results:
-                p = next((p for p in r.plots if p.name == plot_name), None)
-                if p:
-                    pairs.append((r.sim_name, p))
-            if pairs:
-                self.plot_view.show_comparison(plot_name, pairs)
+            categories = []
+            for plot_name in plot_names:
+                pairs = []
+                for r in results:
+                    p = next((p for p in r.plots if p.name == plot_name), None)
+                    if p:
+                        pairs.append((r.sim_name, p))
+                if pairs:
+                    categories.append((plot_name, pairs))
+            if categories:
+                self.plot_view.show_comparison(categories)
+            else:
+                self.plot_view.clear()
         else:
             name = self._sim_picker.currentText()
             res = next((r for r in results if r.sim_name == name), None)
             if res:
-                p = next((p for p in res.plots if p.name == plot_name), None)
-                if p:
-                    self.plot_view.show_plot(p)
+                plots = [p for p in res.plots if p.name in plot_names]
+                if plots:
+                    self.plot_view.show_plots(plots)
+                else:
+                    self.plot_view.clear()
 
     # --- actions (scaffolded) -------------------------------------------
     def _export(self) -> None:
@@ -411,6 +419,7 @@ class MainWindow(QMainWindow):
                 self.settings.hide_empty_monitors,
                 self.settings.monitor_zero_threshold,
             )
+            self.plot_view.set_hover_options(self.settings.hover_show_monitor_name)
             # The hide-empty/threshold settings change which reports qualify as
             # empty: refresh the checkbox list (preserving the current selection).
             results = [r for r in self.store.all() if r.error is None]

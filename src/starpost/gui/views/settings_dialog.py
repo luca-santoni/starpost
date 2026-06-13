@@ -8,7 +8,8 @@ Covers everything in settings.yaml:
   - STAR-CCM+:  starccm_path, default_output_dir, extra_args
   - License:    mode, podkey, licpath, license_file
   - Reports:    report_decimals, hide_empty_reports, zero_threshold
-  - Plots:      hide_empty_monitors, monitor_zero_threshold, classification keywords
+  - Plots:      hide_empty_monitors, monitor_zero_threshold, hover_show_monitor_name,
+                classification keywords
 """
 from __future__ import annotations
 
@@ -206,6 +207,8 @@ class SettingsDialog(QDialog):
         self._monitor_zero_threshold.setValidator(validator)
         self._monitor_zero_threshold.setPlaceholderText("1e-05")
 
+        self._hover_show_name = QCheckBox("Show monitor name in hover label")
+
         self._residual = QLineEdit()
         self._residual.setPlaceholderText("residual, residuals")
         self._force = QLineEdit()
@@ -225,6 +228,14 @@ class SettingsDialog(QDialog):
         zt_hint.setObjectName("hint")
         zt_hint.setWordWrap(True)
         form.addRow("", zt_hint)
+        form.addRow("", self._hover_show_name)
+        hover_hint = QLabel(
+            "When off, hovering a line shows only its coordinates, without the "
+            "monitor's name."
+        )
+        hover_hint.setObjectName("hint")
+        hover_hint.setWordWrap(True)
+        form.addRow("", hover_hint)
         form.addRow("Residual keywords", self._residual)
         form.addRow("Force keywords", self._force)
         hint = QLabel(
@@ -377,6 +388,7 @@ class SettingsDialog(QDialog):
 
         self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
+        self._hover_show_name.setChecked(s.hover_show_monitor_name)
 
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
@@ -401,6 +413,7 @@ class SettingsDialog(QDialog):
             s.monitor_zero_threshold = abs(float(self._monitor_zero_threshold.text()))
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
+        s.hover_show_monitor_name = self._hover_show_name.isChecked()
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())

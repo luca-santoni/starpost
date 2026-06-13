@@ -40,6 +40,10 @@ hide_empty_monitors: true
 # (and hidden when hide_empty_monitors is on).
 monitor_zero_threshold: 1.0e-5
 
+# Include the monitor's name in the label shown when hovering over a plotted
+# line. When false, only the point's coordinates are shown.
+hover_show_monitor_name: true
+
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.

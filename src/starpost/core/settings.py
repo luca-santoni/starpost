@@ -60,6 +60,7 @@ class Settings:
     zero_threshold: float = 1e-5  # |value| below this is treated as 0
     hide_empty_monitors: bool = True  # hide monitor plots whose values are all ~0
     monitor_zero_threshold: float = 1e-5  # |value| below this is treated as 0
+    hover_show_monitor_name: bool = True  # include monitor name in the hover label
     plot_classification: dict = field(
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
@@ -102,6 +103,7 @@ class Settings:
             zero_threshold=float(d.get("zero_threshold", 1e-5)),
             hide_empty_monitors=bool(d.get("hide_empty_monitors", True)),
             monitor_zero_threshold=float(d.get("monitor_zero_threshold", 1e-5)),
+            hover_show_monitor_name=bool(d.get("hover_show_monitor_name", True)),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
         )
@@ -126,6 +128,7 @@ class Settings:
             "zero_threshold": self.zero_threshold,
             "hide_empty_monitors": self.hide_empty_monitors,
             "monitor_zero_threshold": self.monitor_zero_threshold,
+            "hover_show_monitor_name": self.hover_show_monitor_name,
             "plot_classification": self.plot_classification,
         }
 

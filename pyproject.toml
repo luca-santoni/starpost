@@ -13,6 +13,7 @@ authors = [{ name = "Luca" }]
 dependencies = [
     "PySide6>=6.6",
     "pyqtgraph>=0.13",
+    "numpy>=1.24",       # nearest-point hover search in the plot view
     "matplotlib>=3.8",   # used for PDF/JPG export rendering
     "pandas>=2.1",
     "PyYAML>=6.0",

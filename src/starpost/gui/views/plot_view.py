@@ -1,20 +1,24 @@
 """In-app monitor plot viewer (pyqtgraph). Residuals: log Y, multi-series.
 
 Two modes:
-  show_plot(plot)               — one sim's plot, each series a distinct color
-  show_comparison(name, plots)  — same plot across sims overlaid for comparison
+  show_plots(plots)             — one sim's plots, each series a distinct color
+  show_comparison(categories)   — each plot overlaid across sims for comparison
 
-A "Monitors" dropdown beneath the plot lets the user choose which series
-(monitors) of the current plot are drawn — useful when a plot bundles many.
+Beneath the plot sits one dropdown per displayed category (monitor plot),
+labelled with the category's name. Each dropdown chooses which of that
+category's series (monitors) are drawn — useful when a category bundles many,
+or when several categories are overlaid at once.
 """
 from __future__ import annotations
 
+import math
 import re
 
+import numpy as np
 import pyqtgraph as pg
+from PySide6.QtCore import QPointF, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QLabel,
     QMenu,
     QToolButton,
     QVBoxLayout,
@@ -53,6 +57,10 @@ _COLORS = [
     "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
 ]
 
+# How close (in pixels) the cursor must be to a data point for its hover
+# readout to appear — keeps the tooltip from showing when nowhere near a line.
+_HOVER_PX = 25.0
+
 # Series names from STAR-CCM+ exports carry their unit as a trailing
 # parenthetical, e.g. "Mass Flow (kg/s)". Pull it out so the Y axis can label it.
 _UNIT_RE = re.compile(r"\(([^()]*)\)\s*$")
@@ -81,6 +89,76 @@ def _series_is_empty(series, zero_threshold: float) -> bool:
     return not series.y or max(abs(v) for v in series.y) < zero_threshold
 
 
+class _CategorySelector(QWidget):
+    """A category name label beside a dropdown of its series (monitors).
+
+    Each row beneath the plot is one of these; toggling any series emits
+    `changed` so the view can redraw.
+    """
+
+    changed = Signal()
+
+    def __init__(self, category: str, names: list[str], initial=None, parent=None) -> None:
+        super().__init__(parent)
+        self.category = category
+        self._actions: dict[str, object] = {}
+
+        self._btn = QToolButton()
+        self._btn.setObjectName("monitorSelect")
+        self._btn.setPopupMode(QToolButton.InstantPopup)
+        self._menu = _StayOpenMenu(self._btn)
+        self._btn.setMenu(self._menu)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._btn)
+
+        self._populate(names, initial)
+
+    def _populate(self, names: list[str], initial) -> None:
+        self._menu.clear()
+        self._actions = {}
+        if names:
+            self._menu.addAction("Select all").triggered.connect(
+                lambda: self._set_all(True)
+            )
+            self._menu.addAction("Deselect all").triggered.connect(
+                lambda: self._set_all(False)
+            )
+            self._menu.addSeparator()
+        for n in names:
+            act = self._menu.addAction(n)
+            act.setCheckable(True)
+            # No remembered choice (initial is None) → default to shown.
+            act.setChecked(initial is None or n in initial)
+            act.toggled.connect(self._on_toggled)
+            self._actions[n] = act
+        self._update_button()
+
+    def _set_all(self, state: bool) -> None:
+        for a in self._actions.values():
+            a.blockSignals(True)
+            a.setChecked(state)
+            a.blockSignals(False)
+        self._update_button()
+        self.changed.emit()
+
+    def _on_toggled(self, _checked: bool) -> None:
+        self._update_button()
+        self.changed.emit()
+
+    def _update_button(self) -> None:
+        total = len(self._actions)
+        sel = len(self.selected())
+        self._btn.setText(
+            f"{self.category} ({sel}/{total})" if total else f"{self.category} (—)"
+        )
+        self._btn.setEnabled(total > 0)
+
+    def selected(self) -> set[str]:
+        return {n for n, a in self._actions.items() if a.isChecked()}
+
+
 class PlotView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -89,31 +167,41 @@ class PlotView(QWidget):
         self._legend = self._plot.addLegend()
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
-        # Monitor (series) selector shown beneath the plot.
-        self._monitor_btn = QToolButton()
-        self._monitor_btn.setObjectName("monitorSelect")
-        self._monitor_btn.setText("Monitors")
-        self._monitor_btn.setPopupMode(QToolButton.InstantPopup)
-        self._monitor_menu = _StayOpenMenu(self._monitor_btn)
-        self._monitor_btn.setMenu(self._monitor_menu)
-        self._series_actions: dict[str, object] = {}
+        # Hover readout: a marker dot + a coordinate label pinned to the data
+        # point nearest the cursor. Both are re-added after each clear().
+        self._hover_marker = pg.ScatterPlotItem(
+            size=9, pen=pg.mkPen("#222", width=1), brush=pg.mkBrush("#ffffff")
+        )
+        self._hover_text = pg.TextItem(anchor=(0, 1), fill=pg.mkBrush(34, 34, 34, 200))
+        self._hover_marker.setZValue(100)
+        self._hover_text.setZValue(101)
+        # Drawn-curve data the hover search runs over: each is a dict with the
+        # x/y arrays (originals, for display), display colour, and series name.
+        self._curves: list[dict] = []
+        self._plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
-        ctrl = QHBoxLayout()
-        ctrl.addWidget(QLabel("Monitors:"))
-        ctrl.addWidget(self._monitor_btn)
-        ctrl.addStretch(1)
+        # One category (series) selector per displayed plot, laid out in a row.
+        self._ctrl = QHBoxLayout()
+        self._selectors: dict[str, _CategorySelector] = {}
+        # Remember each category's series selection so it survives redraws
+        # (toggling another checkbox re-shows the view from scratch).
+        self._selection_memory: dict[str, set[str]] = {}
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._plot, 1)
-        layout.addLayout(ctrl)
+        layout.addLayout(self._ctrl)
 
         # What to re-render when the monitor selection changes.
         self._mode: str | None = None          # "single" | "comparison"
-        self._current = None                    # MonitorPlot | (name, plots)
+        self._current = None                    # list[MonitorPlot] | categories
+        self._y_log = False                     # current Y-axis log state
 
         # Empty-monitor filtering (mirrors the Reports settings).
         self._hide_empty = True
         self._zero_threshold = 1e-5
+
+        # Hover readout options.
+        self._hover_show_name = True
 
     # --- public entry points --------------------------------------------
     def set_filter(self, hide_empty: bool, zero_threshold: float) -> None:
@@ -125,34 +213,51 @@ class PlotView(QWidget):
         self._zero_threshold = zero_threshold
         self._reshow()
 
-    def show_plot(self, plot: MonitorPlot) -> None:
+    def set_hover_options(self, show_name: bool) -> None:
+        """Configure the hover readout. When show_name is False the label shows
+        only the coordinates, omitting the monitor's name."""
+        self._hover_show_name = show_name
+        self._hide_hover()  # drop any stale label; it rebuilds on next hover
+
+    def show_plots(self, plots: list[MonitorPlot]) -> None:
+        """Draw one sim's monitor plots, overlaid; each is its own category."""
         self._mode = "single"
-        self._current = plot
-        self._rebuild_monitor_menu([s.name for s in plot.series if self._visible(s)])
+        self._current = plots
+        self._set_categories(
+            [(p.name, [s.name for s in p.series if self._visible(s)]) for p in plots]
+        )
         self._render()
 
-    def show_comparison(self, name: str, plots: list[tuple[str, MonitorPlot]]) -> None:
-        """plots: list of (sim_name, MonitorPlot) for the same plot across sims."""
+    def show_comparison(
+        self, categories: list[tuple[str, list[tuple[str, MonitorPlot]]]]
+    ) -> None:
+        """categories: list of (plot_name, [(sim_name, MonitorPlot), ...]) — each
+        plot overlaid across the sims that have it."""
         self._mode = "comparison"
-        self._current = (name, plots)
-        names: list[str] = []
-        seen: set[str] = set()
-        for _, p in plots:
-            for s in p.series:
-                if s.name not in seen and self._visible(s):
-                    seen.add(s.name)
-                    names.append(s.name)
-        self._rebuild_monitor_menu(names)
+        self._current = categories
+        cat_series: list[tuple[str, list[str]]] = []
+        for plot_name, pairs in categories:
+            names: list[str] = []
+            seen: set[str] = set()
+            for _, p in pairs:
+                for s in p.series:
+                    if s.name not in seen and self._visible(s):
+                        seen.add(s.name)
+                        names.append(s.name)
+            cat_series.append((plot_name, names))
+        self._set_categories(cat_series)
         self._render()
 
     def clear(self) -> None:
         """Blank the view — e.g. when no plot is selected for display."""
         self._mode = None
         self._current = None
-        self._rebuild_monitor_menu([])
+        self._set_categories([])
         self._plot.clear()
         self._legend.clear()
         self._plot.setTitle("")
+        self._curves = []
+        self._hide_hover()
 
     # --- empty-monitor filtering ----------------------------------------
     def _visible(self, series) -> bool:
@@ -162,51 +267,38 @@ class PlotView(QWidget):
     def _reshow(self) -> None:
         """Re-run the active show_* so a filter change rebuilds the menu/plot."""
         if self._mode == "single":
-            self.show_plot(self._current)
+            self.show_plots(self._current)
         elif self._mode == "comparison":
-            name, plots = self._current
-            self.show_comparison(name, plots)
+            self.show_comparison(self._current)
 
-    # --- monitor selector ------------------------------------------------
-    def _rebuild_monitor_menu(self, names: list[str]) -> None:
-        self._monitor_menu.clear()
-        self._series_actions = {}
-        if names:
-            self._monitor_menu.addAction("Select all").triggered.connect(
-                lambda: self._set_all_series(True)
-            )
-            self._monitor_menu.addAction("Deselect all").triggered.connect(
-                lambda: self._set_all_series(False)
-            )
-            self._monitor_menu.addSeparator()
-        for n in names:
-            act = self._monitor_menu.addAction(n)
-            act.setCheckable(True)
-            act.setChecked(True)
-            act.toggled.connect(self._on_monitor_toggled)
-            self._series_actions[n] = act
-        self._update_monitor_button()
+    # --- category selectors ---------------------------------------------
+    def _set_categories(self, cat_series: list[tuple[str, list[str]]]) -> None:
+        """Rebuild the row of per-category dropdowns, preserving prior choices."""
+        # Stash current choices so they carry across the teardown.
+        for name, sel in self._selectors.items():
+            self._selection_memory[name] = sel.selected()
+        while self._ctrl.count():
+            item = self._ctrl.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                # Reparent out first so the old row vanishes immediately rather
+                # than lingering until the event loop processes deleteLater.
+                w.setParent(None)
+                w.deleteLater()
+        self._selectors = {}
 
-    def _set_all_series(self, state: bool) -> None:
-        for a in self._series_actions.values():
-            a.blockSignals(True)
-            a.setChecked(state)
-            a.blockSignals(False)
-        self._update_monitor_button()
-        self._render()
+        for category, names in cat_series:
+            remembered = self._selection_memory.get(category)
+            initial = remembered & set(names) if remembered is not None else None
+            sel = _CategorySelector(category, names, initial)
+            sel.changed.connect(self._render)
+            self._ctrl.addWidget(sel)
+            self._selectors[category] = sel
+        self._ctrl.addStretch(1)
 
-    def _selected_series(self) -> set[str]:
-        return {n for n, a in self._series_actions.items() if a.isChecked()}
-
-    def _on_monitor_toggled(self, _checked: bool) -> None:
-        self._update_monitor_button()
-        self._render()
-
-    def _update_monitor_button(self) -> None:
-        total = len(self._series_actions)
-        sel = len(self._selected_series())
-        self._monitor_btn.setText(f"Monitors ({sel}/{total})" if total else "Monitors")
-        self._monitor_btn.setEnabled(total > 0)
+    def _selected_series(self, category: str) -> set[str]:
+        sel = self._selectors.get(category)
+        return sel.selected() if sel is not None else set()
 
     # --- rendering -------------------------------------------------------
     def _reset(self, title: str, y_log: bool, y_label: str = "Value") -> None:
@@ -216,43 +308,141 @@ class PlotView(QWidget):
         self._plot.setLogMode(x=False, y=y_log)
         self._plot.setLabel("bottom", "Iteration")
         self._plot.setLabel("left", y_label)
+        # clear() drops every item, including the hover overlay — re-add it
+        # (hidden) and start collecting the freshly drawn curves.
+        self._y_log = y_log
+        self._curves = []
+        self._hover_marker.setData([], [])
+        self._hover_marker.hide()
+        self._hover_text.hide()
+        self._plot.addItem(self._hover_marker)
+        self._plot.addItem(self._hover_text)
 
     def _render(self) -> None:
         if self._mode == "single":
-            self._render_single(self._current, self._selected_series())
+            self._render_single(self._current)
         elif self._mode == "comparison":
-            name, plots = self._current
-            self._render_comparison(name, plots, self._selected_series())
+            self._render_comparison(self._current)
         else:
             return
         # Re-fit the view to the freshly drawn data, overriding any manual
         # pan/zoom so the new selection is fully visible.
         self._plot.getViewBox().autoRange()
 
-    def _render_single(self, plot: MonitorPlot, selected: set[str]) -> None:
-        drawn = [s.name for s in plot.series if s.name in selected and self._visible(s)]
-        self._reset(plot.name, plot.y_log, _y_label_for(drawn))
-        # Keep each series' colour stable regardless of which are filtered out.
-        for i, s in enumerate(plot.series):
-            if s.name not in selected or not self._visible(s):
-                continue
-            self._plot.plot(
-                s.x, s.y, name=s.name, pen=pg.mkPen(_COLORS[i % len(_COLORS)], width=1.5)
-            )
-
-    def _render_comparison(
-        self, name: str, plots: list[tuple[str, MonitorPlot]], selected: set[str]
-    ) -> None:
-        y_log = any(p.y_log for _, p in plots)
-        drawn = [
-            s.name for _, p in plots for s in p.series
-            if s.name in selected and self._visible(s)
-        ]
-        self._reset(f"{name} (comparison)", y_log, _y_label_for(drawn))
-        for i, (sim_name, plot) in enumerate(plots):
-            color = _COLORS[i % len(_COLORS)]
+    def _render_single(self, plots: list[MonitorPlot]) -> None:
+        drawn: list[str] = []
+        specs: list[tuple] = []
+        # A running colour index across every category's series keeps each
+        # line's colour stable regardless of which are filtered/deselected.
+        color_i = 0
+        for plot in plots:
+            selected = self._selected_series(plot.name)
             for s in plot.series:
+                color = _COLORS[color_i % len(_COLORS)]
+                color_i += 1
                 if s.name not in selected or not self._visible(s):
                     continue
-                label = f"{sim_name}: {s.name}" if len(plot.series) > 1 else sim_name
-                self._plot.plot(s.x, s.y, name=label, pen=pg.mkPen(color, width=1.5))
+                drawn.append(s.name)
+                specs.append((s.x, s.y, s.name, color))
+        title = ", ".join(p.name for p in plots)
+        self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
+        for x, y, name, color in specs:
+            self._plot.plot(x, y, name=name, pen=pg.mkPen(color, width=1.5))
+            self._record_curve(x, y, name, color)
+
+    def _render_comparison(
+        self, categories: list[tuple[str, list[tuple[str, MonitorPlot]]]]
+    ) -> None:
+        # Colour by sim, consistent across every category that has the sim.
+        sim_order: list[str] = []
+        for _, pairs in categories:
+            for sim_name, _ in pairs:
+                if sim_name not in sim_order:
+                    sim_order.append(sim_name)
+        sim_color = {s: _COLORS[i % len(_COLORS)] for i, s in enumerate(sim_order)}
+        # Disambiguate the legend by series whenever more than one could appear.
+        multi = len(categories) > 1 or any(
+            len(p.series) > 1 for _, pairs in categories for _, p in pairs
+        )
+
+        drawn: list[str] = []
+        specs: list[tuple] = []
+        y_log = False
+        for plot_name, pairs in categories:
+            selected = self._selected_series(plot_name)
+            for sim_name, plot in pairs:
+                y_log = y_log or plot.y_log
+                for s in plot.series:
+                    if s.name not in selected or not self._visible(s):
+                        continue
+                    drawn.append(s.name)
+                    label = f"{sim_name}: {s.name}" if multi else sim_name
+                    specs.append((s.x, s.y, label, sim_color[sim_name]))
+        title = ", ".join(name for name, _ in categories) + " (comparison)"
+        self._reset(title, y_log, _y_label_for(drawn))
+        for x, y, label, color in specs:
+            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=1.5))
+            self._record_curve(x, y, label, color)
+
+    # --- hover readout ---------------------------------------------------
+    def _record_curve(self, x, y, name: str, color: str) -> None:
+        """Stash a drawn line's data so the hover search can run over it."""
+        self._curves.append(
+            {
+                "x": np.asarray(x, dtype=float),
+                "y": np.asarray(y, dtype=float),
+                "name": name,
+                "color": color,
+            }
+        )
+
+    def _view_y(self, y):
+        """Map a data Y to the axis' view coordinate (log10 under log mode)."""
+        return np.log10(y) if self._y_log else y
+
+    def _on_mouse_moved(self, scene_pos) -> None:
+        """Pin the readout to the data point nearest the cursor, in pixels."""
+        vb = self._plot.getViewBox()
+        if not self._curves or not self._plot.sceneBoundingRect().contains(scene_pos):
+            self._hide_hover()
+            return
+        cursor_x = float(vb.mapSceneToView(scene_pos).x())
+        sx, sy = scene_pos.x(), scene_pos.y()
+
+        best = None  # (pixel_distance, x, y, color, name)
+        for c in self._curves:
+            xs, ys = c["x"], c["y"]
+            if xs.size == 0:
+                continue
+            # The x arrays are monotonic iterations, so binary-search to the
+            # nearest index and check it plus its neighbours — enough to find
+            # the closest vertex without scanning the whole (possibly huge) line.
+            i = int(np.searchsorted(xs, cursor_x))
+            for j in (i - 1, i, i + 1):
+                if j < 0 or j >= xs.size:
+                    continue
+                yj = ys[j]
+                if self._y_log and yj <= 0:
+                    continue  # not drawable on a log axis
+                pt = vb.mapViewToScene(QPointF(float(xs[j]), float(self._view_y(yj))))
+                d = math.hypot(pt.x() - sx, pt.y() - sy)
+                if best is None or d < best[0]:
+                    best = (d, float(xs[j]), float(yj), c["color"], c["name"])
+
+        if best is None or best[0] > _HOVER_PX:
+            self._hide_hover()
+            return
+        self._show_hover(*best[1:])
+
+    def _show_hover(self, x: float, y: float, color: str, name: str) -> None:
+        vy = float(self._view_y(y))
+        self._hover_marker.setData([x], [vy], brush=pg.mkBrush(color))
+        label = f"{name}\n{x:g}, {y:g}" if self._hover_show_name else f"{x:g}, {y:g}"
+        self._hover_text.setText(label, color=color)
+        self._hover_text.setPos(x, vy)
+        self._hover_marker.show()
+        self._hover_text.show()
+
+    def _hide_hover(self) -> None:
+        self._hover_marker.hide()
+        self._hover_text.hide()
