@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import shlex
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QDoubleValidator
 from PySide6.QtWidgets import (
     QApplication,
@@ -228,6 +228,14 @@ class SettingsDialog(QDialog):
 
         self._podkey = QLineEdit()
         self._podkey.setPlaceholderText("Power-on-Demand key")
+        # Keep the key covered when the page opens; clicking the cover reveals
+        # it, and it re-hides as soon as the field loses focus (clicked away).
+        self._podkey_cover = QPushButton("Hidden: click to show")
+        self._podkey_stack = QStackedWidget()
+        self._podkey_stack.addWidget(self._podkey_cover)  # index 0: covered
+        self._podkey_stack.addWidget(self._podkey)        # index 1: revealed
+        self._podkey_cover.clicked.connect(self._reveal_podkey)
+        self._podkey.installEventFilter(self)
         self._licpath = QLineEdit()
         self._licpath.setPlaceholderText("<port>@<server>   e.g. 1999@licsrv")
         self._licfile = QLineEdit()
@@ -236,7 +244,7 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         form.addRow("Mode", self._mode)
         self._podkey_label = QLabel("POD key")
-        form.addRow(self._podkey_label, self._podkey)
+        form.addRow(self._podkey_label, self._podkey_stack)
         self._licpath_label = QLabel("License server")
         form.addRow(self._licpath_label, self._licpath)
         self._licfile_label = QLabel("License file")
@@ -244,6 +252,16 @@ class SettingsDialog(QDialog):
             self._licfile_label, _path_row(self._licfile, self._browse_licfile)
         )
         return self._wrap(form)
+
+    def _reveal_podkey(self) -> None:
+        self._podkey_stack.setCurrentWidget(self._podkey)
+        self._podkey.setFocus()  # so clicking away triggers the re-hide below
+
+    def eventFilter(self, obj, event):  # noqa: N802 (Qt override)
+        # Re-cover the POD key once the field loses focus (clicked away).
+        if obj is self._podkey and event.type() == QEvent.Type.FocusOut:
+            self._podkey_stack.setCurrentWidget(self._podkey_cover)
+        return super().eventFilter(obj, event)
 
     def _build_files_page(self) -> QWidget:
         self._show_full_paths = QCheckBox("Show full file names")
@@ -548,7 +566,8 @@ class SettingsDialog(QDialog):
     # --- license mode toggling ------------------------------------------
     def _sync_license_mode(self) -> None:
         server = self._mode.currentData() == "podkey_server"
-        for w in (self._podkey, self._podkey_label, self._licpath, self._licpath_label):
+        for w in (self._podkey_stack, self._podkey_label,
+                  self._licpath, self._licpath_label):
             w.setEnabled(server)
         for w in (self._licfile, self._licfile_label):
             w.setEnabled(not server)
