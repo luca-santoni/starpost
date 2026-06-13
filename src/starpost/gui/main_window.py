@@ -193,6 +193,20 @@ class MainWindow(QMainWindow):
             return
         if self._missing_exe():
             return
+        # Guard against same-named duplicates: the data list is keyed by file
+        # name, so loading another .sim with a name already present would shadow
+        # it. Offer to overwrite the existing data instead.
+        existing = [r for r in self.store.all() if Path(r.sim_path).name == path.name]
+        if existing:
+            if QMessageBox.question(
+                self, "File already loaded",
+                f"“{path.name}” has already been loaded. "
+                "Would you like to overwrite it?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            ) != QMessageBox.Yes:
+                return
+            for r in existing:
+                self.store.remove(r.sim_path)
         out_dir = Path(self.settings.default_output_dir or str(Path.home()))
         self._start_jobs([Job(sim_file=path)], out_dir)
 
