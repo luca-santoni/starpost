@@ -38,6 +38,8 @@ class FileListPanel(QWidget):
         self._list.setSelectionMode(QListWidget.ExtendedSelection)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_context_menu)
+        # Double-clicking a row is a shortcut for the right-click "Open".
+        self._list.itemDoubleClicked.connect(self._open_item)
 
         add_files = QPushButton("Add files…")
         add_folder = QPushButton("Add folder…")
@@ -177,6 +179,11 @@ class FileListPanel(QWidget):
         for item in items:
             self._list.takeItem(self._list.row(item))
         self.files_changed.emit(self.files())
+
+    def _open_item(self, item: QListWidgetItem) -> None:
+        """Open the double-clicked file (just that one, regardless of any wider
+        selection)."""
+        self.open_requested.emit([self._item_path(item)])
 
     def _show_context_menu(self, pos) -> None:
         item = self._list.itemAt(pos)
