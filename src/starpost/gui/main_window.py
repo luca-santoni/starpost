@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
+    QTabBar,
     QTabWidget,
     QToolBar,
     QWidget,
@@ -43,6 +44,25 @@ from starpost.gui.views.selection_panel import SelectionPanel
 from starpost.utils.logging import get_logger
 
 log = get_logger("ui")
+
+
+class _UniformTabBar(QTabBar):
+    """A tab bar whose tabs all render at one shared width (set externally), so
+    the Files/Data/Plots tabs can match the Reports tab exactly."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._tab_width = 0  # 0 = use each tab's natural width
+
+    def set_tab_width(self, width: int) -> None:
+        self._tab_width = width
+        self.updateGeometry()
+
+    def tabSizeHint(self, index):  # noqa: N802 (Qt override)
+        size = super().tabSizeHint(index)
+        if self._tab_width:
+            size.setWidth(self._tab_width)
+        return size
 
 
 def _drop_zero_report_columns(df, threshold: float = 1e-5):
@@ -110,11 +130,13 @@ class MainWindow(QMainWindow):
     # --- layout ----------------------------------------------------------
     def _build_layout(self) -> None:
         tabs = QTabWidget()
+        tabs.setTabBar(_UniformTabBar())
         tabs.addTab(self.report_table, "Reports")
         tabs.addTab(self.plot_view, "Plots")
 
         # Left side: Files (the batch list) and Data (loaded results) as tabs.
         left_tabs = QTabWidget()
+        left_tabs.setTabBar(_UniformTabBar())
         left_tabs.addTab(self.file_list, "Files")
         left_tabs.addTab(self.data_list, "Data")
         # Preserve right-click-to-sort, now on the Files tab itself.
@@ -124,12 +146,21 @@ class MainWindow(QMainWindow):
             lambda pos: self._left_tab_menu(left_tabs, pos)
         )
 
+        # Give every tab the width of the widest center tab (Reports) so the
+        # Files/Data/Plots tabs all match it.
+        center_bar = tabs.tabBar()
+        reports_width = max(
+            center_bar.tabSizeHint(i).width() for i in range(tabs.count())
+        )
+        center_bar.set_tab_width(reports_width)
+        left_bar.set_tab_width(reports_width)
+
         center = QSplitter(Qt.Horizontal)
         center.addWidget(left_tabs)
         center.addWidget(tabs)
         center.addWidget(self.selection)
         center.setStretchFactor(1, 1)
-        center.setSizes([260, 720, 300])
+        center.setSizes([320, 660, 300])
 
         outer = QSplitter(Qt.Vertical)
         outer.addWidget(center)
