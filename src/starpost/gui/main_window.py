@@ -134,8 +134,6 @@ class MainWindow(QMainWindow):
         self.addToolBar(tb)
 
         self._run_action = tb.addAction("Run batch", self._run_batch)
-        self._stop_action = tb.addAction("Stop after current", self._stop_batch)
-        self._stop_action.setEnabled(False)
         tb.addSeparator()
         tb.addAction("Export…", self._export)
         tb.addAction("Settings…", self._open_settings)
@@ -232,13 +230,7 @@ class MainWindow(QMainWindow):
 
         self.log_console.clear()
         self._run_action.setEnabled(False)
-        self._stop_action.setEnabled(True)
         self._thread.start()
-
-    def _stop_batch(self) -> None:
-        if self._worker:
-            self._worker.request_stop()
-            self._stop_action.setEnabled(False)
 
     def _on_sim_done(self, _result=None) -> None:
         """A file finished extracting: refresh views on the GUI thread."""
@@ -246,7 +238,6 @@ class MainWindow(QMainWindow):
 
     def _on_batch_finished(self) -> None:
         self._run_action.setEnabled(True)
-        self._stop_action.setEnabled(False)
         self._check_homogeneity()
         self._refresh_from_store()
 
