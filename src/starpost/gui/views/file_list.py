@@ -175,12 +175,9 @@ class FileListPanel(QWidget):
             self._list.setCurrentItem(item)
         menu = QMenu(self)
         open_act = menu.addAction("Open")
-        remove_act = menu.addAction("Remove")
         chosen = menu.exec(self._list.mapToGlobal(pos))
         if chosen is open_act:
             self.open_requested.emit(self._item_path(item))
-        elif chosen is remove_act:
-            self._remove_selected()
 
     def _clear_confirmed(self) -> None:
         """Clear the list only after the user confirms the warning."""
