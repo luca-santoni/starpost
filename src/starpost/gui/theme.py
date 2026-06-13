@@ -146,6 +146,15 @@ QProgressBar {
 }
 QProgressBar::chunk { background: $accent; }
 
+/* Slim underline-style progress bar (bottom log panel): flat, no border, the
+   accent fills left-to-right like a growing underline. */
+QProgressBar#progressUnderline {
+    border: none;
+    border-radius: 0;
+    background: $input_bg;
+}
+QProgressBar#progressUnderline::chunk { background: $accent; }
+
 QPlainTextEdit {
     font-family: monospace;
     background: $console_bg;

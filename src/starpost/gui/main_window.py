@@ -277,6 +277,9 @@ class MainWindow(QMainWindow):
         self._worker.finished.connect(self._thread.quit)
 
         self.log_console.clear()
+        # Show the counter (0/N) and a sliver of progress right away, before the
+        # first file finishes extracting.
+        self.log_console.start_progress(len(jobs))
         self._run_action.setEnabled(False)
         self._thread.start()
 
@@ -288,6 +291,7 @@ class MainWindow(QMainWindow):
         self._run_action.setEnabled(True)
         self._check_homogeneity()
         self._refresh_from_store()
+        self.log_console.finish_progress()  # fade the counter/bar out shortly
 
     def _check_homogeneity(self) -> None:
         if not self.store.is_homogeneous():
