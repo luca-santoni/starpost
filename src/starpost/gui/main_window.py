@@ -16,9 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
-    QLabel,
     QMainWindow,
     QMessageBox,
     QSplitter,
@@ -192,18 +190,6 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction("Export…", self._export)
         tb.addAction("Settings…", self._open_settings)
-        tb.addSeparator()
-
-        tb.addWidget(QLabel(" View: "))
-        self._mode = QComboBox()
-        self._mode.addItems(["Per-file", "Comparison"])
-        self._mode.currentTextChanged.connect(lambda _: self._on_view_changed())
-        tb.addWidget(self._mode)
-
-        tb.addWidget(QLabel(" File: "))
-        self._sim_picker = QComboBox()
-        self._sim_picker.currentTextChanged.connect(lambda _: self._on_view_changed())
-        tb.addWidget(self._sim_picker)
 
     # --- batch run -------------------------------------------------------
     def _busy(self) -> bool:
@@ -393,16 +379,26 @@ class MainWindow(QMainWindow):
         ]
         return len(present) > 0 and all(abs(v) < threshold for v in present)
 
+    def _is_comparison(self) -> bool:
+        """Comparison view when two or more files are checked in the Data tab;
+        otherwise a single file is shown per-file."""
+        return len(self.data_list.checked_names()) >= 2
+
+    def _current_sim(self) -> str:
+        """The single file shown in per-file mode: the first (only) checked one."""
+        checked = self.data_list.checked_names()
+        return checked[0] if checked else ""
+
     def _emptiness_scope(self, results) -> list:
         """Which sims decide whether a report is empty for the checkbox list.
 
         Comparison mode judges across all loaded files; per-file mode judges
         against the currently selected file only.
         """
-        if self._mode.currentText() == "Comparison":
+        if self._is_comparison():
             return results
         sel = next(
-            (r for r in results if r.sim_name == self._sim_picker.currentText()), None
+            (r for r in results if r.sim_name == self._current_sim()), None
         )
         return [sel] if sel is not None else results
 
@@ -424,12 +420,6 @@ class MainWindow(QMainWindow):
     def _refresh_from_store(self) -> None:
         results = [r for r in self.store.all() if r.error is None]
 
-        # Update the file picker first so per-file emptiness uses the right file.
-        self._sim_picker.blockSignals(True)
-        self._sim_picker.clear()
-        self._sim_picker.addItems([r.sim_name for r in results])
-        self._sim_picker.blockSignals(False)
-
         # The Data tab mirrors the loaded results, named after their .sim files.
         self.data_list.set_entries([r.sim_name for r in results])
 
@@ -449,22 +439,9 @@ class MainWindow(QMainWindow):
 
     def _on_data_selection_changed(self) -> None:
         """A Data-tab checkbox toggled: checking 2+ files shows a comparison,
-        one file shows it per-file. Drives which files the views render."""
-        checked = self.data_list.checked_names()
-        self._mode.blockSignals(True)
-        self._sim_picker.blockSignals(True)
-        if len(checked) >= 2:
-            self._mode.setCurrentText("Comparison")
-        elif len(checked) == 1:
-            self._mode.setCurrentText("Per-file")
-            self._sim_picker.setCurrentText(checked[0])
-        self._mode.blockSignals(False)
-        self._sim_picker.blockSignals(False)
-        self._refresh_views()
-
-    def _on_view_changed(self) -> None:
-        # View mode or selected file changed: which reports count as empty can
-        # differ, so refresh the checkbox list (keeping selection) then redraw.
+        one file shows it per-file. This drives both which files the views
+        render and the view mode, so re-scope the report list (which reports
+        count as empty depends on the mode) before redrawing."""
         self._refresh_report_choices()
         self._refresh_views()
 
@@ -492,7 +469,7 @@ class MainWindow(QMainWindow):
             return
         selected = self.selection.selected_reports()
         hide_zero = self.settings.hide_empty_reports
-        if self._mode.currentText() == "Comparison":
+        if self._is_comparison():
             df = reports_wide_frame(results, selected)
             if hide_zero:
                 df = _drop_zero_report_columns(df, self.settings.zero_threshold)
@@ -500,7 +477,7 @@ class MainWindow(QMainWindow):
             # (reports_wide_frame is sims-as-rows; transpose only for the view).
             self.report_table.show_dataframe(df.T)
         else:
-            name = self._sim_picker.currentText()
+            name = self._current_sim()
             res = next((r for r in results if r.sim_name == name), results[0])
             self.report_table.show_single(
                 res, hide_zero=hide_zero, selected=selected
@@ -514,7 +491,7 @@ class MainWindow(QMainWindow):
             # blank the view rather than leaving the previous plot on screen.
             self.plot_view.clear()
             return
-        if self._mode.currentText() == "Comparison":
+        if self._is_comparison():
             categories = []
             for plot_name in plot_names:
                 pairs = []
@@ -529,7 +506,7 @@ class MainWindow(QMainWindow):
             else:
                 self.plot_view.clear()
         else:
-            name = self._sim_picker.currentText()
+            name = self._current_sim()
             res = next((r for r in results if r.sim_name == name), results[0])
             plots = [p for p in res.plots if p.name in plot_names]
             if plots:
