@@ -8,13 +8,11 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -54,21 +52,7 @@ class FileListPanel(QWidget):
         for b in (add_files, add_folder, remove, clear):
             buttons.addWidget(b)
 
-        header = QLabel("Files")
-        header.setObjectName("panelHeader")
-        # Hug the text so it reads as a single tab rather than a full-width bar.
-        header.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        # Right-click the header to sort the list.
-        header.setContextMenuPolicy(Qt.CustomContextMenu)
-        header.customContextMenuRequested.connect(self._show_header_menu)
-        self._header = header
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.addWidget(header)
-        header_row.addStretch(1)
-
         layout = QVBoxLayout(self)
-        layout.addLayout(header_row)
         layout.addWidget(self._list)
         layout.addLayout(buttons)
 
@@ -116,9 +100,10 @@ class FileListPanel(QWidget):
         self.files_changed.emit(self.files())
 
     # --- sorting ---------------------------------------------------------
-    def _show_header_menu(self, pos) -> None:
+    def show_sort_menu(self, global_pos) -> None:
+        """Show the sort options at a global position (the Files tab is
+        right-clicked). The active mode shows a checkmark."""
         menu = QMenu(self)
-        # action text -> sort key; the active mode shows a checkmark.
         options = [
             ("Name (A–Z)", "name_az"),
             ("Name (Z–A)", "name_za"),
@@ -131,7 +116,7 @@ class FileListPanel(QWidget):
             act.setCheckable(True)
             act.setChecked(key == self._sort_mode)
             actions[act] = key
-        chosen = menu.exec(self._header.mapToGlobal(pos))
+        chosen = menu.exec(global_pos)
         if chosen is not None:
             self._sort_files(actions[chosen])
 

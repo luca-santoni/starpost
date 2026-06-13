@@ -35,6 +35,7 @@ from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon
+from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
 from starpost.gui.views.plot_view import PlotView
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
 
         # Panels
         self.file_list = FileListPanel(show_full_names=settings.show_full_file_names)
+        self.data_list = DataListPanel()
         self.selection = SelectionPanel()
         self.report_table = ReportTable(
             decimals=settings.report_decimals,
@@ -102,6 +104,7 @@ class MainWindow(QMainWindow):
 
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_file)
+        self.data_list.selection_changed.connect(self._on_data_selection_changed)
         self._refresh_from_store()
 
     # --- layout ----------------------------------------------------------
@@ -110,8 +113,19 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.report_table, "Reports")
         tabs.addTab(self.plot_view, "Plots")
 
+        # Left side: Files (the batch list) and Data (loaded results) as tabs.
+        left_tabs = QTabWidget()
+        left_tabs.addTab(self.file_list, "Files")
+        left_tabs.addTab(self.data_list, "Data")
+        # Preserve right-click-to-sort, now on the Files tab itself.
+        left_bar = left_tabs.tabBar()
+        left_bar.setContextMenuPolicy(Qt.CustomContextMenu)
+        left_bar.customContextMenuRequested.connect(
+            lambda pos: self._left_tab_menu(left_tabs, pos)
+        )
+
         center = QSplitter(Qt.Horizontal)
-        center.addWidget(self.file_list)
+        center.addWidget(left_tabs)
         center.addWidget(tabs)
         center.addWidget(self.selection)
         center.setStretchFactor(1, 1)
@@ -128,6 +142,12 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(outer)
         self.setCentralWidget(container)
+
+    def _left_tab_menu(self, tabs: QTabWidget, pos) -> None:
+        """Right-clicking the Files tab opens its sort menu."""
+        bar = tabs.tabBar()
+        if tabs.widget(bar.tabAt(pos)) is self.file_list:
+            self.file_list.show_sort_menu(bar.mapToGlobal(pos))
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
@@ -326,10 +346,36 @@ class MainWindow(QMainWindow):
         self._sim_picker.addItems([r.sim_name for r in results])
         self._sim_picker.blockSignals(False)
 
+        # The Data tab mirrors the loaded results, named after their .sim files.
+        self.data_list.set_entries([r.sim_name for r in results])
+
         report_union = self._available_report_names(results)
         plot_union = sorted({n for r in results for n in r.plot_names()})
         self.selection.populate(report_union, plot_union)
 
+        self._refresh_views()
+
+    def _active_results(self) -> list:
+        """The loaded results whose .sim is checked in the Data tab. This is the
+        set fed to the Reports/Plots views."""
+        checked = set(self.data_list.checked_names())
+        return [
+            r for r in self.store.all() if r.error is None and r.sim_name in checked
+        ]
+
+    def _on_data_selection_changed(self) -> None:
+        """A Data-tab checkbox toggled: checking 2+ files shows a comparison,
+        one file shows it per-file. Drives which files the views render."""
+        checked = self.data_list.checked_names()
+        self._mode.blockSignals(True)
+        self._sim_picker.blockSignals(True)
+        if len(checked) >= 2:
+            self._mode.setCurrentText("Comparison")
+        elif len(checked) == 1:
+            self._mode.setCurrentText("Per-file")
+            self._sim_picker.setCurrentText(checked[0])
+        self._mode.blockSignals(False)
+        self._sim_picker.blockSignals(False)
         self._refresh_views()
 
     def _on_view_changed(self) -> None:
@@ -344,7 +390,7 @@ class MainWindow(QMainWindow):
 
     def _selected_plot_names(self) -> list[str]:
         """The monitor plots to display: every checked one (sorted)."""
-        results = [r for r in self.store.all() if r.error is None]
+        results = self._active_results()
         plot_union = sorted({n for r in results for n in r.plot_names()})
         selected = self.selection.selected_plots()
         return [p for p in plot_union if p in selected]
@@ -356,7 +402,10 @@ class MainWindow(QMainWindow):
     def _render_reports(self) -> None:
         from starpost.batch.aggregator import reports_wide_frame
 
-        results = [r for r in self.store.all() if r.error is None]
+        results = self._active_results()
+        if not results:
+            self.report_table.clear()
+            return
         selected = self.selection.selected_reports()
         hide_zero = self.settings.hide_empty_reports
         if self._mode.currentText() == "Comparison":
@@ -368,16 +417,15 @@ class MainWindow(QMainWindow):
             self.report_table.show_dataframe(df.T)
         else:
             name = self._sim_picker.currentText()
-            res = next((r for r in results if r.sim_name == name), None)
-            if res:
-                self.report_table.show_single(
-                    res, hide_zero=hide_zero, selected=selected
-                )
+            res = next((r for r in results if r.sim_name == name), results[0])
+            self.report_table.show_single(
+                res, hide_zero=hide_zero, selected=selected
+            )
 
     def _render_plot(self) -> None:
-        results = [r for r in self.store.all() if r.error is None]
+        results = self._active_results()
         plot_names = self._selected_plot_names()
-        if not plot_names:
+        if not results or not plot_names:
             # No monitor plot selected (e.g. the last one was just unchecked):
             # blank the view rather than leaving the previous plot on screen.
             self.plot_view.clear()
@@ -398,13 +446,12 @@ class MainWindow(QMainWindow):
                 self.plot_view.clear()
         else:
             name = self._sim_picker.currentText()
-            res = next((r for r in results if r.sim_name == name), None)
-            if res:
-                plots = [p for p in res.plots if p.name in plot_names]
-                if plots:
-                    self.plot_view.show_plots(plots)
-                else:
-                    self.plot_view.clear()
+            res = next((r for r in results if r.sim_name == name), results[0])
+            plots = [p for p in res.plots if p.name in plot_names]
+            if plots:
+                self.plot_view.show_plots(plots)
+            else:
+                self.plot_view.clear()
 
     # --- actions (scaffolded) -------------------------------------------
     def _export(self) -> None:

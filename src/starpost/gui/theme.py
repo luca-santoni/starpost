@@ -193,15 +193,6 @@ QTabBar::tab:selected {
     border-bottom: 2px solid $accent;
 }
 
-/* Panel header styled to read like a selected Reports/Plots tab. */
-QLabel#panelHeader {
-    background: $tab_bg;
-    color: $accent;
-    border: 1px solid $border;
-    border-bottom: 2px solid $accent;
-    padding: 5px 12px;
-}
-
 QGroupBox {
     border: 1px solid $border;
     border-radius: 4px;
