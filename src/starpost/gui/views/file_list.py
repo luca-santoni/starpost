@@ -162,7 +162,19 @@ class FileListPanel(QWidget):
             self._add_paths(sorted(Path(folder).glob("*.sim")))
 
     def _remove_selected(self) -> None:
-        for item in self._list.selectedItems():
+        items = self._list.selectedItems()
+        if not items:
+            return
+        target = (
+            f"“{items[0].text()}”" if len(items) == 1 else f"{len(items)} files"
+        )
+        if QMessageBox.question(
+            self, "Remove files",
+            f"Remove {target} from the list?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        for item in items:
             self._list.takeItem(self._list.row(item))
         self.files_changed.emit(self.files())
 
