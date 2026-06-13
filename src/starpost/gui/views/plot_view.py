@@ -158,6 +158,17 @@ class _CategorySelector(QWidget):
     def selected(self) -> set[str]:
         return {n for n, a in self._actions.items() if a.isChecked()}
 
+    def set_selected(self, names) -> None:
+        """Check exactly the series in `names` (others off), without emitting."""
+        for n, a in self._actions.items():
+            a.blockSignals(True)
+            a.setChecked(n in names)
+            a.blockSignals(False)
+        self._update_button()
+
+    def select_all(self) -> None:
+        self.set_selected(set(self._actions))
+
 
 class PlotView(QWidget):
     def __init__(self, parent=None) -> None:
@@ -254,6 +265,31 @@ class PlotView(QWidget):
         self._hover_x_decimals = max(0, x_decimals)
         self._hover_y_decimals = max(0, y_decimals)
         self._hide_hover()  # drop any stale label; it rebuilds on next hover
+
+    # --- monitor selection (persisted in profiles) ----------------------
+    def monitor_selection(self) -> dict[str, list[str]]:
+        """The series (monitors) currently shown, keyed by monitor group name.
+
+        Covers every group seen this session — both the live dropdowns and the
+        remembered choices for groups not currently on screen.
+        """
+        for name, sel in self._selectors.items():
+            self._selection_memory[name] = sel.selected()
+        return {k: sorted(v) for k, v in self._selection_memory.items()}
+
+    def set_monitor_selection(self, selection: dict[str, list[str]]) -> None:
+        """Restore which series are shown per monitor group (profile loading).
+
+        Groups absent from `selection` fall back to showing all their monitors.
+        """
+        self._selection_memory = {k: set(v) for k, v in selection.items()}
+        for name, sel in self._selectors.items():
+            if name in self._selection_memory:
+                sel.set_selected(self._selection_memory[name])
+            else:
+                sel.select_all()
+        if self._mode is not None:
+            self._render()
 
     def show_plots(self, plots: list[MonitorPlot]) -> None:
         """Draw one sim's monitor plots, overlaid; each is its own category."""

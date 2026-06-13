@@ -91,6 +91,10 @@ class MainWindow(QMainWindow):
             settings.hover_y_decimals,
         )
         self.plot_view.apply_theme(settings.appearance.mode)
+        # Let profiles persist which monitors are shown per plot.
+        self.selection.set_monitor_provider(
+            self.plot_view.monitor_selection, self.plot_view.set_monitor_selection
+        )
         self.log_console = LogConsole()
 
         self._build_layout()

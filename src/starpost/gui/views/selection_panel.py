@@ -108,6 +108,11 @@ class SelectionPanel(QWidget):
         self.reports.changed.connect(self.selection_changed)
         self.plots.changed.connect(self.selection_changed)
 
+        # Optional hooks (wired by MainWindow) to read/restore which monitors
+        # are shown per plot, so profiles can persist that selection too.
+        self._monitor_getter = None   # () -> dict[str, list[str]]
+        self._monitor_setter = None   # (dict[str, list[str]]) -> None
+
         # Profiles
         self._profile_box = QComboBox()
         self._refresh_profiles()
@@ -167,6 +172,15 @@ class SelectionPanel(QWidget):
     def selected_plots(self) -> set[str]:
         return set(self.plots.checked())
 
+    def set_monitor_provider(self, getter, setter) -> None:
+        """Wire callbacks for reading/restoring the per-plot monitor selection.
+
+        `getter()` returns ``{plot_name: [monitor, ...]}``; `setter(mapping)`
+        applies one. Used so profiles can save and load which monitors show.
+        """
+        self._monitor_getter = getter
+        self._monitor_setter = setter
+
     # --- profiles --------------------------------------------------------
     def _refresh_profiles(self) -> None:
         self._profile_box.clear()
@@ -177,6 +191,10 @@ class SelectionPanel(QWidget):
         if not name:
             return
         prof = Profile.load(name)
+        # Prime the per-plot monitor selection *before* re-checking the plots,
+        # so the redraw triggered below picks it up.
+        if self._monitor_setter is not None:
+            self._monitor_setter(prof.monitors)
         self.reports.set_checked(set(prof.reports))
         self.plots.set_checked(set(prof.plots))
         self.selection_changed.emit()
@@ -185,10 +203,15 @@ class SelectionPanel(QWidget):
         name, ok = QInputDialog.getText(self, "Save profile", "Profile name:")
         if not ok or not name.strip():
             return
+        # Save the monitor selection only for the plots in this profile.
+        plots = self.selected_plots()
+        all_monitors = self._monitor_getter() if self._monitor_getter else {}
+        monitors = {p: m for p, m in all_monitors.items() if p in plots}
         Profile(
             name=name.strip(),
             reports=sorted(self.selected_reports()),
-            plots=sorted(self.selected_plots()),
+            plots=sorted(plots),
+            monitors=monitors,
         ).save()
         self._refresh_profiles()
         self._profile_box.setCurrentText(name.strip())

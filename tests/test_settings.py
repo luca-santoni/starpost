@@ -1,4 +1,6 @@
-from starpost.core.settings import LicenseConfig, Settings
+import yaml
+
+from starpost.core.settings import LicenseConfig, Profile, Settings
 
 
 def test_podkey_server_args():
@@ -30,3 +32,31 @@ def test_monitor_settings_round_trip():
     # Re-parsing the serialized form preserves the values.
     assert Settings.from_dict(d).hide_empty_monitors is False
     assert Settings.from_dict(d).monitor_zero_threshold == 1e-3
+
+
+def test_profile_round_trips_monitor_selection(monkeypatch, tmp_path):
+    # Profiles live under the XDG config dir; isolate it to tmp_path.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    Profile(
+        name="aero",
+        reports=["Cd"],
+        plots=["Downforce"],
+        monitors={"Downforce": ["Front Downforce (N)"]},
+    ).save()
+
+    loaded = Profile.load("aero")
+    assert loaded.plots == ["Downforce"]
+    assert loaded.monitors == {"Downforce": ["Front Downforce (N)"]}
+
+
+def test_profile_without_monitors_defaults_to_empty(monkeypatch, tmp_path):
+    # Profiles saved before the monitor selection existed have no "monitors" key.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "starpost" / "profiles").mkdir(parents=True)
+    (tmp_path / "starpost" / "profiles" / "legacy.yaml").write_text(
+        yaml.safe_dump({"name": "legacy", "reports": ["Cd"], "plots": ["Drag"]})
+    )
+
+    loaded = Profile.load("legacy")
+    assert loaded.plots == ["Drag"]
+    assert loaded.monitors == {}  # absent -> show all monitors on load

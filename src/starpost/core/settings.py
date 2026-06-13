@@ -151,6 +151,9 @@ class Profile:
     name: str
     reports: list[str] = field(default_factory=list)   # selected report names
     plots: list[str] = field(default_factory=list)     # selected plot names
+    # plot (monitor group) name -> the series (monitors) shown for it. A group
+    # absent here defaults to showing all of its monitors.
+    monitors: dict[str, list[str]] = field(default_factory=dict)
     # plot name -> "log" | "linear", overriding the auto classification
     axis_overrides: dict[str, str] = field(default_factory=dict)
 
@@ -164,6 +167,7 @@ class Profile:
                     "name": self.name,
                     "reports": self.reports,
                     "plots": self.plots,
+                    "monitors": self.monitors,
                     "axis_overrides": self.axis_overrides,
                 },
                 sort_keys=False,
@@ -177,6 +181,7 @@ class Profile:
             name=data["name"],
             reports=data.get("reports", []),
             plots=data.get("plots", []),
+            monitors=data.get("monitors", {}) or {},
             axis_overrides=data.get("axis_overrides", {}),
         )
 
