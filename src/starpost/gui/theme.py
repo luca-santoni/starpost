@@ -14,6 +14,11 @@ from __future__ import annotations
 
 from string import Template
 
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
+
+from starpost.utils.paths import cache_dir
+
 # A curated set of accent presets offered as clickable swatches in the UI.
 ACCENT_PRESETS: list[tuple[str, str]] = [
     ("Amber", "#ffc829"),
@@ -36,6 +41,7 @@ _DARK = {
     "subtle": "#cfcfcf",
     "hint": "#9a9a9a",
     "border": "#333333",
+    "check_border": "#777777",  # lighter than border so checkboxes read on dark bg
     "base_bg": "#232323",
     "alt_bg": "#1c1c1c",
     "input_bg": "#2a2a2a",
@@ -60,6 +66,7 @@ _LIGHT = {
     "subtle": "#3a3a3a",
     "hint": "#6c6c6c",
     "border": "#c8c8c8",
+    "check_border": "#9a9a9a",  # a touch darker than border for contrast on light bg
     "base_bg": "#ffffff",
     "alt_bg": "#f3f3f3",
     "input_bg": "#ffffff",
@@ -179,6 +186,27 @@ QTableView QTableCornerButton::section { background: $header_bg; border: 1px sol
 
 QCheckBox { color: $text; }
 
+/* Checkmarks (checkboxes + checkable list items). The checked glyph is a
+   generated SVG tinted with the user's checkmark colour. */
+QCheckBox::indicator,
+QListView::indicator,
+QTreeView::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid $check_border;
+    border-radius: 3px;
+    background: $input_bg;
+}
+QCheckBox::indicator:checked,
+QListView::indicator:checked,
+QTreeView::indicator:checked {
+    image: url("$check_icon");
+}
+/* Checked menu items (e.g. the sort menus) use the same tinted glyph,
+   without a box. */
+QMenu::indicator { width: 14px; height: 14px; }
+QMenu::indicator:checked { image: url("$check_icon"); }
+
 QTabWidget::pane { border: 1px solid $border; }
 QTabBar::tab {
     background: $tab_bg;
@@ -267,15 +295,57 @@ QMenu::item:selected { background: $accent; color: $on_accent; }
 )
 
 
-def build_stylesheet(mode: str = DEFAULT_MODE, accent: str = DEFAULT_ACCENT) -> str:
-    """Generate the full QSS for the given palette mode and accent colour."""
+def _checkmark_icon(color: str) -> str:
+    """Render (once per colour) a checkmark PNG tinted ``color`` and return its
+    path for use in QSS ``url(...)``. A PNG (not SVG) so it works without the Qt
+    SVG image plugin; the colour is encoded in the filename so a colour change
+    yields a new URL (sidestepping Qt's stylesheet image cache).
+
+    Rendered at 2x and downscaled by the indicator size for crisp edges.
+    """
+    color = normalize_accent(color)
+    path = cache_dir() / f"checkmark_{color.lstrip('#')}.png"
+    if not path.exists():
+        scale = 2
+        pm = QPixmap(14 * scale, 14 * scale)
+        pm.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(color))
+        pen.setWidth(2 * scale)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawPolyline(
+            QPolygonF([QPointF(3 * scale, 7.5 * scale),
+                       QPointF(6 * scale, 10.5 * scale),
+                       QPointF(11 * scale, 4 * scale)])
+        )
+        painter.end()
+        pm.save(str(path), "PNG")
+    return path.as_posix()
+
+
+def build_stylesheet(
+    mode: str = DEFAULT_MODE,
+    accent: str = DEFAULT_ACCENT,
+    checkmark_color: str | None = None,
+) -> str:
+    """Generate the full QSS for the given palette mode and colours. When
+    ``checkmark_color`` is None the accent colour is used for checkmarks."""
     palette = dict(_LIGHT if mode == "light" else _DARK)
     accent = normalize_accent(accent)
     palette["accent"] = accent
     palette["on_accent"] = contrast_color(accent)
+    palette["check_icon"] = _checkmark_icon(checkmark_color or accent)
     return _QSS.substitute(palette)
 
 
-def apply_theme(app, mode: str = DEFAULT_MODE, accent: str = DEFAULT_ACCENT) -> None:
+def apply_theme(
+    app,
+    mode: str = DEFAULT_MODE,
+    accent: str = DEFAULT_ACCENT,
+    checkmark_color: str | None = None,
+) -> None:
     """Apply the generated stylesheet to a running QApplication."""
-    app.setStyleSheet(build_stylesheet(mode, accent))
+    app.setStyleSheet(build_stylesheet(mode, accent, checkmark_color))

@@ -19,7 +19,12 @@ def main() -> int:
     app.setWindowIcon(app_icon())
 
     settings = Settings.load()
-    apply_theme(app, settings.appearance.mode, settings.appearance.accent)
+    apply_theme(
+        app,
+        settings.appearance.mode,
+        settings.appearance.accent,
+        settings.appearance.resolved_checkmark(),
+    )
 
     window = MainWindow(settings)
     window.show()

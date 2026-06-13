@@ -26,6 +26,13 @@ from starpost.utils.paths import (
 class AppearanceConfig:
     mode: str = "dark"          # "dark" | "light"
     accent: str = "#ffc829"     # hex accent colour applied program-wide
+    checkmark_color: str = "#ffc829"     # hex colour of checkmarks program-wide
+    checkmark_match_theme: bool = True   # force checkmark colour to the accent
+
+    def resolved_checkmark(self) -> str:
+        """The checkmark colour actually used: the accent when matching the
+        theme, otherwise the explicit checkmark colour."""
+        return self.accent if self.checkmark_match_theme else self.checkmark_color
 
 
 @dataclass
@@ -98,6 +105,10 @@ class Settings:
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
                 accent=appe.get("accent", "#ffc829"),
+                checkmark_color=appe.get("checkmark_color", "#ffc829"),
+                checkmark_match_theme=bool(
+                    appe.get("checkmark_match_theme", True)
+                ),
             ),
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
@@ -126,6 +137,8 @@ class Settings:
             "appearance": {
                 "mode": self.appearance.mode,
                 "accent": self.appearance.accent,
+                "checkmark_color": self.appearance.checkmark_color,
+                "checkmark_match_theme": self.appearance.checkmark_match_theme,
             },
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,

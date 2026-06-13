@@ -147,6 +147,10 @@ class SettingsDialog(QDialog):
         self._orig_accent = settings.appearance.accent
         self._accent = normalize_accent(settings.appearance.accent)
         self._last_preview_mode = self._orig_mode
+        # Checkmark colour (live + revert state).
+        self._checkmark_color = normalize_accent(settings.appearance.checkmark_color)
+        self._checkmark_match = settings.appearance.checkmark_match_theme
+        self._orig_checkmark = settings.appearance.resolved_checkmark()
 
         # Left nav (groups) drives the right stack (individual settings).
         self._nav = QListWidget()
@@ -485,10 +489,34 @@ class SettingsDialog(QDialog):
         custom_box = QWidget()
         custom_box.setLayout(custom_row)
 
+        # Checkmark colour: a "match theme" toggle plus a hex + picker + chip,
+        # mirroring the accent controls.
+        self._cm_match = QCheckBox("Match with theme")
+        self._cm_match.toggled.connect(self._on_cm_match_toggled)
+        self._cm_hex = QLineEdit()
+        self._cm_hex.setMaxLength(7)
+        self._cm_hex.setPlaceholderText("#rrggbb")
+        self._cm_hex.setFixedWidth(110)
+        self._cm_hex.textEdited.connect(self._on_cm_hex_edited)
+        self._cm_pick = QPushButton("Pick…")
+        self._cm_pick.clicked.connect(self._on_cm_pick_color)
+        self._cm_preview = QLabel()
+        self._cm_preview.setFixedSize(30, 30)
+        cm_row = QHBoxLayout()
+        cm_row.setContentsMargins(0, 0, 0, 0)
+        cm_row.addWidget(self._cm_hex)
+        cm_row.addWidget(self._cm_pick)
+        cm_row.addWidget(self._cm_preview)
+        cm_row.addStretch(1)
+        cm_box = QWidget()
+        cm_box.setLayout(cm_row)
+
         form = QFormLayout()
         form.addRow("Theme", self._theme)
         form.addRow("Accent presets", swatch_box)
         form.addRow("Custom accent", custom_box)
+        form.addRow("Checkmarks", self._cm_match)
+        form.addRow("Checkmark colour", cm_box)
         hint = QLabel("Changes preview instantly; click Save to keep them.")
         hint.setObjectName("hint")
         hint.setWordWrap(True)
@@ -509,6 +537,7 @@ class SettingsDialog(QDialog):
             f"background-color: {self._accent};"
             f" border: 1px solid {contrast_color(self._accent)}; border-radius: 4px;"
         )
+        self._update_checkmark_preview()  # follows the accent when matching
         self._apply_preview()
 
     def _refresh_swatches(self) -> None:
@@ -535,9 +564,51 @@ class SettingsDialog(QDialog):
         if chosen.isValid():
             self._set_accent(chosen.name())
 
+    # --- checkmark colour ------------------------------------------------
+    def _effective_checkmark(self) -> str:
+        """The checkmark colour in effect: the accent when matching, else the
+        explicit checkmark colour."""
+        return self._accent if self._checkmark_match else self._checkmark_color
+
+    def _update_checkmark_preview(self) -> None:
+        color = self._effective_checkmark()
+        self._cm_preview.setStyleSheet(
+            f"background-color: {color};"
+            f" border: 1px solid {contrast_color(color)}; border-radius: 4px;"
+        )
+
+    def _on_cm_match_toggled(self, checked: bool) -> None:
+        self._checkmark_match = checked
+        # The explicit-colour controls are irrelevant while matching the theme.
+        self._cm_hex.setEnabled(not checked)
+        self._cm_pick.setEnabled(not checked)
+        self._update_checkmark_preview()
+        self._apply_preview()
+
+    def _set_checkmark_color(self, color: str, *, update_field: bool = True) -> None:
+        self._checkmark_color = normalize_accent(color)
+        if update_field:
+            self._cm_hex.setText(self._checkmark_color)
+        self._update_checkmark_preview()
+        self._apply_preview()
+
+    def _on_cm_hex_edited(self, text: str) -> None:
+        h = text.lstrip("#")
+        if len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h):
+            self._set_checkmark_color(text, update_field=False)
+
+    def _on_cm_pick_color(self) -> None:
+        chosen = QColorDialog.getColor(
+            QColor(self._checkmark_color), self, "Checkmark colour"
+        )
+        if chosen.isValid():
+            self._set_checkmark_color(chosen.name())
+
     def _apply_preview(self) -> None:
         mode = self._current_mode()
-        apply_theme(QApplication.instance(), mode, self._accent)
+        apply_theme(
+            QApplication.instance(), mode, self._accent, self._effective_checkmark()
+        )
         # Only the mode (not accent) affects non-QSS widgets; notify on change.
         if mode != self._last_preview_mode:
             self._last_preview_mode = mode
@@ -605,10 +676,18 @@ class SettingsDialog(QDialog):
         self._theme.setCurrentIndex(idx if idx >= 0 else 0)
         self._set_accent(s.appearance.accent)
 
+        # Checkmark colour: set the explicit colour first, then the match toggle
+        # (its handler decides whether that colour or the accent is in effect).
+        self._set_checkmark_color(s.appearance.checkmark_color)
+        self._cm_match.setChecked(s.appearance.checkmark_match_theme)
+        self._on_cm_match_toggled(s.appearance.checkmark_match_theme)
+
     def _on_accept(self) -> None:
         s = self._settings
         s.appearance.mode = self._current_mode()
         s.appearance.accent = self._accent
+        s.appearance.checkmark_color = self._checkmark_color
+        s.appearance.checkmark_match_theme = self._checkmark_match
         s.show_full_file_names = self._show_full_paths.isChecked()
         s.report_decimals = self._decimals.value()
         s.hide_empty_reports = self._hide_empty.isChecked()
@@ -642,7 +721,12 @@ class SettingsDialog(QDialog):
 
     def reject(self) -> None:  # noqa: D401 (Qt override)
         # Cancel: undo any live appearance preview before closing.
-        apply_theme(QApplication.instance(), self._orig_mode, self._orig_accent)
+        apply_theme(
+            QApplication.instance(),
+            self._orig_mode,
+            self._orig_accent,
+            self._orig_checkmark,
+        )
         if self._orig_mode != self._last_preview_mode:
             self._last_preview_mode = self._orig_mode
             self.preview_changed.emit(self._orig_mode)

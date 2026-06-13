@@ -15,6 +15,11 @@ license:
 appearance:
   mode: dark                 # "dark" | "light"
   accent: "#ffc829"          # hex accent colour applied program-wide
+  # Colour of checkmarks (checkboxes, checked menu items) program-wide. When
+  # checkmark_match_theme is true the accent colour is used and checkmark_color
+  # is ignored.
+  checkmark_color: "#ffc829"
+  checkmark_match_theme: true
 
 # Default folder for exports (CSV/JPG/PDF). Chosen per-run in the UI; this is the
 # starting location of the picker. Empty = user's home.
