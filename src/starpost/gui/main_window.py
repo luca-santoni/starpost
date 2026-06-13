@@ -34,6 +34,7 @@ from starpost.batch.queue import BatchWorker
 from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.store import ResultStore
+from starpost.gui.icons import app_icon
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
 from starpost.gui.views.plot_view import PlotView
@@ -62,7 +63,8 @@ def _drop_zero_report_columns(df, threshold: float = 1e-5):
 class MainWindow(QMainWindow):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
-        self.setWindowTitle("starpost")
+        self.setWindowTitle("StarPost")
+        self.setWindowIcon(app_icon())
         self.resize(1280, 800)
 
         self.settings = settings
@@ -160,7 +162,7 @@ class MainWindow(QMainWindow):
         if self.settings.starccm_path:
             return False
         QMessageBox.warning(
-            self, "starpost",
+            self, "StarPost",
             "Set the STAR-CCM+ executable path in Settings first.",
         )
         return True
@@ -168,7 +170,7 @@ class MainWindow(QMainWindow):
     def _run_batch(self) -> None:
         files = self.file_list.files()
         if not files:
-            QMessageBox.information(self, "starpost", "Add at least one .sim file.")
+            QMessageBox.information(self, "StarPost", "Add at least one .sim file.")
             return
         if self._missing_exe():
             return
@@ -182,7 +184,7 @@ class MainWindow(QMainWindow):
     def _open_file(self, path: Path) -> None:
         """Extract a single .sim (right-click → Open) and show its data."""
         if self._busy():
-            QMessageBox.information(self, "starpost", "A run is already in progress.")
+            QMessageBox.information(self, "StarPost", "A run is already in progress.")
             return
         if self._missing_exe():
             return

@@ -12,6 +12,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(root / "src" / "starpost" / "macros"), "starpost/macros"),
+        (str(root / "src" / "starpost" / "gui" / "resources"), "starpost/gui/resources"),
         (str(root / "config" / "default_settings.yaml"), "config"),
     ],
     hiddenimports=["pyqtgraph", "matplotlib.backends.backend_agg"],
