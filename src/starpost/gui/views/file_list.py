@@ -1,6 +1,7 @@
 """Left panel: the batch list of .sim files (add files/folder, remove, clear)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -15,6 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from starpost.utils.paths import file_list_cache_path
 
 MAX_FILES = 25  # v1 expected ceiling; warn beyond this
 
@@ -46,6 +49,11 @@ class FileListPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self._list)
         layout.addLayout(buttons)
+
+        # The list survives restarts even though it's separate from the
+        # extracted-result cache, so changes are persisted to disk.
+        self.files_changed.connect(self._save)
+        self._load()
 
     # --- data ------------------------------------------------------------
     def files(self) -> list[Path]:
@@ -105,3 +113,21 @@ class FileListPanel(QWidget):
     def _clear(self) -> None:
         self._list.clear()
         self.files_changed.emit([])
+
+    # --- persistence -----------------------------------------------------
+    def _save(self) -> None:
+        path = file_list_cache_path()
+        path.write_text(json.dumps([str(p) for p in self.files()], indent=2))
+
+    def _load(self) -> None:
+        """Restore the saved list on startup, adding items directly so this
+        does not re-trigger a save of what we just read."""
+        path = file_list_cache_path()
+        if not path.exists():
+            return
+        try:
+            saved = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+        for p in saved:
+            self._list.addItem(QListWidgetItem(str(p)))

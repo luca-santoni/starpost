@@ -35,6 +35,11 @@ def results_cache_path() -> Path:
     return cache_dir() / "results_cache.json"
 
 
+def file_list_cache_path() -> Path:
+    """Persisted batch list of .sim files shown in the left panel."""
+    return cache_dir() / "file_list.json"
+
+
 def packaged_default_settings() -> Path:
     """The default_settings.yaml shipped with the repo/package."""
     # repo layout: <root>/config/default_settings.yaml ; this file is
