@@ -1,7 +1,7 @@
 # starpost — Program Overview & Design Specification
 
 > Package/application name: **starpost**
-> Repository: `autonomic` (to be renamed `starpost` later)
+> Repository: `starpost`
 > Status: v1 scaffold — runnable GUI shell with core extraction/parsing logic
 > implemented; several actions stubbed (see [Implementation Status](#9-implementation-status)).
 > Document last updated: 2026-06-11
@@ -249,7 +249,7 @@ Defined in `src/starpost/data/models.py`:
 ## 7. Project Structure (File by File)
 
 ```
-autonomic/                          (repo; app/package = "starpost")
+starpost/                           (repo; app/package = "starpost")
 ├── README.md                       Quick orientation + dev quickstart
 ├── pyproject.toml                  Package metadata, deps, entry point, ruff config
 ├── requirements.txt                Runtime dependency pins

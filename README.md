@@ -5,9 +5,6 @@ Standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 solved `.sim` files, lets you view and compare them, and exports to CSV / JPG /
 PDF.
 
-> Repo currently named `autonomic`; the application/package is `starpost` and the
-> repo will be renamed to match later.
-
 ## How it works
 
 STAR-CCM+ `.sim` files are a proprietary binary format with no public reader, so
