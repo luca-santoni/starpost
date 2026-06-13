@@ -99,9 +99,14 @@ class _CategorySelector(QWidget):
 
     changed = Signal()
 
-    def __init__(self, category: str, names: list[str], initial=None, parent=None) -> None:
+    def __init__(
+        self, category: str, names: list[str], initial=None,
+        sort_mode: str | None = "az", parent=None,
+    ) -> None:
         super().__init__(parent)
         self.category = category
+        self._names = list(names)        # monitors in their natural (source) order
+        self.sort_mode = sort_mode       # "az" (default) | "za" | None (natural)
         self._actions: dict[str, object] = {}
 
         self._btn = QToolButton()
@@ -109,16 +114,28 @@ class _CategorySelector(QWidget):
         self._btn.setPopupMode(QToolButton.InstantPopup)
         self._menu = _StayOpenMenu(self._btn)
         self._btn.setMenu(self._menu)
+        # Right-clicking the button offers A–Z / Z–A sorting of its monitors.
+        self._btn.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._btn.customContextMenuRequested.connect(self._show_sort_menu)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._btn)
 
-        self._populate(names, initial)
+        self._populate(initial)
 
-    def _populate(self, names: list[str], initial) -> None:
+    def _ordered_names(self) -> list[str]:
+        """The monitor names in the active sort order."""
+        if self.sort_mode == "az":
+            return sorted(self._names, key=str.lower)
+        if self.sort_mode == "za":
+            return sorted(self._names, key=str.lower, reverse=True)
+        return list(self._names)
+
+    def _populate(self, initial) -> None:
         self._menu.clear()
         self._actions = {}
+        names = self._ordered_names()
         if names:
             self._menu.addAction("Select all").triggered.connect(
                 lambda: self._set_all(True)
@@ -136,6 +153,28 @@ class _CategorySelector(QWidget):
             act.toggled.connect(self._on_toggled)
             self._actions[n] = act
         self._update_button()
+
+    def _show_sort_menu(self, pos) -> None:
+        """Right-click menu to reorder the monitors A–Z or Z–A (check state and
+        which series are plotted are unaffected — only the menu order changes)."""
+        menu = QMenu(self)
+        az = menu.addAction("Sort A–Z")
+        za = menu.addAction("Sort Z–A")
+        for act, mode in ((az, "az"), (za, "za")):
+            act.setCheckable(True)
+            act.setChecked(self.sort_mode == mode)
+        chosen = menu.exec(self._btn.mapToGlobal(pos))
+        if chosen is az:
+            self._resort("az")
+        elif chosen is za:
+            self._resort("za")
+
+    def _resort(self, mode: str) -> None:
+        if mode == self.sort_mode:
+            return
+        self.sort_mode = mode
+        # Rebuild the menu in the new order, keeping the current selection.
+        self._populate(self.selected())
 
     def _set_all(self, state: bool) -> None:
         for a in self._actions.values():
@@ -211,6 +250,8 @@ class PlotView(QWidget):
         # Remember each category's series selection so it survives redraws
         # (toggling another checkbox re-shows the view from scratch).
         self._selection_memory: dict[str, set[str]] = {}
+        # Likewise remember each category's chosen monitor sort order.
+        self._sort_memory: dict[str, str | None] = {}
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._plot, 1)
@@ -383,6 +424,7 @@ class PlotView(QWidget):
         # Stash current choices so they carry across the teardown.
         for name, sel in self._selectors.items():
             self._selection_memory[name] = sel.selected()
+            self._sort_memory[name] = sel.sort_mode
         while self._ctrl.count():
             item = self._ctrl.takeAt(0)
             w = item.widget()
@@ -396,7 +438,9 @@ class PlotView(QWidget):
         for category, names in cat_series:
             remembered = self._selection_memory.get(category)
             initial = remembered & set(names) if remembered is not None else None
-            sel = _CategorySelector(category, names, initial)
+            sel = _CategorySelector(
+                category, names, initial, self._sort_memory.get(category, "az")
+            )
             sel.changed.connect(self._render)
             self._ctrl.addWidget(sel)
             self._selectors[category] = sel
