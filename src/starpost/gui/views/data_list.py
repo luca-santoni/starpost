@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QHBoxLayout,
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +34,8 @@ class _CheckList(QListWidget):
 class DataListPanel(QWidget):
     # Emitted when the set of checked entries changes.
     selection_changed = Signal()
+    export_requested = Signal()
+    clear_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -42,8 +46,20 @@ class DataListPanel(QWidget):
         self._list.setSelectionMode(QListWidget.NoSelection)
         self._list.itemChanged.connect(lambda _i: self.selection_changed.emit())
 
+        export = QPushButton("Export")
+        export.clicked.connect(self.export_requested)
+        clear = QPushButton("Clear data")
+        clear.setObjectName("clearDataButton")
+        clear.clicked.connect(self.clear_requested)
+        # Export on the left, Clear data anchored to the bottom right.
+        buttons = QHBoxLayout()
+        buttons.addWidget(export)
+        buttons.addStretch(1)
+        buttons.addWidget(clear)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self._list)
+        layout.addLayout(buttons)
 
     def set_entries(self, names: list[str]) -> None:
         """Replace the listed entries (one per loaded .sim, by name), keeping

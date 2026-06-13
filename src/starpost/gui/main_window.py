@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QSplitter,
     QTabWidget,
     QToolBar,
@@ -105,6 +104,7 @@ class MainWindow(QMainWindow):
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_file)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
+        self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
 
     # --- layout ----------------------------------------------------------
@@ -172,12 +172,6 @@ class MainWindow(QMainWindow):
         self._sim_picker = QComboBox()
         self._sim_picker.currentTextChanged.connect(lambda _: self._on_view_changed())
         tb.addWidget(self._sim_picker)
-
-        tb.addSeparator()
-        self._clear_btn = QPushButton("Clear data")
-        self._clear_btn.setObjectName("clearDataButton")
-        self._clear_btn.clicked.connect(self._clear_data)
-        tb.addWidget(self._clear_btn)
 
     # --- batch run -------------------------------------------------------
     def _busy(self) -> bool:
