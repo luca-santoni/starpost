@@ -144,10 +144,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
     def _left_tab_menu(self, tabs: QTabWidget, pos) -> None:
-        """Right-clicking the Files tab opens its sort menu."""
+        """Right-clicking the Files or Data tab opens its sort menu."""
         bar = tabs.tabBar()
-        if tabs.widget(bar.tabAt(pos)) is self.file_list:
+        widget = tabs.widget(bar.tabAt(pos))
+        if widget is self.file_list:
             self.file_list.show_sort_menu(bar.mapToGlobal(pos))
+        elif widget is self.data_list:
+            self.data_list.show_sort_menu(bar.mapToGlobal(pos))
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")

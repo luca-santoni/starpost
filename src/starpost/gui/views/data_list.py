@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QVBoxLayout,
     QWidget,
 )
@@ -34,6 +35,9 @@ class DataListPanel(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._names: list[str] = []
+        # Active sort, kept in sync with the Data tab's right-click menu.
+        self._sort_mode = "name_az"
         self._list = _CheckList()
         self._list.setSelectionMode(QListWidget.NoSelection)
         self._list.itemChanged.connect(lambda _i: self.selection_changed.emit())
@@ -44,8 +48,39 @@ class DataListPanel(QWidget):
     def set_entries(self, names: list[str]) -> None:
         """Replace the listed entries (one per loaded .sim, by name), keeping
         the existing checked state for names that are still present."""
+        self._names = list(names)
+        self._render()
+
+    def checked_names(self) -> list[str]:
+        return [
+            self._list.item(i).text()
+            for i in range(self._list.count())
+            if self._list.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    # --- sorting ---------------------------------------------------------
+    def show_sort_menu(self, global_pos) -> None:
+        """Show the sort options at a global position (the Data tab is
+        right-clicked). The active mode shows a checkmark."""
+        menu = QMenu(self)
+        options = [("Name (A–Z)", "name_az"), ("Name (Z–A)", "name_za")]
+        actions = {}
+        for text, key in options:
+            act = menu.addAction(text)
+            act.setCheckable(True)
+            act.setChecked(key == self._sort_mode)
+            actions[act] = key
+        chosen = menu.exec(global_pos)
+        if chosen is not None:
+            self._sort_mode = actions[chosen]
+            self._render()
+
+    def _render(self) -> None:
+        """Rebuild the rows in the active sort order, preserving checked state."""
         checked = set(self.checked_names())
-        self._list.blockSignals(True)  # repopulating shouldn't emit per item
+        names = sorted(self._names, key=str.lower,
+                       reverse=self._sort_mode == "name_za")
+        self._list.blockSignals(True)  # rebuilding shouldn't emit per item
         self._list.clear()
         for name in names:
             item = QListWidgetItem(name)
@@ -58,10 +93,3 @@ class DataListPanel(QWidget):
             )
             self._list.addItem(item)
         self._list.blockSignals(False)
-
-    def checked_names(self) -> list[str]:
-        return [
-            self._list.item(i).text()
-            for i in range(self._list.count())
-            if self._list.item(i).checkState() == Qt.CheckState.Checked
-        ]
