@@ -8,11 +8,13 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -46,7 +48,17 @@ class FileListPanel(QWidget):
         for b in (add_files, add_folder, remove, clear):
             buttons.addWidget(b)
 
+        header = QLabel("Files")
+        header.setObjectName("panelHeader")
+        # Hug the text so it reads as a single tab rather than a full-width bar.
+        header.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.addWidget(header)
+        header_row.addStretch(1)
+
         layout = QVBoxLayout(self)
+        layout.addLayout(header_row)
         layout.addWidget(self._list)
         layout.addLayout(buttons)
 
