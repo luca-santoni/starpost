@@ -44,6 +44,9 @@ monitor_zero_threshold: 1.0e-5
 # line. When false, only the point's coordinates are shown.
 hover_show_monitor_name: true
 
+# Number of decimal places shown for the coordinates in the hover label.
+hover_decimals: 4
+
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.
