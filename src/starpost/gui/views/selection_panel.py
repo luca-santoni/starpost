@@ -182,9 +182,17 @@ class SelectionPanel(QWidget):
         self._monitor_setter = setter
 
     # --- profiles --------------------------------------------------------
+    def refresh_profiles(self) -> None:
+        """Reload the profile dropdown (e.g. after profiles are deleted)."""
+        self._refresh_profiles()
+
     def _refresh_profiles(self) -> None:
+        current = self._profile_box.currentText()
         self._profile_box.clear()
-        self._profile_box.addItems(list_profiles())
+        names = list_profiles()
+        self._profile_box.addItems(names)
+        if current in names:
+            self._profile_box.setCurrentText(current)
 
     def _load_profile(self) -> None:
         name = self._profile_box.currentText()

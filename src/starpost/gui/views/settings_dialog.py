@@ -10,6 +10,9 @@ Covers everything in settings.yaml:
   - Reports:    report_decimals, hide_empty_reports, zero_threshold
   - Plots:      hide_empty_monitors, monitor_zero_threshold, hover_show_monitor_name,
                 hover_x_decimals, hover_y_decimals, classification keywords
+
+Plus a Profiles page that lists saved selection profiles and lets the user
+delete them (these live as separate YAML files, not in settings.yaml).
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -40,7 +44,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from starpost.core.settings import LicenseConfig, Settings
+from starpost.core.settings import (
+    LicenseConfig,
+    Settings,
+    delete_profile,
+    list_profiles,
+)
 from starpost.gui.theme import (
     ACCENT_PRESETS,
     apply_theme,
@@ -92,6 +101,7 @@ class SettingsDialog(QDialog):
         self._add_page("License", self._build_license_page())
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
+        self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Appearance", self._build_appearance_page())
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
@@ -276,6 +286,66 @@ class SettingsDialog(QDialog):
         hint.setWordWrap(True)
         form.addRow("", hint)
         return self._wrap(form)
+
+    def _build_profiles_page(self) -> QWidget:
+        # A header row plus one row per saved profile, rebuilt on delete.
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        intro = QLabel(
+            "Saved selection profiles. Deleting one removes it permanently."
+        )
+        intro.setObjectName("hint")
+        intro.setWordWrap(True)
+        outer.addWidget(intro)
+
+        self._profiles_list = QVBoxLayout()
+        self._profiles_list.setContentsMargins(0, 4, 0, 0)
+        self._profiles_list.setSpacing(4)
+        outer.addLayout(self._profiles_list)
+        outer.addStretch(1)
+
+        self._rebuild_profiles_list()
+        return page
+
+    def _rebuild_profiles_list(self) -> None:
+        # Clear existing rows.
+        while self._profiles_list.count():
+            item = self._profiles_list.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+
+        names = list_profiles()
+        if not names:
+            empty = QLabel("No saved profiles yet.")
+            empty.setObjectName("hint")
+            self._profiles_list.addWidget(empty)
+            return
+
+        for name in names:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.addWidget(QLabel(name))
+            rl.addStretch(1)
+            btn = QPushButton("Delete")
+            btn.setObjectName("dangerButton")
+            btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
+            rl.addWidget(btn)
+            self._profiles_list.addWidget(row)
+
+    def _delete_profile(self, name: str) -> None:
+        confirm = QMessageBox.question(
+            self,
+            "Delete profile",
+            f"Delete the profile “{name}”? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm == QMessageBox.Yes:
+            delete_profile(name)
+            self._rebuild_profiles_list()
 
     def _build_appearance_page(self) -> QWidget:
         # Theme mode

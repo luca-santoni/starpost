@@ -188,3 +188,8 @@ class Profile:
 
 def list_profiles() -> list[str]:
     return sorted(p.stem for p in profiles_dir().glob("*.yaml"))
+
+
+def delete_profile(name: str) -> None:
+    """Remove a saved profile. No-op if it doesn't exist."""
+    (profiles_dir() / f"{name}.yaml").unlink(missing_ok=True)

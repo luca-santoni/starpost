@@ -424,7 +424,11 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.settings, self)
         # Live-preview the light/dark switch on the plot too (Cancel reverts it).
         dlg.preview_changed.connect(self.plot_view.apply_theme)
-        if dlg.exec():
+        accepted = dlg.exec()
+        # Profile deletions in the dialog take effect immediately (independent of
+        # Save/Cancel), so resync the profile dropdown either way.
+        self.selection.refresh_profiles()
+        if accepted:
             log.info("Settings saved to %s", settings_path())
             self.report_table.set_decimals(self.settings.report_decimals)
             self.report_table.set_zero_threshold(self.settings.zero_threshold)
