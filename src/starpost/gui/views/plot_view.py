@@ -202,7 +202,8 @@ class PlotView(QWidget):
 
         # Hover readout options.
         self._hover_show_name = True
-        self._hover_decimals = 4
+        self._hover_x_decimals = 0
+        self._hover_y_decimals = 4
 
     # --- public entry points --------------------------------------------
     def set_filter(self, hide_empty: bool, zero_threshold: float) -> None:
@@ -214,12 +215,15 @@ class PlotView(QWidget):
         self._zero_threshold = zero_threshold
         self._reshow()
 
-    def set_hover_options(self, show_name: bool, decimals: int = 4) -> None:
+    def set_hover_options(
+        self, show_name: bool, x_decimals: int = 0, y_decimals: int = 4
+    ) -> None:
         """Configure the hover readout. When show_name is False the label shows
-        only the coordinates, omitting the monitor's name. `decimals` sets how
-        many decimal places the coordinates are rounded to."""
+        only the coordinates, omitting the monitor's name. `x_decimals` and
+        `y_decimals` set how many decimal places each coordinate is rounded to."""
         self._hover_show_name = show_name
-        self._hover_decimals = max(0, decimals)
+        self._hover_x_decimals = max(0, x_decimals)
+        self._hover_y_decimals = max(0, y_decimals)
         self._hide_hover()  # drop any stale label; it rebuilds on next hover
 
     def show_plots(self, plots: list[MonitorPlot]) -> None:
@@ -440,8 +444,7 @@ class PlotView(QWidget):
     def _show_hover(self, x: float, y: float, color: str, name: str) -> None:
         vy = float(self._view_y(y))
         self._hover_marker.setData([x], [vy], brush=pg.mkBrush(color))
-        d = self._hover_decimals
-        coords = f"{x:.{d}f}, {y:.{d}f}"
+        coords = f"{x:.{self._hover_x_decimals}f}, {y:.{self._hover_y_decimals}f}"
         label = f"{name}\n{coords}" if self._hover_show_name else coords
         self._hover_text.setText(label, color=color)
         self._hover_text.setPos(x, vy)

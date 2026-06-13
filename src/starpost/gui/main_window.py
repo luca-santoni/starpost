@@ -84,7 +84,9 @@ class MainWindow(QMainWindow):
             settings.hide_empty_monitors, settings.monitor_zero_threshold
         )
         self.plot_view.set_hover_options(
-            settings.hover_show_monitor_name, settings.hover_decimals
+            settings.hover_show_monitor_name,
+            settings.hover_x_decimals,
+            settings.hover_y_decimals,
         )
         self.log_console = LogConsole()
 
@@ -422,7 +424,9 @@ class MainWindow(QMainWindow):
                 self.settings.monitor_zero_threshold,
             )
             self.plot_view.set_hover_options(
-                self.settings.hover_show_monitor_name, self.settings.hover_decimals
+                self.settings.hover_show_monitor_name,
+                self.settings.hover_x_decimals,
+                self.settings.hover_y_decimals,
             )
             # The hide-empty/threshold settings change which reports qualify as
             # empty: refresh the checkbox list (preserving the current selection).

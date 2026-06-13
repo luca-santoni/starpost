@@ -9,7 +9,7 @@ Covers everything in settings.yaml:
   - License:    mode, podkey, licpath, license_file
   - Reports:    report_decimals, hide_empty_reports, zero_threshold
   - Plots:      hide_empty_monitors, monitor_zero_threshold, hover_show_monitor_name,
-                hover_decimals, classification keywords
+                hover_x_decimals, hover_y_decimals, classification keywords
 """
 from __future__ import annotations
 
@@ -209,9 +209,12 @@ class SettingsDialog(QDialog):
 
         self._hover_show_name = QCheckBox("Show monitor name in hover label")
 
-        self._hover_decimals = QSpinBox()
-        self._hover_decimals.setRange(0, 15)
-        self._hover_decimals.setValue(4)
+        self._hover_x_decimals = QSpinBox()
+        self._hover_x_decimals.setRange(0, 15)
+        self._hover_x_decimals.setValue(0)
+        self._hover_y_decimals = QSpinBox()
+        self._hover_y_decimals.setRange(0, 15)
+        self._hover_y_decimals.setValue(4)
 
         self._residual = QLineEdit()
         self._residual.setPlaceholderText("residual, residuals")
@@ -240,8 +243,11 @@ class SettingsDialog(QDialog):
         hover_hint.setObjectName("hint")
         hover_hint.setWordWrap(True)
         form.addRow("", hover_hint)
-        form.addRow("Hover decimals", self._hover_decimals)
-        dec_hint = QLabel("Decimal places shown for the coordinates in the hover label.")
+        form.addRow("Hover X decimals", self._hover_x_decimals)
+        form.addRow("Hover Y decimals", self._hover_y_decimals)
+        dec_hint = QLabel(
+            "Decimal places shown for the X and Y coordinates in the hover label."
+        )
         dec_hint.setObjectName("hint")
         dec_hint.setWordWrap(True)
         form.addRow("", dec_hint)
@@ -398,7 +404,8 @@ class SettingsDialog(QDialog):
         self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
         self._hover_show_name.setChecked(s.hover_show_monitor_name)
-        self._hover_decimals.setValue(s.hover_decimals)
+        self._hover_x_decimals.setValue(s.hover_x_decimals)
+        self._hover_y_decimals.setValue(s.hover_y_decimals)
 
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
@@ -424,7 +431,8 @@ class SettingsDialog(QDialog):
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
         s.hover_show_monitor_name = self._hover_show_name.isChecked()
-        s.hover_decimals = self._hover_decimals.value()
+        s.hover_x_decimals = self._hover_x_decimals.value()
+        s.hover_y_decimals = self._hover_y_decimals.value()
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())
