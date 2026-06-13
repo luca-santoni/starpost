@@ -16,9 +16,10 @@ import re
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPointF, Signal
+from PySide6.QtCore import QEvent, QPointF, Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QMenu,
     QToolButton,
     QVBoxLayout,
@@ -129,8 +130,9 @@ class _CategorySelector(QWidget):
         for n in names:
             act = self._menu.addAction(n)
             act.setCheckable(True)
-            # No remembered choice (initial is None) → default to shown.
-            act.setChecked(initial is None or n in initial)
+            # No remembered choice (initial is None) → default to hidden, so a
+            # freshly selected group plots nothing until the user picks monitors.
+            act.setChecked(initial is not None and n in initial)
             act.toggled.connect(self._on_toggled)
             self._actions[n] = act
         self._update_button()
@@ -177,6 +179,18 @@ class PlotView(QWidget):
         self._plot = pg.PlotWidget()
         self._legend = self._plot.addLegend()
         self._plot.showGrid(x=True, y=True, alpha=0.3)
+
+        # Hint shown centred over the plot when nothing is drawn. Kept subtle
+        # (gray) and click-through so it never gets in the way. Parented to the
+        # plot widget; re-centred via an event filter on the plot's resizes.
+        self._empty_label = QLabel("Select a monitor to begin", self._plot)
+        self._empty_label.setStyleSheet(
+            "color: gray; background: transparent; font-size: 28px;"
+        )
+        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._empty_label.adjustSize()
+        self._plot.installEventFilter(self)
 
         # Hover readout: a marker dot + a coordinate label pinned to the data
         # point nearest the cursor. Both are re-added after each clear().
@@ -331,6 +345,25 @@ class PlotView(QWidget):
         self._plot.setTitle("", color=self._fg)
         self._curves = []
         self._hide_hover()
+        self._update_empty_label()
+
+    # --- "select a monitor" hint ----------------------------------------
+    def _update_empty_label(self) -> None:
+        """Show the centred hint only while nothing is plotted."""
+        self._empty_label.setVisible(not self._curves)
+        self._center_empty_label()
+
+    def _center_empty_label(self) -> None:
+        self._empty_label.adjustSize()
+        x = (self._plot.width() - self._empty_label.width()) // 2
+        y = (self._plot.height() - self._empty_label.height()) // 2
+        self._empty_label.move(x, y)
+
+    def eventFilter(self, obj, event):
+        # Keep the hint centred as the plot widget is resized.
+        if obj is self._plot and event.type() == QEvent.Type.Resize:
+            self._center_empty_label()
+        return super().eventFilter(obj, event)
 
     # --- empty-monitor filtering ----------------------------------------
     def _visible(self, series) -> bool:
@@ -403,6 +436,8 @@ class PlotView(QWidget):
         # Re-fit the view to the freshly drawn data, overriding any manual
         # pan/zoom so the new selection is fully visible.
         self._plot.getViewBox().autoRange()
+        # Reveal the hint when the selection ended up drawing nothing.
+        self._update_empty_label()
 
     def _render_single(self, plots: list[MonitorPlot]) -> None:
         drawn: list[str] = []
