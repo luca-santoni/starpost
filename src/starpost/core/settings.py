@@ -186,6 +186,12 @@ class Profile:
         )
 
 
+# A built-in profile (not stored on disk): selects every available report and
+# no monitor plots — the application's default selection state. Resolved at load
+# time so "every report" always reflects whatever data is currently loaded.
+DEFAULT_PROFILE_NAME = "Default"
+
+
 def list_profiles() -> list[str]:
     return sorted(p.stem for p in profiles_dir().glob("*.yaml"))
 

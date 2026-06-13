@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QStyle,
     QStyleOptionViewItem,
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from starpost.core.settings import Profile, list_profiles
+from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
 
 
 class _CheckList(QListWidget):
@@ -189,7 +190,10 @@ class SelectionPanel(QWidget):
     def _refresh_profiles(self) -> None:
         current = self._profile_box.currentText()
         self._profile_box.clear()
-        names = list_profiles()
+        # The built-in Default profile always leads the list.
+        names = [DEFAULT_PROFILE_NAME] + [
+            n for n in list_profiles() if n != DEFAULT_PROFILE_NAME
+        ]
         self._profile_box.addItems(names)
         if current in names:
             self._profile_box.setCurrentText(current)
@@ -197,6 +201,14 @@ class SelectionPanel(QWidget):
     def _load_profile(self) -> None:
         name = self._profile_box.currentText()
         if not name:
+            return
+        if name == DEFAULT_PROFILE_NAME:
+            # Built-in: every available report, no monitor plots.
+            if self._monitor_setter is not None:
+                self._monitor_setter({})
+            self.reports.set_all(True)
+            self.plots.set_all(False)
+            self.selection_changed.emit()
             return
         prof = Profile.load(name)
         # Prime the per-plot monitor selection *before* re-checking the plots,
@@ -210,6 +222,12 @@ class SelectionPanel(QWidget):
     def _save_profile(self) -> None:
         name, ok = QInputDialog.getText(self, "Save profile", "Profile name:")
         if not ok or not name.strip():
+            return
+        if name.strip() == DEFAULT_PROFILE_NAME:
+            QMessageBox.warning(
+                self, "Save profile",
+                f"“{DEFAULT_PROFILE_NAME}” is a reserved profile name.",
+            )
             return
         # Save the monitor selection only for the plots in this profile.
         plots = self.selected_plots()

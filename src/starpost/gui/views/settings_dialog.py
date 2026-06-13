@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.core.settings import (
+    DEFAULT_PROFILE_NAME,
     LicenseConfig,
     Profile,
     Settings,
@@ -78,16 +79,21 @@ def _path_row(line: QLineEdit, on_browse) -> QHBoxLayout:
 class ProfileDetailsDialog(QDialog):
     """Read-only view of one profile's selected reports and plots/monitors."""
 
-    def __init__(self, profile: Profile, parent=None) -> None:
+    def __init__(self, profile: Profile, parent=None, *, all_reports: bool = False) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Profile: {profile.name}")
         self.resize(540, 420)
 
         reports = QListWidget()
-        for name in sorted(profile.reports):
-            reports.addItem(name)
-        if reports.count() == 0:
-            reports.addItem("(none selected)")
+        if all_reports:
+            # Built-in Default: reports are resolved from the loaded data, so
+            # there are no concrete names to list here.
+            reports.addItem("(all reports)")
+        else:
+            for name in sorted(profile.reports):
+                reports.addItem(name)
+            if reports.count() == 0:
+                reports.addItem("(none selected)")
 
         # Each selected plot (monitor group), with its shown monitors listed
         # beneath it. A group with no recorded monitors shows all of them.
@@ -343,7 +349,8 @@ class SettingsDialog(QDialog):
         page = QWidget()
         outer = QVBoxLayout(page)
         intro = QLabel(
-            "Saved selection profiles. Deleting one removes it permanently."
+            "Selection profiles. Deleting one removes it permanently; the "
+            "built-in Default can't be deleted."
         )
         intro.setObjectName("hint")
         intro.setWordWrap(True)
@@ -367,14 +374,12 @@ class SettingsDialog(QDialog):
                 w.setParent(None)
                 w.deleteLater()
 
-        names = list_profiles()
-        if not names:
-            empty = QLabel("No saved profiles yet.")
-            empty.setObjectName("hint")
-            self._profiles_list.addWidget(empty)
-            return
-
+        # The built-in Default profile always leads the list and can't be deleted.
+        names = [DEFAULT_PROFILE_NAME] + [
+            n for n in list_profiles() if n != DEFAULT_PROFILE_NAME
+        ]
         for name in names:
+            builtin = name == DEFAULT_PROFILE_NAME
             row = QWidget()
             rl = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
@@ -383,14 +388,18 @@ class SettingsDialog(QDialog):
             details = QPushButton("Show Details")
             details.clicked.connect(lambda _=False, n=name: self._show_profile_details(n))
             rl.addWidget(details)
-            btn = QPushButton("Delete")
-            btn.setObjectName("dangerButton")
-            btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
-            rl.addWidget(btn)
+            if not builtin:
+                btn = QPushButton("Delete")
+                btn.setObjectName("dangerButton")
+                btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
+                rl.addWidget(btn)
             self._profiles_list.addWidget(row)
 
     def _show_profile_details(self, name: str) -> None:
-        ProfileDetailsDialog(Profile.load(name), self).exec()
+        if name == DEFAULT_PROFILE_NAME:
+            ProfileDetailsDialog(Profile(name=name), self, all_reports=True).exec()
+        else:
+            ProfileDetailsDialog(Profile.load(name), self).exec()
 
     def _delete_profile(self, name: str) -> None:
         confirm = QMessageBox.question(
