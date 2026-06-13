@@ -2,9 +2,10 @@
 
 > Package/application name: **starpost**
 > Repository: `starpost`
-> Status: v1 scaffold — runnable GUI shell with core extraction/parsing logic
-> implemented; several actions stubbed (see [Implementation Status](#9-implementation-status)).
-> Document last updated: 2026-06-11
+> Status: v1 — runnable GUI with core extraction/parsing logic, a full in-app
+> settings dialog, and an interactive plot viewer; batch export wiring is still
+> stubbed (see [Implementation Status](#9-implementation-status)).
+> Document last updated: 2026-06-12
 
 ---
 
@@ -72,20 +73,53 @@ are noted as possible future extensions.
 ### Viewing (in-app)
 - **Per-file mode** (default): browse one simulation's reports and plots.
 - **Comparison mode**: a wide table of report values across all sims (one row
-  per sim, one column per report), and plot overlays of the *same* monitor plot
-  across multiple sims.
+  per sim, one column per report), and plot overlays of the selected monitor
+  plot(s) across multiple sims (coloured per sim).
 - **Report table**: numeric values with units.
 - **Monitor plot viewer** (interactive, pyqtgraph):
   - **Residual plots** → all series overlaid in distinct colors with a
     **logarithmic Y axis**.
   - **Force / other plots** → distinct colors with a **linear Y axis**.
-  - Axis type is auto-classified by plot name and is **overridable**.
+  - Axis type is auto-classified by plot name (keyword lists are configurable in
+    settings) and is **overridable** in the data model.
+  - **Multiple monitor groups (categories) at once**: selecting several monitor
+    plots overlays them on one set of axes, each with its **own dropdown**
+    (labelled with the category name, e.g. `Downforce (2/3)`) for choosing which
+    of its monitors (series) are drawn.
+  - **Hover readout**: hovering a line pins a marker and a coordinate label to
+    the nearest data point (computed in pixel space, log-axis aware). The label
+    optionally shows the monitor name and uses configurable X/Y decimal places.
+  - **Theme-aware**: the plot background, axes and legend text follow the app's
+    light/dark mode and update live when the theme is changed.
+- **Empty-monitor / empty-report hiding**: series or reports whose values are all
+  within a configurable zero-threshold are hidden by default (toggleable).
 
 ### Selection & profiles
 - User picks **which reports/plots** to view and export, with a **Select All**
   option per category.
-- **Profiles**: save a named selection of reports/plots (and axis overrides) to
-  reuse on future files with similar contents. Stored as YAML.
+- **Profiles**: save a named selection of reports/plots to reuse on future files
+  with similar contents. Stored as YAML. Each profile also records **which
+  monitors are shown within each selected plot** (groups without a recorded
+  subset default to showing all), plus any axis overrides.
+- A built-in **Default** profile always leads the list: loading it selects every
+  available report and no monitor plots (the app's default state, resolved at
+  load time). It is reserved and cannot be deleted or overwritten.
+- Profiles can be **inspected and deleted** from the Settings → Profiles page
+  (see below).
+
+### Settings & appearance
+- A full **in-app settings dialog** (left-nav pages, each scrollable) edits
+  everything in `settings.yaml`:
+  - **STAR-CCM+** — executable path, default output folder, extra CLI args.
+  - **License** — POD-key/server vs. license-file mode and their fields.
+  - **Reports** — decimal places, hide-empty toggle, zero threshold.
+  - **Plots** — hide-empty monitors + threshold, hover label options
+    (show name, X/Y decimals), and the residual/force classification keywords.
+  - **Profiles** — lists every profile (Default first) with a **Show Details**
+    window (its selected reports and plots/monitors) and a red **Delete** button
+    that confirms before removing the profile.
+  - **Appearance** — **dark/light theme** and an **accent colour** (preset
+    swatches or custom hex), previewed live across the whole UI.
 
 ### Export
 - **Report values → CSV**
@@ -188,6 +222,7 @@ sits on top of an installed STAR-CCM+ engine.
 | Language | Python 3.11+ | Best fit for subprocess orchestration + data handling; matches the proven prototype approach |
 | GUI | PySide6 (Qt) | Native Linux, cross-platform later, fully custom UI via QSS |
 | Plots (in-app) | pyqtgraph | Fast, interactive value-vs-iteration plotting with log-scale support |
+| Plot hover math | numpy | Nearest-point search for the in-plot hover readout |
 | Plots (export) | matplotlib | Publication-quality JPG/PDF rendering |
 | Tabular data | pandas | Wide/long report tables, easy CSV export |
 | Config/profiles | PyYAML | Human-readable, editable config and profiles |
@@ -244,6 +279,15 @@ Defined in `src/starpost/data/models.py`:
   `plots[]`, `extracted_at` timestamp, optional batch-level `error`. Provides a
   `signature()` (the set of report + plot names) used for the homogeneity check.
 
+A related persistence type lives in `src/starpost/core/settings.py`:
+
+- **`Profile`** — a saved selection: `name`, `reports[]`, `plots[]` (selected
+  monitor groups), `monitors` (`{plot_name: [monitor, ...]}` — which series are
+  shown per group; absent groups show all), and `axis_overrides`
+  (`{plot_name: "log" | "linear"}`). Stored one-per-YAML under the profiles dir.
+  The reserved **Default** profile (`DEFAULT_PROFILE_NAME`) is built-in and has
+  no file.
+
 ---
 
 ## 7. Project Structure (File by File)
@@ -270,14 +314,16 @@ starpost/                           (repo; app/package = "starpost")
 ├── tests/
 │   ├── test_aggregator.py          Wide report-table layout + selection filtering
 │   ├── test_result_parser.py       CSV parsing + plot classification
-│   └── test_settings.py            License flag generation (POD/server/file)
+│   ├── test_plot_view.py           Empty-series detection for plot hiding
+│   └── test_settings.py            License flags + profile (monitors) round-trip
 │
 └── src/starpost/
     ├── __init__.py                 Version, APP_NAME
     ├── app.py                      Entry point: QApplication, stylesheet, MainWindow
     │
     ├── core/                       Engine interface & business logic (no GUI)
-    │   ├── settings.py             Settings + LicenseConfig + Profile (YAML I/O)
+    │   ├── settings.py             Settings + LicenseConfig + Profile (YAML I/O);
+    │   │                           list/delete profiles + built-in Default name
     │   ├── macro_generator.py      Renders extract_all.java from the Jinja2 template
     │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log
     │   ├── result_parser.py        Parses exported CSVs; classifies plots (log/linear)
@@ -297,13 +343,17 @@ starpost/                           (repo; app/package = "starpost")
     │
     ├── gui/                        PySide6 user interface
     │   ├── main_window.py          Assembles panels, wires the batch worker & views
+    │   ├── theme.py                Dark/light + accent QSS generator (build/apply)
+    │   ├── icons.py                Loads the bundled app icon (QIcon)
     │   ├── resources/
-    │   │   └── theme.qss           Custom QSS theme (placeholder, iterate)
+    │   │   └── StarPost-logo.png   Application / window icon
     │   └── views/
     │       ├── file_list.py        Batch list: add files/folder, remove, clear
     │       ├── selection_panel.py  Report/plot checkboxes, Select All, profile load/save
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide)
-    │       ├── plot_view.py        pyqtgraph viewer (log residuals, plot comparison)
+    │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-group
+    │       │                       monitor dropdowns, hover readout, theme-following
+    │       ├── settings_dialog.py  In-app settings (paged, scrollable) + profile mgmt
     │       ├── log_console.py      Live log + progress bar
     │       └── export_dialog.py    Export options (what + format + folder)
     │
@@ -399,21 +449,32 @@ the authoritative answers that shaped the v1 design.
 - Report aggregation (wide comparison + per-file) and CSV export helpers.
 - Plot export to JPG/PDF (matplotlib) honoring axis choice.
 - Full GUI shell: file list, selection panel with profiles, report table, plot
-  viewer (per-file + comparison), log console, export dialog, custom QSS theme.
-- Settings + Profile YAML persistence.
-- Unit tests for parser, classifier, aggregator, and license flags.
+  viewer (per-file + comparison), log console, export dialog.
+- **In-app settings dialog** — paged, scrollable form covering every
+  `settings.yaml` field (STAR-CCM+ paths, license mode/key/server, reports,
+  plots, profiles, appearance); writes back and persists on Save.
+- **Appearance theming** — dark/light palettes + user accent colour generated
+  into QSS at runtime, previewed live; the pyqtgraph plot also follows the mode.
+- **Interactive plot viewer** — multiple monitor groups overlaid with per-group
+  monitor dropdowns, nearest-point hover readout (configurable), and empty-series
+  hiding.
+- **Profiles** — YAML persistence including per-group monitor selection, a
+  built-in Default profile, and in-dialog management (Show Details + Delete).
+- App window titled **StarPost** with a bundled application icon.
+- Unit tests for parser, classifier, aggregator, license flags, profile
+  round-trip, and empty-series detection.
 
 **Stubbed / TODO (clearly marked in code):**
-- **Settings dialog** — currently directs the user to edit the YAML file; needs a
-  proper in-app form (exe path, license mode/key/server, default output dir).
 - **Export action wiring** — the export dialog collects options but does not yet
   call the aggregator / plot exporter; the hookup points exist.
-- **Per-plot axis-override UI** — supported in the data model; no toggle widget
-  yet.
+- **Per-plot axis-override UI** — supported in the data model and profiles, and
+  the classification keywords are editable in settings, but there is no per-plot
+  log/linear toggle widget yet.
 - **`starccm_path` default** — blank pending the team's install path.
 - **`StarPlot.export()` CSV layout** — parser handles the common case; needs
   validation against real exports and tightening.
-- **PyInstaller/AppImage build** — spec exists; not yet produced.
+- **PyInstaller/AppImage build** — spec exists (now bundles the icon); not yet
+  produced.
 
 **Not validated:**
 - The Java macro has not been run against a live, licensed STAR-CCM+ install.
@@ -460,8 +521,7 @@ PYTHONPATH=src python -m pytest tests/ -q
 
 - **Validate the Java macro** on a real STAR-CCM+ install and confirm the
   `StarPlot.export()` CSV layout across plot types; tighten the parser.
-- **Complete the stubbed actions** (settings dialog, export wiring, axis-override
-  UI).
+- **Complete the stubbed actions** (export wiring, per-plot axis-override UI).
 - **Windows support** (swap XDG paths for `platformdirs`; verify subprocess and
   executable auto-detection).
 - **Packaging/installer** for team distribution (AppImage on Linux; MSI/NSIS on

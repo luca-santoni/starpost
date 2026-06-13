@@ -20,6 +20,29 @@ starpost does **not** parse them directly. Instead it:
 
 A licensed STAR-CCM+ installation must be present on the machine.
 
+## Features
+
+- **Batch extraction** of all report values and monitor plots from multiple
+  `.sim` files, run sequentially (one license checkout at a time) with a live
+  log and progress bar, and a crash-recovery cache.
+- **Per-file and comparison views** — a numeric report table and an interactive
+  plot viewer.
+- **Interactive plots** (pyqtgraph):
+  - Overlay **several monitor groups at once**, each with its own dropdown for
+    choosing which monitors (series) are shown.
+  - **Hover readout** that snaps a marker + coordinate label to the nearest data
+    point (optional monitor name, configurable X/Y decimals).
+  - Residuals on a log axis, forces on a linear axis (auto-classified by name).
+  - Background, axes and legend **follow the light/dark theme**.
+- **Profiles** — save/reuse a named selection of reports and plots, *including
+  which monitors are shown per group*. A built-in **Default** profile selects
+  every report and no plots.
+- **In-app settings dialog** — STAR-CCM+ paths, licensing, report/plot display
+  options, profile management (view details / delete), and a **dark/light theme
+  with a custom accent colour** previewed live.
+- **Export** report values to CSV and plots to JPG/PDF *(export wiring is still
+  in progress — see the overview doc)*.
+
 ## Requirements
 
 - Python 3.11+
@@ -36,18 +59,25 @@ python scripts/dev_run.py        # launches the GUI (no STAR-CCM+ needed to open
 
 ## Configuration
 
-User settings live at `~/.config/starpost/settings.yaml` (seeded from
-`config/default_settings.yaml`). Key fields:
+Most settings are editable in-app via **Settings** (paged dialog), or directly
+in `~/.config/starpost/settings.yaml` (seeded from `config/default_settings.yaml`
+on first run). Key fields:
 
 - `starccm_path` — path to the `starccm+` executable (manual; default TBD).
 - `license` — default mode is POD key + license server
   (`-power -podkey <KEY> -licpath <port>@<server>`); a regular license-file mode
   is also supported.
 - `default_output_dir` — where exports are written (user-defined per run).
+- Report/plot display options (decimals, empty-value hiding + thresholds, hover
+  label options, axis-classification keywords) and `appearance` (theme + accent).
 
-Extraction **profiles** (saved selections of which reports/plots to export) live
-in `~/.config/starpost/profiles/*.yaml`.
+Extraction **profiles** (saved report/plot selections, the monitors shown per
+plot, and axis overrides) live in `~/.config/starpost/profiles/*.yaml`. The
+crash-recovery cache and logs live under `~/.cache/starpost/`.
 
 ## Status
 
-v1 scaffold. See module-level `TODO`s. Built for Linux; Windows support planned.
+v1. Core extraction/parsing, the in-app settings dialog, and the interactive
+plot viewer are implemented; batch **export wiring** is still stubbed (see
+[`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md)). Built for Linux;
+Windows support planned.
