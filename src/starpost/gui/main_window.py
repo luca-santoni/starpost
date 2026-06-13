@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
+    QStyle,
     QTabBar,
     QTabWidget,
     QToolBar,
@@ -242,33 +243,70 @@ class MainWindow(QMainWindow):
             return
         if self._missing_exe():
             return
-        # Guard against same-named duplicates: the data list is keyed by file
-        # name, so loading another .sim with a name already present would shadow
-        # it. Offer to overwrite the existing data instead.
-        names = {p.name for p in paths}
-        existing = [r for r in self.store.all() if Path(r.sim_path).name in names]
-        if existing:
-            dup = sorted({Path(r.sim_path).name for r in existing})
-            if len(dup) == 1:
-                title, msg = "File already loaded", (
-                    f"“{dup[0]}” has already been loaded. "
-                    "Would you like to overwrite it?"
-                )
+        # The data list is keyed by file name, so re-loading a .sim whose name is
+        # already present would shadow it. Rather than block the whole selection,
+        # skip the already-loaded files and load only the new ones — warning first
+        # when some (but not all) of the selection is already loaded.
+        loaded_names = {Path(r.sim_path).name for r in self.store.all()}
+        new_paths = [p for p in paths if p.name not in loaded_names]
+        dup = sorted({p.name for p in paths if p.name in loaded_names})
+        load_paths = new_paths  # which files to actually (re)load
+        if dup:
+            joined = ", ".join(f"“{d}”" for d in dup)
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Question)
+            load_btn = None
+            if not new_paths:
+                # The whole selection is already loaded: the only useful action is
+                # to force a reload, overwriting the existing copies.
+                box.setWindowTitle("Already loaded")
+                if len(dup) == 1:
+                    box.setText(f"“{dup[0]}” is already loaded.")
+                else:
+                    box.setText(
+                        f"All {len(dup)} selected files are already loaded ({joined})."
+                    )
             else:
-                joined = ", ".join(f"“{d}”" for d in dup)
-                title, msg = "Files already loaded", (
-                    f"{len(dup)} of these files have already been loaded "
-                    f"({joined}). Would you like to overwrite them?"
+                if len(dup) == 1:
+                    box.setWindowTitle("File already loaded")
+                    box.setText(
+                        f"“{dup[0]}” is already loaded. "
+                        "Would you like to load all other new files?"
+                    )
+                else:
+                    box.setWindowTitle("Files already loaded")
+                    box.setText(
+                        f"{len(dup)} files are already loaded ({joined}). "
+                        "Would you like to load all other new files?"
+                    )
+                load_btn = box.addButton("Load new files", QMessageBox.AcceptRole)
+                # Reuse the style's standard Yes-button icon (the green check seen
+                # on other Yes/No dialogs) so this affirmative button matches them.
+                load_btn.setIcon(
+                    self.style().standardIcon(QStyle.SP_DialogYesButton)
                 )
-            if QMessageBox.question(
-                self, title, msg,
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            ) != QMessageBox.Yes:
+            # The force button overwrites the existing copies and loads everything.
+            # ResetRole parks it in the dialog's bottom-left cluster, away from the
+            # primary action. Opening a single already-loaded file reloads just
+            # that one, so drop the "all".
+            force_label = "Force load" if len(paths) == 1 else "Force load all"
+            force_btn = box.addButton(force_label, QMessageBox.ResetRole)
+            cancel_btn = box.addButton(QMessageBox.Cancel)
+            box.setDefaultButton(load_btn or force_btn)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is cancel_btn:
                 return
-            for r in existing:
-                self.store.remove(r.sim_path)
+            if clicked is force_btn:
+                # Drop the already-loaded copies so the reload replaces them.
+                for r in [
+                    r for r in self.store.all()
+                    if Path(r.sim_path).name in set(dup)
+                ]:
+                    self.store.remove(r.sim_path)
+                load_paths = paths
         out_dir = Path(self.settings.default_output_dir or str(Path.home()))
-        self._start_jobs([Job(sim_file=p) for p in paths], out_dir)
+        self._start_jobs([Job(sim_file=p) for p in load_paths], out_dir)
 
     def _start_jobs(self, jobs: list[Job], out_dir: Path) -> None:
         """Run the given jobs on a worker thread, wiring progress to the UI."""
