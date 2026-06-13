@@ -356,9 +356,13 @@ class SettingsDialog(QDialog):
         intro.setWordWrap(True)
         outer.addWidget(intro)
 
-        self._profiles_list = QVBoxLayout()
+        # A grid so the per-profile buttons line up in columns regardless of
+        # which rows have a Delete button (the built-in Default doesn't).
+        self._profiles_list = QGridLayout()
         self._profiles_list.setContentsMargins(0, 4, 0, 0)
-        self._profiles_list.setSpacing(4)
+        self._profiles_list.setHorizontalSpacing(8)
+        self._profiles_list.setVerticalSpacing(4)
+        self._profiles_list.setColumnStretch(0, 1)  # name column absorbs slack
         outer.addLayout(self._profiles_list)
         outer.addStretch(1)
 
@@ -378,22 +382,16 @@ class SettingsDialog(QDialog):
         names = [DEFAULT_PROFILE_NAME] + [
             n for n in list_profiles() if n != DEFAULT_PROFILE_NAME
         ]
-        for name in names:
-            builtin = name == DEFAULT_PROFILE_NAME
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            rl.addWidget(QLabel(name))
-            rl.addStretch(1)
+        for r, name in enumerate(names):
+            self._profiles_list.addWidget(QLabel(name), r, 0)
             details = QPushButton("Show Details")
             details.clicked.connect(lambda _=False, n=name: self._show_profile_details(n))
-            rl.addWidget(details)
-            if not builtin:
+            self._profiles_list.addWidget(details, r, 1)
+            if name != DEFAULT_PROFILE_NAME:
                 btn = QPushButton("Delete")
                 btn.setObjectName("dangerButton")
                 btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
-                rl.addWidget(btn)
-            self._profiles_list.addWidget(row)
+                self._profiles_list.addWidget(btn, r, 2)
 
     def _show_profile_details(self, name: str) -> None:
         if name == DEFAULT_PROFILE_NAME:
