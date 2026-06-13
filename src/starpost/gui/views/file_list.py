@@ -33,6 +33,9 @@ class FileListPanel(QWidget):
         # Each item stores its full path in Qt.UserRole; the displayed text is
         # either that path or just the file name, per this flag.
         self._show_full_names = show_full_names
+        # Active sort, kept in sync with the header menu's checkmark. The list is
+        # always ordered by this; A–Z is the default.
+        self._sort_mode = "name_az"
         self._list = QListWidget()
         self._list.setSelectionMode(QListWidget.ExtendedSelection)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -55,6 +58,10 @@ class FileListPanel(QWidget):
         header.setObjectName("panelHeader")
         # Hug the text so it reads as a single tab rather than a full-width bar.
         header.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        # Right-click the header to sort the list.
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_header_menu)
+        self._header = header
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.addWidget(header)
@@ -105,7 +112,57 @@ class FileListPanel(QWidget):
         for p in paths:
             if p.suffix == ".sim" and p.resolve() not in existing:
                 self._list.addItem(self._make_item(p))
+        self._apply_sort()  # keep the list in the active sort order
         self.files_changed.emit(self.files())
+
+    # --- sorting ---------------------------------------------------------
+    def _show_header_menu(self, pos) -> None:
+        menu = QMenu(self)
+        # action text -> sort key; the active mode shows a checkmark.
+        options = [
+            ("Name (A–Z)", "name_az"),
+            ("Name (Z–A)", "name_za"),
+            ("File size (largest)", "size_large"),
+            ("File size (smallest)", "size_small"),
+        ]
+        actions = {}
+        for text, key in options:
+            act = menu.addAction(text)
+            act.setCheckable(True)
+            act.setChecked(key == self._sort_mode)
+            actions[act] = key
+        chosen = menu.exec(self._header.mapToGlobal(pos))
+        if chosen is not None:
+            self._sort_files(actions[chosen])
+
+    @staticmethod
+    def _size(path: Path) -> int:
+        # Missing files sort as smallest so a broken path doesn't raise.
+        try:
+            return path.stat().st_size
+        except OSError:
+            return -1
+
+    def _sort_files(self, mode: str) -> None:
+        self._sort_mode = mode
+        self._apply_sort()
+        self.files_changed.emit(self.files())
+
+    def _apply_sort(self) -> None:
+        """Reorder the existing items by the active sort mode. Pure display
+        reorder: callers emit files_changed when the new order should persist."""
+        paths = self.files()
+        if self._sort_mode == "name_az":
+            paths.sort(key=lambda p: p.name.lower())
+        elif self._sort_mode == "name_za":
+            paths.sort(key=lambda p: p.name.lower(), reverse=True)
+        elif self._sort_mode == "size_large":
+            paths.sort(key=self._size, reverse=True)
+        elif self._sort_mode == "size_small":
+            paths.sort(key=self._size)
+        self._list.clear()
+        for p in paths:
+            self._list.addItem(self._make_item(p))
 
     # --- slots -----------------------------------------------------------
     def _add_files(self) -> None:
@@ -172,3 +229,4 @@ class FileListPanel(QWidget):
             return
         for p in saved:
             self._list.addItem(self._make_item(Path(p)))
+        self._apply_sort()  # present in the default (A–Z) order
