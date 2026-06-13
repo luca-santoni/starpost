@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import (
     LicenseConfig,
+    Profile,
     Settings,
     delete_profile,
     list_profiles,
@@ -72,6 +73,56 @@ def _path_row(line: QLineEdit, on_browse) -> QHBoxLayout:
     btn.clicked.connect(on_browse)
     row.addWidget(btn)
     return row
+
+
+class ProfileDetailsDialog(QDialog):
+    """Read-only view of one profile's selected reports and plots/monitors."""
+
+    def __init__(self, profile: Profile, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Profile: {profile.name}")
+        self.resize(540, 420)
+
+        reports = QListWidget()
+        for name in sorted(profile.reports):
+            reports.addItem(name)
+        if reports.count() == 0:
+            reports.addItem("(none selected)")
+
+        # Each selected plot (monitor group), with its shown monitors listed
+        # beneath it. A group with no recorded monitors shows all of them.
+        plots = QListWidget()
+        for plot in sorted(profile.plots):
+            plots.addItem(plot)
+            monitors = profile.monitors.get(plot)
+            if monitors:
+                for m in sorted(monitors):
+                    plots.addItem(f"    • {m}")
+            else:
+                plots.addItem("    • (all monitors)")
+        if plots.count() == 0:
+            plots.addItem("(none selected)")
+
+        cols = QHBoxLayout()
+        cols.addLayout(self._column("Reports", reports), 1)
+        cols.addLayout(self._column("Plots", plots), 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(cols, 1)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _column(title: str, lst: QListWidget) -> QVBoxLayout:
+        col = QVBoxLayout()
+        label = QLabel(title)
+        label.setStyleSheet("font-weight: bold;")
+        col.addWidget(label)
+        col.addWidget(lst, 1)
+        return col
 
 
 class SettingsDialog(QDialog):
@@ -329,11 +380,17 @@ class SettingsDialog(QDialog):
             rl.setContentsMargins(0, 0, 0, 0)
             rl.addWidget(QLabel(name))
             rl.addStretch(1)
+            details = QPushButton("Show Details")
+            details.clicked.connect(lambda _=False, n=name: self._show_profile_details(n))
+            rl.addWidget(details)
             btn = QPushButton("Delete")
             btn.setObjectName("dangerButton")
             btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
             rl.addWidget(btn)
             self._profiles_list.addWidget(row)
+
+    def _show_profile_details(self, name: str) -> None:
+        ProfileDetailsDialog(Profile.load(name), self).exec()
 
     def _delete_profile(self, name: str) -> None:
         confirm = QMessageBox.question(
