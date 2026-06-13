@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
 
         self.selection.selection_changed.connect(self._on_selection_changed)
-        self.file_list.open_requested.connect(self._open_file)
+        self.file_list.open_requested.connect(self._open_files)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
@@ -232,8 +232,11 @@ class MainWindow(QMainWindow):
         )
         self._start_jobs([Job(sim_file=f) for f in files], out_dir)
 
-    def _open_file(self, path: Path) -> None:
-        """Extract a single .sim (right-click → Open) and show its data."""
+    def _open_files(self, paths: list[Path]) -> None:
+        """Extract one or more .sim files (right-click → Open) and show their
+        data. Multiple files are queued and run sequentially as a batch."""
+        if not paths:
+            return
         if self._busy():
             QMessageBox.information(self, "StarPost", "A run is already in progress.")
             return
@@ -242,19 +245,30 @@ class MainWindow(QMainWindow):
         # Guard against same-named duplicates: the data list is keyed by file
         # name, so loading another .sim with a name already present would shadow
         # it. Offer to overwrite the existing data instead.
-        existing = [r for r in self.store.all() if Path(r.sim_path).name == path.name]
+        names = {p.name for p in paths}
+        existing = [r for r in self.store.all() if Path(r.sim_path).name in names]
         if existing:
+            dup = sorted({Path(r.sim_path).name for r in existing})
+            if len(dup) == 1:
+                title, msg = "File already loaded", (
+                    f"“{dup[0]}” has already been loaded. "
+                    "Would you like to overwrite it?"
+                )
+            else:
+                joined = ", ".join(f"“{d}”" for d in dup)
+                title, msg = "Files already loaded", (
+                    f"{len(dup)} of these files have already been loaded "
+                    f"({joined}). Would you like to overwrite them?"
+                )
             if QMessageBox.question(
-                self, "File already loaded",
-                f"“{path.name}” has already been loaded. "
-                "Would you like to overwrite it?",
+                self, title, msg,
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
             ) != QMessageBox.Yes:
                 return
             for r in existing:
                 self.store.remove(r.sim_path)
         out_dir = Path(self.settings.default_output_dir or str(Path.home()))
-        self._start_jobs([Job(sim_file=path)], out_dir)
+        self._start_jobs([Job(sim_file=p) for p in paths], out_dir)
 
     def _start_jobs(self, jobs: list[Job], out_dir: Path) -> None:
         """Run the given jobs on a worker thread, wiring progress to the UI."""

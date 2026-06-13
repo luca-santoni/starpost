@@ -24,7 +24,7 @@ MAX_FILES = 25  # v1 expected ceiling; warn beyond this
 
 class FileListPanel(QWidget):
     files_changed = Signal(list)  # list[Path]
-    open_requested = Signal(Path)  # a single .sim to extract & view
+    open_requested = Signal(list)  # list[Path] to extract & view (in order)
 
     def __init__(self, parent=None, *, show_full_names: bool = False) -> None:
         super().__init__(parent)
@@ -189,7 +189,14 @@ class FileListPanel(QWidget):
         open_act = menu.addAction("Open")
         chosen = menu.exec(self._list.mapToGlobal(pos))
         if chosen is open_act:
-            self.open_requested.emit(self._item_path(item))
+            # Open every selected file, in list (top-to-bottom) order.
+            paths = [
+                self._item_path(self._list.item(i))
+                for i in range(self._list.count())
+                if self._list.item(i).isSelected()
+            ]
+            if paths:
+                self.open_requested.emit(paths)
 
     def _clear_confirmed(self) -> None:
         """Clear the list only after the user confirms the warning."""
