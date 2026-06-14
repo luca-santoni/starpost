@@ -84,7 +84,7 @@ class ProfileDetailsDialog(QDialog):
     def __init__(self, profile: Profile, parent=None, *, all_reports: bool = False) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Profile: {profile.name}")
-        self.resize(540, 420)
+        self.resize(720, 420)
 
         reports = QListWidget()
         if all_reports:
@@ -111,9 +111,21 @@ class ProfileDetailsDialog(QDialog):
         if plots.count() == 0:
             plots.addItem("(none selected)")
 
+        # Statistical measures saved with the profile. None means the profile
+        # predates this feature, so it falls back to the current settings.
+        stats = QListWidget()
+        if profile.region_stats is None:
+            stats.addItem("(default statistics)")
+        else:
+            for name in profile.region_stats:
+                stats.addItem(name)
+            if stats.count() == 0:
+                stats.addItem("(none selected)")
+
         cols = QHBoxLayout()
         cols.addLayout(self._column("Reports", reports), 1)
         cols.addLayout(self._column("Plots", plots), 1)
+        cols.addLayout(self._column("Statistics", stats), 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
