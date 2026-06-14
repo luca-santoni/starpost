@@ -15,9 +15,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QStyle,
+    QStyleOptionGroupBox,
     QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
@@ -34,6 +36,9 @@ class _CheckList(QListWidget):
         # Connect once. User-driven check toggles emit `changed`; programmatic
         # updates below block signals to avoid storms and emit explicitly.
         self.itemChanged.connect(lambda _: self.changed.emit())
+        # Active name sort, A–Z by default. Toggled via the group title's
+        # right-click menu and re-applied whenever the list is rebuilt.
+        self.sort_mode = "az"  # "az" | "za"
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         # QoL: clicking anywhere on a row toggles its checkbox, not just the
@@ -63,14 +68,36 @@ class _CheckList(QListWidget):
         )
         return rect.contains(pos)
 
+    def _sorted(self, names) -> list[str]:
+        """Order names by the active sort mode (case-insensitive)."""
+        return sorted(names, key=str.lower, reverse=self.sort_mode == "za")
+
     def set_items(self, names: list[str], checked: bool = True) -> None:
         self.blockSignals(True)
         self.clear()
         state = Qt.Checked if checked else Qt.Unchecked
-        for n in names:
+        for n in self._sorted(names):
             item = QListWidgetItem(n)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(state)
+            self.addItem(item)
+        self.blockSignals(False)
+
+    def set_sort_mode(self, mode: str) -> None:
+        """Switch the A–Z/Z–A order, re-sorting the existing items in place and
+        preserving each one's check state (a pure reorder, no `changed` emit)."""
+        if mode == self.sort_mode:
+            return
+        self.sort_mode = mode
+        kept = [(self.item(i).text(), self.item(i).checkState())
+                for i in range(self.count())]
+        kept.sort(key=lambda t: t[0].lower(), reverse=mode == "za")
+        self.blockSignals(True)
+        self.clear()
+        for text, st in kept:
+            item = QListWidgetItem(text)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(st)
             self.addItem(item)
         self.blockSignals(False)
 
@@ -97,6 +124,30 @@ class _CheckList(QListWidget):
         for i in range(self.count()):
             self.item(i).setCheckState(s)
         self.blockSignals(False)
+
+
+class _SortableGroupBox(QGroupBox):
+    """A group box whose title responds to a right-click: clicking the title
+    text invokes ``on_sort(global_pos)`` (to raise a sort menu). Right-clicks
+    elsewhere on the box keep their default behaviour.
+    """
+
+    def __init__(self, title: str, on_sort, parent=None) -> None:
+        super().__init__(title, parent)
+        self._on_sort = on_sort
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        opt = QStyleOptionGroupBox()
+        self.initStyleOption(opt)
+        label = self.style().subControlRect(
+            QStyle.ComplexControl.CC_GroupBox, opt,
+            QStyle.SubControl.SC_GroupBoxLabel, self,
+        )
+        if label.contains(event.pos()):
+            self._on_sort(event.globalPos())
+            event.accept()
+        else:
+            super().contextMenuEvent(event)
 
 
 class SelectionPanel(QWidget):
@@ -137,7 +188,11 @@ class SelectionPanel(QWidget):
         layout.addWidget(self._group("Monitor plots", self.plots))
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
-        box = QGroupBox(title)
+        # Right-clicking the title sorts this list A–Z / Z–A.
+        box = _SortableGroupBox(
+            title, on_sort=lambda gp, lst=lst: self._show_sort_menu(lst, gp)
+        )
+        box.setToolTip("Right-click the title to sort A–Z / Z–A")
         all_on = QPushButton("Select all")
         all_off = QPushButton("Clear")
         all_on.clicked.connect(lambda: (lst.set_all(True), self.selection_changed.emit()))
@@ -149,6 +204,21 @@ class SelectionPanel(QWidget):
         v.addLayout(row)
         v.addWidget(lst)
         return box
+
+    def _show_sort_menu(self, lst: _CheckList, global_pos) -> None:
+        """Sort menu for a checklist, raised from its group title's right-click.
+        The active mode shows a checkmark."""
+        menu = QMenu(self)
+        options = [("Name (A–Z)", "az"), ("Name (Z–A)", "za")]
+        actions = {}
+        for text, mode in options:
+            act = menu.addAction(text)
+            act.setCheckable(True)
+            act.setChecked(lst.sort_mode == mode)
+            actions[act] = mode
+        chosen = menu.exec(global_pos)
+        if chosen is not None:
+            lst.set_sort_mode(actions[chosen])
 
     # --- data ------------------------------------------------------------
     def populate(self, report_names: list[str], plot_names: list[str]) -> None:
