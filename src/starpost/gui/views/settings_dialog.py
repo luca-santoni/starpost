@@ -557,8 +557,18 @@ class SettingsDialog(QDialog):
         return self._wrap(form)
 
     def _build_misc_page(self) -> QWidget:
-        # Blank for now; miscellaneous settings will be added here later.
-        return self._wrap(QFormLayout())
+        self._show_setup = QCheckBox("Show setup menu on startup")
+
+        form = QFormLayout()
+        form.addRow("", self._show_setup)
+        hint = QLabel(
+            "When on, the welcome/setup wizard opens each time the application "
+            "starts; when off, nothing is shown on startup."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+        return self._wrap(form)
 
     # --- appearance helpers ---------------------------------------------
     def _current_mode(self) -> str:
@@ -694,6 +704,7 @@ class SettingsDialog(QDialog):
         self._licfile.setText(s.license.license_file)
 
         self._show_full_paths.setChecked(s.show_full_file_names)
+        self._show_setup.setChecked(s.show_setup_on_startup)
 
         self._decimals.setValue(s.report_decimals)
         self._hide_empty.setChecked(s.hide_empty_reports)
@@ -733,6 +744,7 @@ class SettingsDialog(QDialog):
         s.appearance.checkmark_color = self._checkmark_color
         s.appearance.checkmark_match_theme = self._checkmark_match
         s.show_full_file_names = self._show_full_paths.isChecked()
+        s.show_setup_on_startup = self._show_setup.isChecked()
         s.report_decimals = self._decimals.value()
         s.hide_empty_reports = self._hide_empty.isChecked()
         try:

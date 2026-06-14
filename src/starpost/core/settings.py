@@ -81,6 +81,9 @@ class Settings:
             "force_keywords": ["force", "drag", "lift", "moment", "cd", "cl"],
         }
     )
+    # Show the first-run welcome/setup wizard on startup. Defaults on so new
+    # users see it; cleared once they opt out (in the wizard or Misc settings).
+    show_setup_on_startup: bool = True
 
     # --- persistence -----------------------------------------------------
     @classmethod
@@ -132,6 +135,7 @@ class Settings:
             ),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
+            show_setup_on_startup=bool(d.get("show_setup_on_startup", True)),
         )
 
     def to_dict(self) -> dict:
@@ -162,6 +166,7 @@ class Settings:
             "hover_y_decimals": self.hover_y_decimals,
             "region_stats": self.region_stats,
             "plot_classification": self.plot_classification,
+            "show_setup_on_startup": self.show_setup_on_startup,
         }
 
     def save(self) -> None:

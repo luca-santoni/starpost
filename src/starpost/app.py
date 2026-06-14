@@ -28,6 +28,13 @@ def main() -> int:
 
     window = MainWindow(settings)
     window.show()
+
+    # First-run (or whenever the user keeps it enabled) welcome/setup wizard.
+    if settings.show_setup_on_startup:
+        from starpost.gui.views.welcome_dialog import WelcomeDialog
+
+        WelcomeDialog(settings, window).exec()
+
     return app.exec()
 
 
