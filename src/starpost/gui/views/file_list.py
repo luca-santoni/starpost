@@ -45,6 +45,7 @@ class FileListPanel(QWidget):
         add_folder = QPushButton("Add folder…")
         remove = QPushButton("Remove")
         clear = QPushButton("Clear")
+        clear.setObjectName("dangerButton")
         add_files.clicked.connect(self._add_files)
         add_folder.clicked.connect(self._add_folder)
         remove.clicked.connect(self._remove_selected)
