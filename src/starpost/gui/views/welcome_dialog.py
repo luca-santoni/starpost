@@ -301,7 +301,12 @@ class WelcomeDialog(QDialog):
         self.accept()
 
     def reject(self) -> None:  # noqa: D401 (Qt override)
-        # Closed without finishing: revert the live theme preview.
+        # Closed without finishing: don't keep the setup entries, but still
+        # honour the startup-visibility choice so unchecking it here sticks
+        # (and is reflected in the Misc settings page).
+        self._settings.show_setup_on_startup = self._show_again.isChecked()
+        self._settings.save()
+        # Revert the live theme preview.
         apply_theme(
             QApplication.instance(),
             self._orig_mode,
