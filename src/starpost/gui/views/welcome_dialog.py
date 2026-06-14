@@ -98,6 +98,11 @@ class WelcomeDialog(QDialog):
         v.setContentsMargins(0, 0, 0, 0)
         title = QLabel("Welcome to StarPost")
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        about = QLabel(
+            "StarPost is a custom post processing software for Star CCM+ focused "
+            "on numerical analysis."
+        )
+        about.setWordWrap(True)
         intro = QLabel(
             "Let's get a few essentials set up. You can change all of this later "
             "from the Settings… button in the toolbar."
@@ -105,6 +110,7 @@ class WelcomeDialog(QDialog):
         intro.setWordWrap(True)
         intro.setObjectName("hint")
         v.addWidget(title)
+        v.addWidget(about)
         v.addWidget(intro)
         return box
 
@@ -115,7 +121,7 @@ class WelcomeDialog(QDialog):
         self._out.setPlaceholderText("Empty = your home folder")
 
         form = QFormLayout()
-        form.addRow("Install location", self._path_row(self._exe, self._browse_exe))
+        form.addRow("Executable Location", self._path_row(self._exe, self._browse_exe))
         form.addRow("Output folder", self._path_row(self._out, self._browse_out))
         group = QGroupBox("STAR-CCM+")
         group.setLayout(form)
@@ -182,9 +188,9 @@ class WelcomeDialog(QDialog):
 
     def _info_label(self) -> QWidget:
         info = QLabel(
-            "That's the essentials. Open <b>Settings…</b> from the toolbar to "
-            "customize reports, plots, profiles and more. For full details and "
-            "advanced usage, please read the documentation."
+            "Open <b>Settings…</b> from the toolbar to customize reports, plots, "
+            "profiles and more. For full details and advanced usage, please read "
+            "the documentation."
         )
         info.setWordWrap(True)
         info.setObjectName("hint")
