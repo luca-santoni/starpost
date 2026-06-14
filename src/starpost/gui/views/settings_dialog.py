@@ -167,6 +167,7 @@ class SettingsDialog(QDialog):
         self._add_page("Plots", self._build_plots_page())
         self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Appearance", self._build_appearance_page())
+        self._add_page("Misc", self._build_misc_page())
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
@@ -542,6 +543,10 @@ class SettingsDialog(QDialog):
         hint.setWordWrap(True)
         form.addRow("", hint)
         return self._wrap(form)
+
+    def _build_misc_page(self) -> QWidget:
+        # Blank for now; miscellaneous settings will be added here later.
+        return self._wrap(QFormLayout())
 
     # --- appearance helpers ---------------------------------------------
     def _current_mode(self) -> str:
