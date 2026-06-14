@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -371,9 +372,19 @@ class PlotView(QWidget):
         # Likewise remember each category's chosen monitor sort order.
         self._sort_memory: dict[str, str | None] = {}
 
+        # "Clear selection" sits at the bottom-right, past the category
+        # dropdowns; enabled only while a Shift+drag region is active.
+        self._clear_sel_btn = QPushButton("Clear selection")
+        self._clear_sel_btn.setEnabled(False)
+        self._clear_sel_btn.clicked.connect(self._clear_region)
+
+        bottom = QHBoxLayout()
+        bottom.addLayout(self._ctrl, 1)
+        bottom.addWidget(self._clear_sel_btn)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self._plot, 1)
-        layout.addLayout(self._ctrl)
+        layout.addLayout(bottom)
 
         # What to re-render when the monitor selection changes.
         self._mode: str | None = None          # "single" | "comparison"
@@ -742,6 +753,7 @@ class PlotView(QWidget):
         self._region_rect = None
         self._region_item.hide()
         self._stats_label.hide()
+        self._clear_sel_btn.setEnabled(False)
 
     def _on_region_selected(self, rect: QRectF) -> None:
         """Handle a Shift+drag: a real rectangle shows stats; a zero-area drag
@@ -753,6 +765,7 @@ class PlotView(QWidget):
         self._region_item.setRect(rect)
         self._region_item.show()
         self._show_region_stats(rect)
+        self._clear_sel_btn.setEnabled(True)
 
     def _region_values(self, curve: dict, rect: QRectF):
         """The curve's Y values whose points fall inside the rectangle (in view
