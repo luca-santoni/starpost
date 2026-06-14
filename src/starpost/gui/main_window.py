@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_files)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
+        self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
 
@@ -343,6 +344,33 @@ class MainWindow(QMainWindow):
                 "The loaded .sim files don't all share the same reports/plots. "
                 "Comparison views may have gaps; selection lists show the union.",
             )
+
+    def _delete_selected_data(self) -> None:
+        """Delete just the checked data sets from the store, after confirmation."""
+        if self._thread is not None and self._thread.isRunning():
+            QMessageBox.information(
+                self, "Delete data",
+                "A batch is still running. Stop it before deleting data.",
+            )
+            return
+        names = self.data_list.checked_names()
+        if not names:
+            return
+        target = f"“{names[0]}”" if len(names) == 1 else f"{len(names)} data sets"
+        if QMessageBox.question(
+            self, "Delete data",
+            f"Delete {target}? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        # Drop only the selected results; the rest of the workspace is rebuilt
+        # from what remains in the store.
+        selected = set(names)
+        for r in [r for r in self.store.all() if r.sim_name in selected]:
+            self.store.remove(r.sim_path)
+        self.store.save_cache()  # persist so the deletion survives restart
+        self._refresh_from_store()
 
     def _clear_data(self) -> None:
         """Wipe all loaded sim data after a confirmation, leaving a blank workspace."""

@@ -35,6 +35,7 @@ class DataListPanel(QWidget):
     # Emitted when the set of checked entries changes.
     selection_changed = Signal()
     export_requested = Signal()
+    delete_requested = Signal()  # delete the checked data sets
     clear_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -48,13 +49,17 @@ class DataListPanel(QWidget):
 
         export = QPushButton("Export")
         export.clicked.connect(self.export_requested)
+        delete = QPushButton("Delete")
+        delete.clicked.connect(self.delete_requested)
         clear = QPushButton("Clear data")
         clear.setObjectName("clearDataButton")
         clear.clicked.connect(self.clear_requested)
-        # Export on the left, Clear data anchored to the bottom right.
+        # Export on the left; Delete and Clear data anchored to the bottom
+        # right, with Delete immediately left of Clear data.
         buttons = QHBoxLayout()
         buttons.addWidget(export)
         buttons.addStretch(1)
+        buttons.addWidget(delete)
         buttons.addWidget(clear)
 
         layout = QVBoxLayout(self)
