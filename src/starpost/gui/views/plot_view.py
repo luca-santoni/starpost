@@ -106,6 +106,19 @@ def _series_unit(name: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _display_name(name: str) -> str:
+    """Collapse STAR-CCM+'s doubled monitor labels for display only.
+
+    A single-monitor series is exported as "<Plot>: <Plot> (unit)"; show just
+    "<Plot> (unit)" when the prefix merely repeats the rest of the label. Other
+    "A: B" names (genuinely different parts) are left untouched. The stored
+    series name is never changed — it stays the lookup key everywhere."""
+    prefix, sep, rest = name.partition(": ")
+    if sep and prefix.strip() and prefix.strip() == _UNIT_RE.sub("", rest).strip():
+        return rest.strip()
+    return name
+
+
 def _y_label_for(names: list[str]) -> str:
     """Y-axis label from the plotted series' units: the shared unit when they
     agree, else a generic fallback (mixed units can't share one axis label)."""
@@ -179,7 +192,8 @@ class _CategorySelector(QWidget):
             )
             self._menu.addSeparator()
         for n in names:
-            act = self._menu.addAction(n)
+            # Show the collapsed label; keep the real name as the action's key.
+            act = self._menu.addAction(_display_name(n))
             act.setCheckable(True)
             # No remembered choice (initial is None) → default to hidden, so a
             # freshly selected group plots nothing until the user picks monitors.
@@ -661,8 +675,9 @@ class PlotView(QWidget):
         title = ", ".join(p.name for p in plots)
         self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
         for x, y, name, color in specs:
-            self._plot.plot(x, y, name=name, pen=pg.mkPen(color, width=1.5))
-            self._record_curve(x, y, name, color)
+            label = _display_name(name)
+            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=1.5))
+            self._record_curve(x, y, label, color)
 
     def _render_comparison(
         self, categories: list[tuple[str, list[tuple[str, MonitorPlot]]]]
@@ -690,7 +705,8 @@ class PlotView(QWidget):
                     if s.name not in selected or not self._visible(s):
                         continue
                     drawn.append(s.name)
-                    label = f"{sim_name}: {s.name}" if multi else sim_name
+                    disp = _display_name(s.name)
+                    label = f"{sim_name}: {disp}" if multi else sim_name
                     specs.append((s.x, s.y, label, sim_color[sim_name]))
         title = ", ".join(name for name, _ in categories) + " (comparison)"
         self._reset(title, y_log, _y_label_for(drawn))
