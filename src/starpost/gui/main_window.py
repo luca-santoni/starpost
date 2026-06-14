@@ -239,7 +239,12 @@ class MainWindow(QMainWindow):
         # already present would shadow it. Rather than block the whole selection,
         # skip the already-loaded files and load only the new ones — warning first
         # when some (but not all) of the selection is already loaded.
-        loaded_names = {Path(r.sim_path).name for r in self.store.all()}
+        # Only successfully-loaded sims count as "already loaded": a failed load
+        # leaves an errored entry that never shows in the Data tab, so it must
+        # not block (or warn about) re-loading that file.
+        loaded_names = {
+            Path(r.sim_path).name for r in self.store.all() if r.error is None
+        }
         new_paths = [p for p in paths if p.name not in loaded_names]
         dup = sorted({p.name for p in paths if p.name in loaded_names})
         load_paths = new_paths  # which files to actually (re)load
