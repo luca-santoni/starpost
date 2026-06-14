@@ -291,8 +291,8 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         form.addRow("", self._show_full_paths)
         hint = QLabel(
-            "When off, the Files panel lists each .sim by name only; when on, it "
-            "shows the full path."
+            "When selected, the Files window lists the full file path for each "
+            ".sim file instead of just the file name."
         )
         hint.setObjectName("hint")
         hint.setWordWrap(True)
@@ -344,7 +344,7 @@ class SettingsDialog(QDialog):
         self._monitor_zero_threshold.setValidator(validator)
         self._monitor_zero_threshold.setPlaceholderText("1e-05")
 
-        self._hover_show_name = QCheckBox("Show monitor name in hover label")
+        self._hover_show_name = QCheckBox("Show name when hovering")
 
         self._hover_x_decimals = QSpinBox()
         self._hover_x_decimals.setRange(0, 15)
@@ -384,8 +384,7 @@ class SettingsDialog(QDialog):
         form.addRow("", zt_hint)
         form.addRow("", self._hover_show_name)
         hover_hint = QLabel(
-            "When off, hovering a line shows only its coordinates, without the "
-            "monitor's name."
+            "When selected, monitor names are shown when hovering over a monitor."
         )
         hover_hint.setObjectName("hint")
         hover_hint.setWordWrap(True)
