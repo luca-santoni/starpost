@@ -182,6 +182,9 @@ class Profile:
     monitors: dict[str, list[str]] = field(default_factory=dict)
     # plot name -> "log" | "linear", overriding the auto classification
     axis_overrides: dict[str, str] = field(default_factory=dict)
+    # Region statistics shown when the profile was saved (labels). None for
+    # profiles saved before this existed — those leave the current stats as-is.
+    region_stats: Optional[list[str]] = None
 
     def path(self) -> Path:
         return profiles_dir() / f"{self.name}.yaml"
@@ -195,6 +198,7 @@ class Profile:
                     "plots": self.plots,
                     "monitors": self.monitors,
                     "axis_overrides": self.axis_overrides,
+                    "region_stats": self.region_stats,
                 },
                 sort_keys=False,
             )
@@ -203,12 +207,14 @@ class Profile:
     @classmethod
     def load(cls, name: str) -> "Profile":
         data = yaml.safe_load((profiles_dir() / f"{name}.yaml").read_text())
+        rs = data.get("region_stats")
         return cls(
             name=data["name"],
             reports=data.get("reports", []),
             plots=data.get("plots", []),
             monitors=data.get("monitors", {}) or {},
             axis_overrides=data.get("axis_overrides", {}),
+            region_stats=list(rs) if isinstance(rs, list) else None,
         )
 
 

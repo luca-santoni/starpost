@@ -113,6 +113,10 @@ class SelectionPanel(QWidget):
         # are shown per plot, so profiles can persist that selection too.
         self._monitor_getter = None   # () -> dict[str, list[str]]
         self._monitor_setter = None   # (dict[str, list[str]]) -> None
+        # Likewise for the region-statistics selection. The setter takes a list
+        # of stat labels, or None to reset to the application default.
+        self._region_stats_getter = None   # () -> list[str]
+        self._region_stats_setter = None   # (list[str] | None) -> None
 
         # Profiles
         self._profile_box = QComboBox()
@@ -182,6 +186,15 @@ class SelectionPanel(QWidget):
         self._monitor_getter = getter
         self._monitor_setter = setter
 
+    def set_region_stats_provider(self, getter, setter) -> None:
+        """Wire callbacks for reading/restoring the region-statistics selection.
+
+        `getter()` returns the shown stat labels; `setter(labels)` applies a
+        list (or None to reset to the app default). Lets profiles persist it.
+        """
+        self._region_stats_getter = getter
+        self._region_stats_setter = setter
+
     # --- profiles --------------------------------------------------------
     def refresh_profiles(self) -> None:
         """Reload the profile dropdown (e.g. after profiles are deleted)."""
@@ -206,6 +219,8 @@ class SelectionPanel(QWidget):
             # Built-in: every available report, no monitor plots.
             if self._monitor_setter is not None:
                 self._monitor_setter({})
+            if self._region_stats_setter is not None:
+                self._region_stats_setter(None)  # reset stats to the app default
             self.reports.set_all(True)
             self.plots.set_all(False)
             self.selection_changed.emit()
@@ -215,6 +230,10 @@ class SelectionPanel(QWidget):
         # so the redraw triggered below picks it up.
         if self._monitor_setter is not None:
             self._monitor_setter(prof.monitors)
+        # Restore the saved region statistics; profiles predating this leave the
+        # current selection untouched (region_stats is None).
+        if self._region_stats_setter is not None and prof.region_stats is not None:
+            self._region_stats_setter(prof.region_stats)
         self.reports.set_checked(set(prof.reports))
         self.plots.set_checked(set(prof.plots))
         self.selection_changed.emit()
@@ -242,11 +261,15 @@ class SelectionPanel(QWidget):
         plots = self.selected_plots()
         all_monitors = self._monitor_getter() if self._monitor_getter else {}
         monitors = {p: m for p, m in all_monitors.items() if p in plots}
+        region_stats = (
+            self._region_stats_getter() if self._region_stats_getter else None
+        )
         Profile(
             name=name.strip(),
             reports=sorted(self.selected_reports()),
             plots=sorted(plots),
             monitors=monitors,
+            region_stats=region_stats,
         ).save()
         self._refresh_profiles()
         self._profile_box.setCurrentText(name.strip())

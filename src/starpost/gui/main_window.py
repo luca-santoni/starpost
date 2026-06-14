@@ -116,6 +116,10 @@ class MainWindow(QMainWindow):
         self.selection.set_monitor_provider(
             self.plot_view.monitor_selection, self.plot_view.set_monitor_selection
         )
+        # …and which region statistics are shown.
+        self.selection.set_region_stats_provider(
+            self.plot_view.region_stats, self._apply_region_stats
+        )
         self.log_console = LogConsole()
 
         self._build_layout()
@@ -530,6 +534,15 @@ class MainWindow(QMainWindow):
                 f"reports_csv={opts.reports_csv}, plots={opts.plots_format}, "
                 f"comparison={opts.comparison}",
             )
+
+    def _apply_region_stats(self, labels) -> None:
+        """Apply a profile's saved region statistics. A profile that specifies
+        them becomes the active selection, mirrored into settings so the
+        Settings dialog reflects what the plot is actually showing; labels=None
+        (the Default profile) keeps the current selection."""
+        if labels is not None:
+            self.settings.region_stats = list(labels)
+        self.plot_view.set_region_stats(self.settings.region_stats)
 
     def _open_settings(self) -> None:
         from starpost.gui.views.settings_dialog import SettingsDialog

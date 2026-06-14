@@ -470,6 +470,10 @@ class PlotView(QWidget):
         if self._region_rect is not None:
             self._show_region_stats(self._region_rect)
 
+    def region_stats(self) -> list[str]:
+        """The statistics currently shown in the region table (for profiles)."""
+        return list(self._enabled_stats)
+
     # --- monitor selection (persisted in profiles) ----------------------
     def monitor_selection(self) -> dict[str, list[str]]:
         """The series (monitors) currently shown, keyed by monitor group name.

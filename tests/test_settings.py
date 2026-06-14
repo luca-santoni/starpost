@@ -60,3 +60,23 @@ def test_profile_without_monitors_defaults_to_empty(monkeypatch, tmp_path):
     loaded = Profile.load("legacy")
     assert loaded.plots == ["Drag"]
     assert loaded.monitors == {}  # absent -> show all monitors on load
+
+
+def test_profile_round_trips_region_stats(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    Profile(name="aero", region_stats=["Avg", "Range"]).save()
+
+    loaded = Profile.load("aero")
+    assert loaded.region_stats == ["Avg", "Range"]
+
+
+def test_profile_without_region_stats_is_none(monkeypatch, tmp_path):
+    # Profiles saved before region stats existed have no "region_stats" key;
+    # load as None so the current selection is left unchanged.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "starpost" / "profiles").mkdir(parents=True)
+    (tmp_path / "starpost" / "profiles" / "legacy.yaml").write_text(
+        yaml.safe_dump({"name": "legacy", "reports": ["Cd"], "plots": ["Drag"]})
+    )
+
+    assert Profile.load("legacy").region_stats is None
