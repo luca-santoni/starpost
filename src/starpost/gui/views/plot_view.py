@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QEvent, QPointF, Qt, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtWidgets import (
+    QGraphicsRectItem,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -61,6 +64,28 @@ _COLORS = [
 # How close (in pixels) the cursor must be to a data point for its hover
 # readout to appear — keeps the tooltip from showing when nowhere near a line.
 _HOVER_PX = 25.0
+
+
+@dataclass(frozen=True)
+class RegionStat:
+    """One statistic reported for a Shift+drag region selection: a display
+    label and a function over the in-region values (a 1-D float array).
+
+    Add entries to ``REGION_STATS`` to surface more statistics — the region
+    overlay renders whatever the list contains.
+    """
+
+    label: str
+    compute: Callable[[np.ndarray], float]
+
+
+# Statistics shown (in order) for a selected region. Extend this list to add
+# more, e.g. RegionStat("Min", lambda v: float(np.min(v))).
+REGION_STATS: list[RegionStat] = [
+    RegionStat("Average", lambda v: float(np.mean(v))),
+    RegionStat("Std dev", lambda v: float(np.std(v))),
+    RegionStat("Range", lambda v: float(np.ptp(v))),
+]
 
 # Series names from STAR-CCM+ exports carry their unit as a trailing
 # parenthetical, e.g. "Mass Flow (kg/s)". Pull it out so the Y axis can label it.
@@ -211,11 +236,39 @@ class _CategorySelector(QWidget):
         self.set_selected(set(self._actions))
 
 
+class _RegionSelectViewBox(pg.ViewBox):
+    """A ViewBox where Shift+left-drag rubber-bands a rectangular region and
+    emits its data-space bounds, rather than panning. Without Shift, the usual
+    pan/zoom behaviour is untouched.
+    """
+
+    # Emitted on drag release with the selected rectangle in data (view) coords;
+    # a zero-area rectangle (a plain Shift+click) signals "clear the selection".
+    region_selected = Signal(object)  # QRectF
+
+    def mouseDragEvent(self, ev, axis=None) -> None:  # noqa: N802 (Qt override)
+        shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if shift and ev.button() == Qt.MouseButton.LeftButton:
+            ev.accept()
+            if ev.isFinish():
+                self.rbScaleBox.hide()
+                rect = QRectF(ev.buttonDownPos(), ev.pos())
+                rect = self.childGroup.mapRectFromParent(rect).normalized()
+                self.region_selected.emit(rect)
+            else:
+                # Reuse the built-in rubber-band box for live feedback.
+                self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+        else:
+            super().mouseDragEvent(ev, axis)
+
+
 class PlotView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         pg.setConfigOptions(antialias=True)
-        self._plot = pg.PlotWidget()
+        self._vb = _RegionSelectViewBox()
+        self._plot = pg.PlotWidget(viewBox=self._vb)
+        self._vb.region_selected.connect(self._on_region_selected)
         self._legend = self._plot.addLegend()
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
@@ -243,6 +296,22 @@ class PlotView(QWidget):
         # x/y arrays (originals, for display), display colour, and series name.
         self._curves: list[dict] = []
         self._plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
+
+        # Shift+drag region selection: a shaded rectangle (in data coords, so it
+        # tracks pan/zoom) plus a stats overlay pinned to the plot's top-left.
+        self._region_rect: QRectF | None = None
+        self._region_item = QGraphicsRectItem()
+        self._region_item.setPen(
+            pg.mkPen("#5aa9e6", width=1, style=Qt.PenStyle.DashLine)
+        )
+        self._region_item.setBrush(pg.mkBrush(90, 169, 230, 45))
+        self._region_item.setZValue(50)
+        self._region_item.hide()
+        self._plot.addItem(self._region_item)
+        self._stats_label = QLabel("", self._plot)
+        self._stats_label.setTextFormat(Qt.RichText)
+        self._stats_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._stats_label.hide()
 
         # One category (series) selector per displayed plot, laid out in a row.
         self._ctrl = QHBoxLayout()
@@ -279,6 +348,7 @@ class PlotView(QWidget):
         self._title = ""
         self._y_axis_label = "Value"
         self._plot.setBackground(self._bg)
+        self._style_stats_label()
 
     # --- public entry points --------------------------------------------
     def apply_theme(self, mode: str) -> None:
@@ -287,6 +357,7 @@ class PlotView(QWidget):
         self._fg = "#1f1f1f" if light else "#e6e6e6"
         self._bg = "#ffffff" if light else "#1e1e1e"
         self._plot.setBackground(self._bg)
+        self._style_stats_label()
         for name in ("left", "bottom", "right", "top"):
             ax = self._plot.getAxis(name)
             ax.setPen(self._fg)
@@ -386,6 +457,7 @@ class PlotView(QWidget):
         self._plot.setTitle("", color=self._fg)
         self._curves = []
         self._hide_hover()
+        self._clear_region()
         self._update_empty_label()
 
     # --- "select a monitor" hint ----------------------------------------
@@ -469,6 +541,10 @@ class PlotView(QWidget):
         self._hover_text.hide()
         self._plot.addItem(self._hover_marker)
         self._plot.addItem(self._hover_text)
+        # A new render invalidates any region selection; drop it and re-attach
+        # the (hidden) rectangle that _plot.clear() just removed.
+        self._clear_region()
+        self._plot.addItem(self._region_item)
 
     def _render(self) -> None:
         if self._mode == "single":
@@ -601,3 +677,86 @@ class PlotView(QWidget):
     def _hide_hover(self) -> None:
         self._hover_marker.hide()
         self._hover_text.hide()
+
+    # --- region statistics (Shift+drag) ---------------------------------
+    def _style_stats_label(self) -> None:
+        """Theme the region-stats overlay: legible text on a translucent panel."""
+        panel = "rgba(255,255,255,225)" if self._bg == "#ffffff" else "rgba(30,30,30,215)"
+        self._stats_label.setStyleSheet(
+            f"color: {self._fg}; background: {panel};"
+            " padding: 6px 8px; border-radius: 4px;"
+        )
+
+    def _clear_region(self) -> None:
+        """Drop any active region selection and its stats overlay."""
+        self._region_rect = None
+        self._region_item.hide()
+        self._stats_label.hide()
+
+    def _on_region_selected(self, rect: QRectF) -> None:
+        """Handle a Shift+drag: a real rectangle shows stats; a zero-area drag
+        (a plain Shift+click) clears the current selection."""
+        if rect.width() <= 0 or rect.height() <= 0 or not self._curves:
+            self._clear_region()
+            return
+        self._region_rect = rect
+        self._region_item.setRect(rect)
+        self._region_item.show()
+        self._show_region_stats(rect)
+
+    def _region_values(self, curve: dict, rect: QRectF):
+        """The curve's Y values whose points fall inside the rectangle (in view
+        space for Y, matching how the rect was captured under log mode)."""
+        xs, ys = curve["x"], curve["y"]
+        if xs.size == 0:
+            return None
+        vy = self._view_y(ys)
+        with np.errstate(invalid="ignore"):
+            inside = (
+                (xs >= rect.left()) & (xs <= rect.right())
+                & (vy >= rect.top()) & (vy <= rect.bottom())
+            )
+        vals = ys[inside]
+        return vals if vals.size else None
+
+    def _show_region_stats(self, rect: QRectF) -> None:
+        """Render the per-series statistics for the selected region as a table:
+        one row per series, one column per statistic (plus the point count)."""
+        xd = self._hover_x_decimals
+        yd = self._hover_y_decimals
+        rows: list[str] = []
+        for c in self._curves:
+            vals = self._region_values(c, rect)
+            if vals is None:
+                continue
+            cells = "".join(
+                f'<td align="right">{st.compute(vals):.{yd}f}</td>'
+                for st in REGION_STATS
+            )
+            rows.append(
+                "<tr>"
+                f'<td><font color="{c["color"]}">{c["name"]}</font></td>'
+                f"{cells}"
+                f'<td align="right">{vals.size}</td>'
+                "</tr>"
+            )
+        title = (
+            f"<b>Region</b> &nbsp; x [{rect.left():.{xd}f}, {rect.right():.{xd}f}]"
+        )
+        if rows:
+            heads = "".join(f'<th align="right">{st.label}</th>' for st in REGION_STATS)
+            table = (
+                '<table cellspacing="0" cellpadding="4">'
+                f'<tr><th align="left">Series</th>{heads}<th align="right">n</th></tr>'
+                f'{"".join(rows)}'
+                "</table>"
+            )
+            body = table
+        else:
+            body = "No data points in region."
+        self._stats_label.setText(f"{title}{body}")
+        self._stats_label.adjustSize()
+        # Pin to the top-left of the plot, clear of the Y axis.
+        self._stats_label.move(58, 8)
+        self._stats_label.show()
+        self._stats_label.raise_()
