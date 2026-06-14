@@ -584,31 +584,45 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.settings, self)
         # Live-preview the light/dark switch on the plot too (Cancel reverts it).
         dlg.preview_changed.connect(self.plot_view.apply_theme)
+        # Resetting settings is applied + saved immediately (independent of
+        # Save/Cancel): push it to the views and reload the Default profile.
+        dlg.defaults_reset.connect(self._on_settings_reset)
         accepted = dlg.exec()
         # Profile deletions in the dialog take effect immediately (independent of
         # Save/Cancel), so resync the profile dropdown either way.
         self.selection.refresh_profiles()
         if accepted:
             log.info("Settings saved to %s", settings_path())
-            self.file_list.set_show_full_names(self.settings.show_full_file_names)
-            self.report_table.set_decimals(self.settings.report_decimals)
-            self.report_table.set_zero_threshold(self.settings.zero_threshold)
-            self.plot_view.set_filter(
-                self.settings.hide_empty_monitors,
-                self.settings.monitor_zero_threshold,
-            )
-            self.plot_view.set_hover_options(
-                self.settings.hover_show_monitor_name,
-                self.settings.hover_x_decimals,
-                self.settings.hover_y_decimals,
-            )
-            self.plot_view.set_region_stats(self.settings.region_stats)
-            self.plot_view.apply_theme(self.settings.appearance.mode)
-            # The hide-empty/threshold settings change which reports qualify as
-            # empty: refresh the checkbox list (preserving the current selection).
-            results = [r for r in self.store.all() if r.error is None]
-            self.selection.set_available_reports(self._available_report_names(results))
-            self._refresh_views()
+            self._apply_settings_to_views()
+
+    def _apply_settings_to_views(self) -> None:
+        """Push the current settings onto every view that mirrors them. Used when
+        the Settings dialog is saved and when settings are reset to defaults."""
+        self.file_list.set_show_full_names(self.settings.show_full_file_names)
+        self.report_table.set_decimals(self.settings.report_decimals)
+        self.report_table.set_zero_threshold(self.settings.zero_threshold)
+        self.plot_view.set_filter(
+            self.settings.hide_empty_monitors,
+            self.settings.monitor_zero_threshold,
+        )
+        self.plot_view.set_hover_options(
+            self.settings.hover_show_monitor_name,
+            self.settings.hover_x_decimals,
+            self.settings.hover_y_decimals,
+        )
+        self.plot_view.set_region_stats(self.settings.region_stats)
+        self.plot_view.apply_theme(self.settings.appearance.mode)
+        # The hide-empty/threshold settings change which reports qualify as
+        # empty: refresh the checkbox list (preserving the current selection).
+        results = [r for r in self.store.all() if r.error is None]
+        self.selection.set_available_reports(self._available_report_names(results))
+        self._refresh_views()
+
+    def _on_settings_reset(self) -> None:
+        """The Settings dialog reset to defaults and saved immediately: apply the
+        new settings to the views, then reload the Default profile selection."""
+        self._apply_settings_to_views()
+        self.selection.load_default_profile()
 
     def createPopupMenu(self):  # noqa: N802 (Qt override)
         # Suppress the default toolbar/dock right-click menu: its only entry

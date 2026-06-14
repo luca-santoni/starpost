@@ -281,6 +281,12 @@ class SelectionPanel(QWidget):
         if current in names:
             self._profile_box.setCurrentText(current)
 
+    def load_default_profile(self) -> None:
+        """Select and apply the built-in Default profile (every available report,
+        no monitor plots), e.g. after the settings are reset to defaults."""
+        self._profile_box.setCurrentText(DEFAULT_PROFILE_NAME)
+        self._load_profile()
+
     def _load_profile(self) -> None:
         name = self._profile_box.currentText()
         if not name:

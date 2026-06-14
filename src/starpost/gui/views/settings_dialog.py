@@ -149,6 +149,9 @@ class SettingsDialog(QDialog):
     # Emitted while previewing with the current "dark"/"light" mode whenever it
     # changes, so non-QSS widgets (e.g. the plot) can follow the live preview.
     preview_changed = Signal(str)
+    # Emitted when the user resets settings to defaults, so the main view can
+    # reload the Default profile.
+    defaults_reset = Signal()
 
     def __init__(self, settings: Settings, parent=None) -> None:
         super().__init__(parent)
@@ -568,7 +571,90 @@ class SettingsDialog(QDialog):
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         form.addRow("", hint)
+
+        reset = QPushButton("Reset settings")
+        reset.clicked.connect(self._reset_settings)
+        form.addRow("", reset)
+        reset_hint = QLabel(
+            "Restore Files, Reports, Plots, Appearance and Misc settings to their "
+            "defaults and reload the Default profile. STAR-CCM+, License and saved "
+            "Profiles are left unchanged. Takes effect immediately."
+        )
+        reset_hint.setObjectName("hint")
+        reset_hint.setWordWrap(True)
+        form.addRow("", reset_hint)
         return self._wrap(form)
+
+    def _reset_settings(self) -> None:
+        """Immediately reset every settings group except STAR-CCM+, License and
+        saved Profiles back to its default, persist it, and reload the Default
+        profile in the main view. The reset is applied and saved on click (not
+        deferred to Save), so it stands even if the dialog is then cancelled."""
+        if QMessageBox.warning(
+            self, "Reset settings",
+            "Reset Files, Reports, Plots, Appearance and Misc settings to their "
+            "defaults now? This takes effect immediately and cannot be undone. "
+            "STAR-CCM+, License and saved profiles are left unchanged.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        d = Settings()  # the defaults
+        s = self._settings
+
+        # Overwrite only the resettable groups; STAR-CCM+, License and profiles
+        # (separate files) are deliberately left as they are.
+        s.show_full_file_names = d.show_full_file_names
+        s.report_decimals = d.report_decimals
+        s.hide_empty_reports = d.hide_empty_reports
+        s.zero_threshold = d.zero_threshold
+        s.hide_empty_monitors = d.hide_empty_monitors
+        s.monitor_zero_threshold = d.monitor_zero_threshold
+        s.hover_show_monitor_name = d.hover_show_monitor_name
+        s.hover_x_decimals = d.hover_x_decimals
+        s.hover_y_decimals = d.hover_y_decimals
+        s.region_stats = list(d.region_stats)
+        s.plot_classification = {
+            k: list(v) for k, v in d.plot_classification.items()
+        }
+        s.appearance.mode = d.appearance.mode
+        s.appearance.accent = d.appearance.accent
+        s.appearance.checkmark_color = d.appearance.checkmark_color
+        s.appearance.checkmark_match_theme = d.appearance.checkmark_match_theme
+        s.show_setup_on_startup = d.show_setup_on_startup
+        s.save()
+
+        # Mirror the reset into the form; the appearance setters live-preview it.
+        self._show_full_paths.setChecked(d.show_full_file_names)
+        self._decimals.setValue(d.report_decimals)
+        self._hide_empty.setChecked(d.hide_empty_reports)
+        self._zero_threshold.setText(f"{d.zero_threshold:g}")
+        self._hide_empty_monitors.setChecked(d.hide_empty_monitors)
+        self._monitor_zero_threshold.setText(f"{d.monitor_zero_threshold:g}")
+        self._hover_show_name.setChecked(d.hover_show_monitor_name)
+        self._hover_x_decimals.setValue(d.hover_x_decimals)
+        self._hover_y_decimals.setValue(d.hover_y_decimals)
+        enabled_stats = set(d.region_stats)
+        for i in range(self._region_stats.count()):
+            item = self._region_stats.item(i)
+            item.setCheckState(
+                Qt.Checked if item.text() in enabled_stats else Qt.Unchecked
+            )
+        self._residual.setText(", ".join(d.plot_classification["residual_keywords"]))
+        self._force.setText(", ".join(d.plot_classification["force_keywords"]))
+        idx = self._theme.findData(d.appearance.mode)
+        self._theme.setCurrentIndex(idx if idx >= 0 else 0)
+        self._set_accent(d.appearance.accent)
+        self._set_checkmark_color(d.appearance.checkmark_color)
+        self._cm_match.setChecked(d.appearance.checkmark_match_theme)
+        self._on_cm_match_toggled(d.appearance.checkmark_match_theme)
+        self._show_setup.setChecked(d.show_setup_on_startup)
+
+        # The reset is committed, so a later Cancel must not revert the new theme.
+        self._orig_mode = s.appearance.mode
+        self._orig_accent = normalize_accent(s.appearance.accent)
+        self._orig_checkmark = s.appearance.resolved_checkmark()
+
+        self.defaults_reset.emit()
 
     # --- appearance helpers ---------------------------------------------
     def _current_mode(self) -> str:
