@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -58,6 +59,7 @@ from starpost.gui.theme import (
     contrast_color,
     normalize_accent,
 )
+from starpost.gui.views.plot_view import REGION_STAT_LABELS
 
 
 def _csv(text: str) -> list[str]:
@@ -335,6 +337,16 @@ class SettingsDialog(QDialog):
         self._hover_y_decimals.setRange(0, 15)
         self._hover_y_decimals.setValue(4)
 
+        # Statistics shown in the Shift+drag region table — a checkable list of
+        # the available statistics.
+        self._region_stats = QListWidget()
+        self._region_stats.setMaximumHeight(160)
+        for label in REGION_STAT_LABELS:
+            item = QListWidgetItem(label)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self._region_stats.addItem(item)
+
         self._residual = QLineEdit()
         self._residual.setPlaceholderText("residual, residuals")
         self._force = QLineEdit()
@@ -370,6 +382,14 @@ class SettingsDialog(QDialog):
         dec_hint.setObjectName("hint")
         dec_hint.setWordWrap(True)
         form.addRow("", dec_hint)
+        form.addRow("Statistics", self._region_stats)
+        stats_hint = QLabel(
+            "Statistics listed in the table shown when you Shift+drag a region "
+            "over the plot. Checked ones are displayed."
+        )
+        stats_hint.setObjectName("hint")
+        stats_hint.setWordWrap(True)
+        form.addRow("", stats_hint)
         form.addRow("Residual keywords", self._residual)
         form.addRow("Force keywords", self._force)
         hint = QLabel(
@@ -668,6 +688,13 @@ class SettingsDialog(QDialog):
         self._hover_x_decimals.setValue(s.hover_x_decimals)
         self._hover_y_decimals.setValue(s.hover_y_decimals)
 
+        enabled_stats = set(s.region_stats)
+        for i in range(self._region_stats.count()):
+            item = self._region_stats.item(i)
+            item.setCheckState(
+                Qt.Checked if item.text() in enabled_stats else Qt.Unchecked
+            )
+
         pc = s.plot_classification or {}
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
         self._force.setText(", ".join(pc.get("force_keywords", [])))
@@ -703,6 +730,11 @@ class SettingsDialog(QDialog):
         s.hover_show_monitor_name = self._hover_show_name.isChecked()
         s.hover_x_decimals = self._hover_x_decimals.value()
         s.hover_y_decimals = self._hover_y_decimals.value()
+        s.region_stats = [
+            self._region_stats.item(i).text()
+            for i in range(self._region_stats.count())
+            if self._region_stats.item(i).checkState() == Qt.Checked
+        ]
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())

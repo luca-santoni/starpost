@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
             settings.hover_x_decimals,
             settings.hover_y_decimals,
         )
+        self.plot_view.set_region_stats(settings.region_stats)
         self.plot_view.apply_theme(settings.appearance.mode)
         # Let profiles persist which monitors are shown per plot.
         self.selection.set_monitor_provider(
@@ -555,6 +556,7 @@ class MainWindow(QMainWindow):
                 self.settings.hover_x_decimals,
                 self.settings.hover_y_decimals,
             )
+            self.plot_view.set_region_stats(self.settings.region_stats)
             self.plot_view.apply_theme(self.settings.appearance.mode)
             # The hide-empty/threshold settings change which reports qualify as
             # empty: refresh the checkbox list (preserving the current selection).

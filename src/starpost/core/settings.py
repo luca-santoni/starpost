@@ -71,6 +71,10 @@ class Settings:
     hover_show_monitor_name: bool = True  # include monitor name in the hover label
     hover_x_decimals: int = 0  # decimal places shown for the hover X coordinate
     hover_y_decimals: int = 4  # decimal places shown for the hover Y coordinate
+    # Statistics shown in the Shift+drag region table (labels, in catalog order).
+    region_stats: list[str] = field(
+        default_factory=lambda: ["Average", "Std dev", "Range"]
+    )
     plot_classification: dict = field(
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
@@ -121,6 +125,11 @@ class Settings:
             hover_show_monitor_name=bool(d.get("hover_show_monitor_name", True)),
             hover_x_decimals=int(d.get("hover_x_decimals", 0)),
             hover_y_decimals=int(d.get("hover_y_decimals", 4)),
+            region_stats=(
+                list(d["region_stats"])
+                if isinstance(d.get("region_stats"), list)
+                else ["Average", "Std dev", "Range"]
+            ),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
         )
@@ -151,6 +160,7 @@ class Settings:
             "hover_show_monitor_name": self.hover_show_monitor_name,
             "hover_x_decimals": self.hover_x_decimals,
             "hover_y_decimals": self.hover_y_decimals,
+            "region_stats": self.region_stats,
             "plot_classification": self.plot_classification,
         }
 

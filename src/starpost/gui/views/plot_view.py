@@ -80,13 +80,20 @@ class RegionStat:
     compute: Callable[[np.ndarray], float]
 
 
-# Statistics shown (in order) for a selected region. Extend this list to add
-# more, e.g. RegionStat("Min", lambda v: float(np.min(v))).
+# The catalog of statistics available for a selected region, in display order.
+# Which of these actually show is chosen in Settings → Plots → Statistics.
+# Extend this list to offer more, e.g. RegionStat("Sum", lambda v: float(v.sum())).
 REGION_STATS: list[RegionStat] = [
     RegionStat("Average", lambda v: float(np.mean(v))),
+    RegionStat("Median", lambda v: float(np.median(v))),
     RegionStat("Std dev", lambda v: float(np.std(v))),
+    RegionStat("Min", lambda v: float(np.min(v))),
+    RegionStat("Max", lambda v: float(np.max(v))),
     RegionStat("Range", lambda v: float(np.ptp(v))),
 ]
+
+# The catalog's labels, in order — the choices offered by the Statistics setting.
+REGION_STAT_LABELS: list[str] = [s.label for s in REGION_STATS]
 
 # Series names from STAR-CCM+ exports carry their unit as a trailing
 # parenthetical, e.g. "Mass Flow (kg/s)". Pull it out so the Y axis can label it.
@@ -347,7 +354,10 @@ class PlotView(QWidget):
 
         # Shift+drag region selection: a shaded rectangle (in data coords, so it
         # tracks pan/zoom) plus a stats overlay pinned to the plot's top-left.
+        # Which statistics the table reports (labels into REGION_STATS); set from
+        # Settings via set_region_stats. Defaults to the original three.
         self._region_rect: QRectF | None = None
+        self._enabled_stats: list[str] = ["Average", "Std dev", "Range"]
         self._region_item = QGraphicsRectItem()
         self._region_item.setPen(
             pg.mkPen("#5aa9e6", width=1, style=Qt.PenStyle.DashLine)
@@ -451,6 +461,14 @@ class PlotView(QWidget):
         self._hover_x_decimals = max(0, x_decimals)
         self._hover_y_decimals = max(0, y_decimals)
         self._hide_hover()  # drop any stale label; it rebuilds on next hover
+
+    def set_region_stats(self, labels) -> None:
+        """Choose which statistics the region table shows, by label. Columns
+        render in REGION_STATS catalog order regardless of the order given.
+        Refreshes the table immediately if a region is currently selected."""
+        self._enabled_stats = list(labels)
+        if self._region_rect is not None:
+            self._show_region_stats(self._region_rect)
 
     # --- monitor selection (persisted in profiles) ----------------------
     def monitor_selection(self) -> dict[str, list[str]]:
@@ -787,6 +805,8 @@ class PlotView(QWidget):
         one row per series, one column per statistic (plus the point count)."""
         xd = self._hover_x_decimals
         yd = self._hover_y_decimals
+        enabled = set(self._enabled_stats)
+        active = [st for st in REGION_STATS if st.label in enabled]
         rows: list[str] = []
         for c in self._curves:
             vals = self._region_values(c, rect)
@@ -794,7 +814,7 @@ class PlotView(QWidget):
                 continue
             cells = "".join(
                 f'<td align="right">{st.compute(vals):.{yd}f}</td>'
-                for st in REGION_STATS
+                for st in active
             )
             rows.append(
                 "<tr>"
@@ -807,7 +827,7 @@ class PlotView(QWidget):
             f"<b>Region</b> &nbsp; x [{rect.left():.{xd}f}, {rect.right():.{xd}f}]"
         )
         if rows:
-            heads = "".join(f'<th align="right">{st.label}</th>' for st in REGION_STATS)
+            heads = "".join(f'<th align="right">{st.label}</th>' for st in active)
             table = (
                 '<table cellspacing="0" cellpadding="4">'
                 f'<tr><th align="left">Series</th>{heads}<th align="right">n</th></tr>'
