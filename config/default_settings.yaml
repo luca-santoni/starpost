@@ -58,9 +58,9 @@ hover_x_decimals: 0
 hover_y_decimals: 4
 
 # Statistics listed in the table shown when Shift+dragging a region on the plot.
-# Available: Average, Median, Std dev, Min, Max, Range. Editable in-app via
+# Available: Avg, Median, Std Dev, Min, Max, Range. Editable in-app via
 # Settings -> Plots -> Statistics.
-region_stats: [Average, Std dev, Range]
+region_stats: [Avg, Std Dev, Range]
 
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot

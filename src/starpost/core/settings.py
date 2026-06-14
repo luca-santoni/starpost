@@ -73,7 +73,7 @@ class Settings:
     hover_y_decimals: int = 4  # decimal places shown for the hover Y coordinate
     # Statistics shown in the Shift+drag region table (labels, in catalog order).
     region_stats: list[str] = field(
-        default_factory=lambda: ["Average", "Std dev", "Range"]
+        default_factory=lambda: ["Avg", "Std Dev", "Range"]
     )
     plot_classification: dict = field(
         default_factory=lambda: {
@@ -128,7 +128,7 @@ class Settings:
             region_stats=(
                 list(d["region_stats"])
                 if isinstance(d.get("region_stats"), list)
-                else ["Average", "Std dev", "Range"]
+                else ["Avg", "Std Dev", "Range"]
             ),
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,

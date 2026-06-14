@@ -84,9 +84,9 @@ class RegionStat:
 # Which of these actually show is chosen in Settings → Plots → Statistics.
 # Extend this list to offer more, e.g. RegionStat("Sum", lambda v: float(v.sum())).
 REGION_STATS: list[RegionStat] = [
-    RegionStat("Average", lambda v: float(np.mean(v))),
+    RegionStat("Avg", lambda v: float(np.mean(v))),
     RegionStat("Median", lambda v: float(np.median(v))),
-    RegionStat("Std dev", lambda v: float(np.std(v))),
+    RegionStat("Std Dev", lambda v: float(np.std(v))),
     RegionStat("Min", lambda v: float(np.min(v))),
     RegionStat("Max", lambda v: float(np.max(v))),
     RegionStat("Range", lambda v: float(np.ptp(v))),
@@ -357,7 +357,7 @@ class PlotView(QWidget):
         # Which statistics the table reports (labels into REGION_STATS); set from
         # Settings via set_region_stats. Defaults to the original three.
         self._region_rect: QRectF | None = None
-        self._enabled_stats: list[str] = ["Average", "Std dev", "Range"]
+        self._enabled_stats: list[str] = ["Avg", "Std Dev", "Range"]
         self._region_item = QGraphicsRectItem()
         self._region_item.setPen(
             pg.mkPen("#5aa9e6", width=1, style=Qt.PenStyle.DashLine)
