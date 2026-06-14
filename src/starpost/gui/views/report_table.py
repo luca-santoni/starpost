@@ -66,7 +66,9 @@ class _DataFrameModel(QAbstractTableModel):
             return None
         if orientation == Qt.Horizontal:
             return str(self._df.columns[section])
-        return str(self._df.index[section])
+        # Row numbers down the side, 1-based (the report name itself is a
+        # column, so the index is purely positional numbering).
+        return str(section + 1)
 
 
 class ReportTable(QWidget):
@@ -78,7 +80,11 @@ class ReportTable(QWidget):
         self._decimals = decimals
         self._zero_threshold = zero_threshold
         self._df: pd.DataFrame | None = None
-        self._sort: tuple[str, bool] | None = None  # (column, ascending)
+        # Default to sorting report names A–Z; (column, ascending).
+        self._sort: tuple[str, bool] | None = ("report", True)
+        # Single-file view header for the value column: the data set's name
+        # (set by show_single). Falls back to "Value" until a result is shown.
+        self._value_label = "Value"
 
         header = self._table.horizontalHeader()
         header.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -107,8 +113,36 @@ class ReportTable(QWidget):
     def show_dataframe(self, df: pd.DataFrame) -> None:
         # Keep the source frame; display a sorted view if a sort is active.
         self._df = df
+        display = self._sorted(df)
+        if _SINGLE_COLUMNS.issubset(df.columns):
+            # Single-file view: capitalise the headers and label the value
+            # column with the data set's name (the canonical lowercase columns
+            # are kept on self._df so sorting still works).
+            display = display.rename(
+                columns={
+                    "report": "Report",
+                    "value": self._value_label,
+                    "units": "Units",
+                }
+            )
+        else:
+            # Comparison view: the report names live in the index (as
+            # "Name [unit]"), which Qt renders in the grey vertical header and
+            # replaces the row numbers. Lift them into regular leading columns
+            # — name and units split apart — so they show on the normal dark
+            # data background, units get their own column (matching the
+            # single-file view), and the side keeps its row numbers via the
+            # default integer index.
+            display = display.reset_index()
+            label_col = display.columns[0]
+            split = [_split_label(lbl) for lbl in display[label_col]]
+            display = display.drop(columns=[label_col])
+            display.insert(0, "Report", [name for name, _ in split])
+            # Units sit in the right-most column (after every sim's values),
+            # matching the single-file view.
+            display["Units"] = [unit for _, unit in split]
         self._table.setModel(
-            _DataFrameModel(self._sorted(df), self._decimals, self._zero_threshold)
+            _DataFrameModel(display, self._decimals, self._zero_threshold)
         )
         self._table.resizeColumnsToContents()
 
@@ -190,4 +224,6 @@ class ReportTable(QWidget):
             [{"report": r.name, "value": r.value, "units": r.units} for r in reports],
             columns=["report", "value", "units"],
         )
+        # Label the value column with this data set's name in the display.
+        self._value_label = result.sim_name
         self.show_dataframe(df)
