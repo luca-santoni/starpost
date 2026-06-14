@@ -262,6 +262,53 @@ class _RegionSelectViewBox(pg.ViewBox):
             super().mouseDragEvent(ev, axis)
 
 
+class _DraggableLabel(QLabel):
+    """A QLabel the user can drag to reposition anywhere within its parent,
+    clamped so it never leaves the parent's bounds."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setCursor(Qt.OpenHandCursor)
+        self._grab: QPointF | None = None  # cursor offset within the label
+
+    def set_position(self, pos) -> None:
+        """Move to ``pos`` (parent coords), clamped to stay fully on-parent."""
+        parent = self.parentWidget()
+        if parent is not None:
+            x = min(max(0, pos.x()), max(0, parent.width() - self.width()))
+            y = min(max(0, pos.y()), max(0, parent.height() - self.height()))
+            pos = pos.__class__(x, y)
+        self.move(pos)
+
+    def reclamp(self) -> None:
+        """Re-apply the clamp to the current position (after a resize/relayout)."""
+        self.set_position(self.pos())
+
+    def mousePressEvent(self, ev) -> None:  # noqa: N802 (Qt override)
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self._grab = ev.position()
+            self.setCursor(Qt.ClosedHandCursor)
+            ev.accept()
+        else:
+            super().mousePressEvent(ev)
+
+    def mouseMoveEvent(self, ev) -> None:  # noqa: N802 (Qt override)
+        if self._grab is not None:
+            delta = (ev.position() - self._grab).toPoint()
+            self.set_position(self.pos() + delta)
+            ev.accept()
+        else:
+            super().mouseMoveEvent(ev)
+
+    def mouseReleaseEvent(self, ev) -> None:  # noqa: N802 (Qt override)
+        if self._grab is not None and ev.button() == Qt.MouseButton.LeftButton:
+            self._grab = None
+            self.setCursor(Qt.OpenHandCursor)
+            ev.accept()
+        else:
+            super().mouseReleaseEvent(ev)
+
+
 class PlotView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -308,9 +355,11 @@ class PlotView(QWidget):
         self._region_item.setZValue(50)
         self._region_item.hide()
         self._plot.addItem(self._region_item)
-        self._stats_label = QLabel("", self._plot)
+        # Draggable so it can be moved off the data; starts at the top-left.
+        self._stats_label = _DraggableLabel(self._plot)
         self._stats_label.setTextFormat(Qt.RichText)
-        self._stats_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._stats_label.setToolTip("Drag to move")
+        self._stats_label.move(58, 8)
         self._stats_label.hide()
 
         # One category (series) selector per displayed plot, laid out in a row.
@@ -473,9 +522,10 @@ class PlotView(QWidget):
         self._empty_label.move(x, y)
 
     def eventFilter(self, obj, event):
-        # Keep the hint centred as the plot widget is resized.
+        # Keep the hint centred and the stats panel on-plot as it's resized.
         if obj is self._plot and event.type() == QEvent.Type.Resize:
             self._center_empty_label()
+            self._stats_label.reclamp()
         return super().eventFilter(obj, event)
 
     # --- empty-monitor filtering ----------------------------------------
@@ -756,7 +806,8 @@ class PlotView(QWidget):
             body = "No data points in region."
         self._stats_label.setText(f"{title}{body}")
         self._stats_label.adjustSize()
-        # Pin to the top-left of the plot, clear of the Y axis.
-        self._stats_label.move(58, 8)
+        # Keep the user's chosen position; just clamp it on-plot after resizing
+        # to the new content.
+        self._stats_label.reclamp()
         self._stats_label.show()
         self._stats_label.raise_()
