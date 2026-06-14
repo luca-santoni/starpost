@@ -562,8 +562,8 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         form.addRow("", self._show_setup)
         hint = QLabel(
-            "When on, the welcome/setup wizard opens each time the application "
-            "starts; when off, nothing is shown on startup."
+            "When selected, the welcome/setup wizard opens each time the "
+            "application starts"
         )
         hint.setObjectName("hint")
         hint.setWordWrap(True)
