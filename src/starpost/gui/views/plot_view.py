@@ -87,6 +87,7 @@ REGION_STATS: list[RegionStat] = [
     RegionStat("Avg", lambda v: float(np.mean(v))),
     RegionStat("Median", lambda v: float(np.median(v))),
     RegionStat("Std Dev", lambda v: float(np.std(v))),
+    RegionStat("Var", lambda v: float(np.var(v))),
     RegionStat("Min", lambda v: float(np.min(v))),
     RegionStat("Max", lambda v: float(np.max(v))),
     RegionStat("Range", lambda v: float(np.ptp(v))),

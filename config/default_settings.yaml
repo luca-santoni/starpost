@@ -58,7 +58,7 @@ hover_x_decimals: 0
 hover_y_decimals: 4
 
 # Statistics listed in the table shown when Shift+dragging a region on the plot.
-# Available: Avg, Median, Std Dev, Min, Max, Range. Editable in-app via
+# Available: Avg, Median, Std Dev, Var, Min, Max, Range. Editable in-app via
 # Settings -> Plots -> Statistics.
 region_stats: [Avg, Std Dev, Range]
 
