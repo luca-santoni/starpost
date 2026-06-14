@@ -68,7 +68,7 @@ class Settings:
     zero_threshold: float = 1e-5  # |value| below this is treated as 0
     hide_empty_monitors: bool = True  # hide monitor plots whose values are all ~0
     monitor_zero_threshold: float = 1e-5  # |value| below this is treated as 0
-    hover_show_monitor_name: bool = True  # include monitor name in the hover label
+    hover_show_monitor_name: bool = False  # include monitor name in the hover label
     hover_x_decimals: int = 0  # decimal places shown for the hover X coordinate
     hover_y_decimals: int = 4  # decimal places shown for the hover Y coordinate
     # Statistics shown in the Shift+drag region table (labels, in catalog order).
@@ -125,7 +125,7 @@ class Settings:
             zero_threshold=float(d.get("zero_threshold", 1e-5)),
             hide_empty_monitors=bool(d.get("hide_empty_monitors", True)),
             monitor_zero_threshold=float(d.get("monitor_zero_threshold", 1e-5)),
-            hover_show_monitor_name=bool(d.get("hover_show_monitor_name", True)),
+            hover_show_monitor_name=bool(d.get("hover_show_monitor_name", False)),
             hover_x_decimals=int(d.get("hover_x_decimals", 0)),
             hover_y_decimals=int(d.get("hover_y_decimals", 4)),
             region_stats=(

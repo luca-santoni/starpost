@@ -51,7 +51,7 @@ monitor_zero_threshold: 1.0e-5
 
 # Include the monitor's name in the label shown when hovering over a plotted
 # line. When false, only the point's coordinates are shown.
-hover_show_monitor_name: true
+hover_show_monitor_name: false
 
 # Number of decimal places shown for the X and Y coordinates in the hover label.
 hover_x_decimals: 0
