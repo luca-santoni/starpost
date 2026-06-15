@@ -1,6 +1,6 @@
-# starpost — Program Overview & Reference
+# StarPost — Program Overview & Reference
 
-> Package/application name: **starpost** (window title: **StarPost**)
+> Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
 > Status: v1 — runnable cross-platform (Linux + Windows) GUI with batch
 > extraction, the Files/Data workspace, an interactive plot viewer, the full
@@ -42,7 +42,7 @@
 
 ## 1. Purpose
 
-**starpost** is a standalone desktop application that automates parts of the
+**StarPost** is a standalone desktop application that automates parts of the
 post-processing workflow for **Siemens STAR-CCM+** CFD simulations.
 
 Engineers solving CFD cases in STAR-CCM+ accumulate large numbers of `.sim`
@@ -52,7 +52,7 @@ iterations, such as residuals or force histories). Extracting and comparing
 these values across many files is normally a manual, repetitive task done inside
 the STAR-CCM+ GUI one file at a time.
 
-starpost automates that extraction. It opens solved `.sim` files in batch,
+StarPost automates that extraction. It opens solved `.sim` files in batch,
 pulls out every report value and monitor plot, and presents them in a custom GUI
 where the engineer can **view, filter, compare, and export** the data — without
 re-solving and without manually clicking through each simulation.
@@ -144,7 +144,7 @@ rendering and complex visualization are out of scope (see
 ## 3. User Interface Reference
 
 This section documents every panel, control, button, and context (right-click)
-menu in the application. starpost has **no traditional menu bar**; actions are
+menu in the application. StarPost has **no traditional menu bar**; actions are
 reached through the **toolbar** and through **context menus** on the various
 panels.
 
@@ -323,7 +323,7 @@ The bottom panel:
   bar shows a sliver immediately), update per file, and fade out ~5 s after the
   run finishes.
 - A **read-only log** streams the combined stdout/stderr of each STAR-CCM+
-  invocation plus starpost's own status lines (capped at 5000 lines).
+  invocation plus StarPost's own status lines (capped at 5000 lines).
 
 ### 3.9 Export dialog
 
@@ -415,10 +415,10 @@ theme preview, but still honours the *show on startup* choice.
 
 ### Fundamental / architectural
 - **It does not parse `.sim` files directly.** The STAR-CCM+ `.sim` format is
-  proprietary, binary, and has no public reader/SDK. starpost drives an
+  proprietary, binary, and has no public reader/SDK. StarPost drives an
   installed STAR-CCM+ engine via its Java macro API in batch mode and reads back
   exported CSVs. **A licensed STAR-CCM+ installation must be present** on the
-  machine running starpost.
+  machine running StarPost.
 - **Every extraction consumes a license checkout** and incurs STAR-CCM+ startup
   time. This is inherent to the batch-macro approach and is why runs are
   sequential and results are cached. The tool is not a lightweight file reader.
@@ -464,12 +464,12 @@ theme preview, but still honours the *show on startup* choice.
 
 ## 5. How It Works (Architecture)
 
-starpost is fundamentally an **orchestrator + viewer**, not a file parser. It
+StarPost is fundamentally an **orchestrator + viewer**, not a file parser. It
 sits on top of an installed STAR-CCM+ engine.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                          starpost (PySide6 GUI)                        │
+│                          StarPost (PySide6 GUI)                        │
 │                                                                        │
 │  Files list ─► Batch queue ─► StarRunner ─► (subprocess)              │
 │                    │                │                                   │
@@ -573,7 +573,7 @@ Persistence type in `src/starpost/core/settings.py`:
 
 ## 8. Configuration Files & Locations
 
-starpost uses `platformdirs`, so locations are native to each OS. On Linux it
+StarPost uses `platformdirs`, so locations are native to each OS. On Linux it
 honours `XDG_CONFIG_HOME` / `XDG_CACHE_HOME`.
 
 | What | Linux | Windows |

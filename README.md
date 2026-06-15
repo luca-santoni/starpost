@@ -1,4 +1,4 @@
-# starpost
+# StarPost
 
 Standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 **report values** and **monitor plots** (residuals, forces vs. iteration) from
@@ -10,13 +10,13 @@ Runs on **Linux and Windows**.
 ## How it works
 
 STAR-CCM+ `.sim` files are a proprietary binary format with no public reader, so
-starpost does **not** parse them directly. Instead it:
+StarPost does **not** parse them directly. Instead it:
 
 1. Generates a Java macro from a template (`src/starpost/macros/`).
 2. Runs it via `starccm+ -batch <macro> <file.sim>` (one license checkout per
    file, sequential — license-safe).
 3. The macro exports **all** reports and monitor plots to CSV in an output dir;
-   starpost parses those and caches them.
+   StarPost parses those and caches them.
 4. The GUI filters the cached data by your selection/profile for viewing and
    export. Re-selecting never re-runs STAR-CCM+.
 
@@ -67,7 +67,7 @@ A licensed STAR-CCM+ installation must be present on the machine.
 
 ## Installation
 
-starpost is a Python application; install it into a virtual environment.
+StarPost is a Python application; install it into a virtual environment.
 
 ### Linux
 
