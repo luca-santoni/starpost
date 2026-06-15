@@ -1,11 +1,13 @@
-# starpost — Program Overview & Design Specification
+# starpost — Program Overview & Reference
 
-> Package/application name: **starpost**
+> Package/application name: **starpost** (window title: **StarPost**)
 > Repository: `starpost`
-> Status: v1 — runnable GUI with core extraction/parsing logic, a full in-app
-> settings dialog, and an interactive plot viewer; batch export wiring is still
-> stubbed (see [Implementation Status](#9-implementation-status)).
-> Document last updated: 2026-06-12
+> Status: v1 — runnable cross-platform (Linux + Windows) GUI with batch
+> extraction, the Files/Data workspace, an interactive plot viewer, the full
+> in-app settings dialog, and report/plot export all implemented. The Java
+> extraction macro has not yet been validated against a live STAR-CCM+ install
+> (see [Limitations](#4-limitations)).
+> Document last updated: 2026-06-15
 
 ---
 
@@ -13,15 +15,28 @@
 
 1. [Purpose](#1-purpose)
 2. [What the Program Does (Capabilities)](#2-what-the-program-does-capabilities)
-3. [What It Does *Not* Do (Limitations)](#3-what-it-does-not-do-limitations)
-4. [How It Works (Architecture)](#4-how-it-works-architecture)
-5. [Data Flow, End to End](#5-data-flow-end-to-end)
-6. [Data Model](#6-data-model)
-7. [Project Structure (File by File)](#7-project-structure-file-by-file)
-8. [Locked Design Decisions (from requirements gathering)](#8-locked-design-decisions-from-requirements-gathering)
-9. [Implementation Status](#9-implementation-status)
+3. [User Interface Reference](#3-user-interface-reference)
+   - [3.1 Window layout](#31-window-layout)
+   - [3.2 Toolbar](#32-toolbar)
+   - [3.3 Files panel](#33-files-panel)
+   - [3.4 Data panel](#34-data-panel)
+   - [3.5 Reports view](#35-reports-view)
+   - [3.6 Plots view](#36-plots-view)
+   - [3.7 Selection panel (right)](#37-selection-panel-right)
+   - [3.8 Log console](#38-log-console)
+   - [3.9 Export dialog](#39-export-dialog)
+   - [3.10 Settings dialog](#310-settings-dialog)
+   - [3.11 Welcome / setup wizard](#311-welcome--setup-wizard)
+4. [Limitations](#4-limitations)
+5. [How It Works (Architecture)](#5-how-it-works-architecture)
+6. [Data Flow, End to End](#6-data-flow-end-to-end)
+7. [Data Model](#7-data-model)
+8. [Configuration Files & Locations](#8-configuration-files--locations)
+9. [Project Structure (File by File)](#9-project-structure-file-by-file)
 10. [Setup & Usage](#10-setup--usage)
-11. [Open Questions / Future Work](#11-open-questions--future-work)
+11. [Implementation Status](#11-implementation-status)
+12. [Design Decisions (Requirements History)](#12-design-decisions-requirements-history)
+13. [Open Questions / Future Work](#13-open-questions--future-work)
 
 ---
 
@@ -42,9 +57,9 @@ pulls out every report value and monitor plot, and presents them in a custom GUI
 where the engineer can **view, filter, compare, and export** the data — without
 re-solving and without manually clicking through each simulation.
 
-The initial focus is **numeric data only**: report values and monitor plots. 3D
-scene rendering and complex visualization are explicitly out of scope for v1 but
-are noted as possible future extensions.
+The focus is **numeric data only**: report values and monitor plots. 3D scene
+rendering and complex visualization are out of scope (see
+[Limitations](#4-limitations)).
 
 ---
 
@@ -57,91 +72,346 @@ are noted as possible future extensions.
 - Extracts **all monitor plots** (value vs. iteration), including multi-series
   plots such as residuals (continuity, momentum components, energy, etc.).
 - Uses an **extract-all-then-filter** strategy: a single pass per file (one
-  license checkout) dumps everything; filtering happens in the app afterward.
+  license checkout) dumps everything; filtering happens in the app afterward, so
+  changing the selection never re-runs STAR-CCM+.
 
 ### Batch processing
 - Accepts **multiple `.sim` files at once** (add individually or by folder).
 - Processes files **sequentially**, so at most one STAR-CCM+ license is checked
   out at a time (license-safe).
 - Designed for batches of **up to ~25 files** (the expected practical ceiling).
-- **"Stop after current file"** — halts gracefully without killing a batch
-  session mid-write.
-- Live **progress bar** and **streaming log** of STAR-CCM+ output.
+- Live **progress** (an *x/N* counter and a thin progress bar) and a
+  **streaming log** of STAR-CCM+ output.
+- **Crash-recovery cache**: extracted results are checkpointed to disk after
+  every file, so a crash or unexpected exit doesn't lose completed work, and the
+  loaded data is restored on the next launch.
 - **Homogeneity check**: assumes batch files share the same reports/plots; if
-  they don't, the user is warned and the union of all names is shown.
+  they don't, the user is warned and the **union** of all names is shown.
+
+### The Files / Data workspace
+- A persistent **Files** list of `.sim` files to process (survives restarts).
+- A **Data** list of the results extracted so far, named after their source
+  `.sim`. **Ticking** Data entries chooses which results feed the views; ticking
+  two or more switches the Reports/Plots views into **comparison** mode.
 
 ### Viewing (in-app)
-- **Per-file mode** (default): browse one simulation's reports and plots.
-- **Comparison mode**: a wide table of report values across all sims (one row
-  per sim, one column per report), and plot overlays of the selected monitor
-  plot(s) across multiple sims (coloured per sim).
-- **Report table**: numeric values with units.
+- **Per-file mode** (one Data set ticked): that simulation's reports and plots.
+- **Comparison mode** (two or more ticked): a wide table of report values across
+  the selected sims, and monitor-plot overlays coloured per sim.
+- **Report table**: numeric values with units, configurable decimal places, and
+  optional hiding of ~0 reports; sortable by name/value/units.
 - **Monitor plot viewer** (interactive, pyqtgraph):
-  - **Residual plots** → all series overlaid in distinct colors with a
-    **logarithmic Y axis**.
-  - **Force / other plots** → distinct colors with a **linear Y axis**.
-  - Axis type is auto-classified by plot name (keyword lists are configurable in
-    settings) and is **overridable** in the data model.
-  - **Multiple monitor groups (categories) at once**: selecting several monitor
-    plots overlays them on one set of axes, each with its **own dropdown**
-    (labelled with the category name, e.g. `Downforce (2/3)`) for choosing which
-    of its monitors (series) are drawn.
-  - **Hover readout**: hovering a line pins a marker and a coordinate label to
-    the nearest data point (computed in pixel space, log-axis aware). The label
-    optionally shows the monitor name and uses configurable X/Y decimal places.
-  - **Theme-aware**: the plot background, axes and legend text follow the app's
-    light/dark mode and update live when the theme is changed.
-- **Empty-monitor / empty-report hiding**: series or reports whose values are all
-  within a configurable zero-threshold are hidden by default (toggleable).
+  - **Residual plots** → all series overlaid in distinct colours with a
+    **logarithmic Y axis**; **force/other plots** → **linear Y axis**.
+  - Axis type is auto-classified by plot name (keyword lists configurable in
+    Settings).
+  - **Multiple monitor groups at once**, each with its **own dropdown** for
+    choosing which of its series (monitors) are drawn.
+  - **Hover readout**: a marker + coordinate label snapped to the nearest data
+    point (log-axis aware; optional monitor name; configurable X/Y decimals).
+  - **Region statistics**: **Shift+drag** a rectangle to get a per-series table
+    (Avg, Median, Std Dev, Var, Min, Max, Range — choose which appear).
+  - **Theme-aware**: background, axes, and legend follow the app's light/dark
+    mode and update live.
+  - **Empty-monitor / empty-report hiding** by a configurable zero threshold.
 
 ### Selection & profiles
-- User picks **which reports/plots** to view and export, with a **Select All**
-  option per category.
-- **Profiles**: save a named selection of reports/plots to reuse on future files
-  with similar contents. Stored as YAML. Each profile also records **which
-  monitors are shown within each selected plot** (groups without a recorded
-  subset default to showing all), plus any axis overrides.
-- A built-in **Default** profile always leads the list: loading it selects every
-  available report and no monitor plots (the app's default state, resolved at
-  load time). It is reserved and cannot be deleted or overwritten.
-- Profiles can be **inspected and deleted** from the Settings → Profiles page
-  (see below).
-
-### Settings & appearance
-- A full **in-app settings dialog** (left-nav pages, each scrollable) edits
-  everything in `settings.yaml`:
-  - **STAR-CCM+** — executable path, default output folder, extra CLI args.
-  - **License** — POD-key/server vs. license-file mode and their fields.
-  - **Reports** — decimal places, hide-empty toggle, zero threshold.
-  - **Plots** — hide-empty monitors + threshold, hover label options
-    (show name, X/Y decimals), and the residual/force classification keywords.
-  - **Profiles** — lists every profile (Default first) with a **Show Details**
-    window (its selected reports and plots/monitors) and a red **Delete** button
-    that confirms before removing the profile.
-  - **Appearance** — **dark/light theme** and an **accent colour** (preset
-    swatches or custom hex), previewed live across the whole UI.
+- Pick **which reports/plots** to view and export, with **Select all / Clear**
+  per category and A–Z / Z–A sorting.
+- **Profiles**: save a named selection (reports, monitor groups, which monitors
+  show per group, and which region statistics show) as YAML, reusable on future
+  files. A reserved built-in **Default** profile selects every report and no
+  plots; it cannot be deleted or overwritten.
 
 ### Export
-- **Report values → CSV**
-  - Wide comparison layout: one row per sim, one column per report, units
-    embedded in headers (e.g. `Drag Force [N]`).
-  - Per-file long layout: `report, value, units`.
-- **Monitor plots → JPG / PDF** (rendered natively by the app via matplotlib,
-  honoring the per-plot log/linear axis choice and multi-series coloring).
-- Exports are written to a **user-defined output folder** chosen per run.
+- **Reports → CSV / TSV / XLSX / ODS**, with optional embedded units and an
+  optional **one-file-per-data-set** mode.
+- **Plots → PNG / JPG / TIFF / PDF**, via a live **preview window**, with custom
+  title and axis labels, per-monitor colours, theme, and aspect ratio.
 
-### Configuration & resilience
-- **Configurable STAR-CCM+ executable path** (manual, with an intended team
-  default).
+### Configuration, appearance & resilience
+- **Configurable STAR-CCM+ executable path** and **extra CLI args**.
 - **Licensing**: defaults to **Power-on-Demand key + license server**
   (`-power -podkey <KEY> -licpath <port>@<server>`); also supports a **regular
-  license file**.
-- **Crash-recovery cache**: extracted results are checkpointed to disk after
-  every file, so a crash or unexpected exit doesn't lose completed work.
+  license file** (`-licpath <file>`).
+- **Dark/light theme** with a custom **accent colour** and **checkmark colour**,
+  previewed live across the whole UI.
+- **First-run setup wizard** for the essentials, re-openable any time.
+- **Cross-platform**: per-OS config/cache/log locations via `platformdirs`.
 
 ---
 
-## 3. What It Does *Not* Do (Limitations)
+## 3. User Interface Reference
+
+This section documents every panel, control, button, and context (right-click)
+menu in the application. starpost has **no traditional menu bar**; actions are
+reached through the **toolbar** and through **context menus** on the various
+panels.
+
+### 3.1 Window layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  [Run batch] | [Export…]  [Settings…]                        ← toolbar    │
+├───────────────┬───────────────────────────────────┬───────────────────┤
+│  Files | Data │   Reports | Plots                 │  Selection panel    │
+│  (left tabs)  │   (centre tabs)                   │  (Profile + lists)  │
+│               │                                   │                     │
+├───────────────┴───────────────────────────────────┴───────────────────┤
+│  x/N counter + progress bar                                             │
+│  Live batch log (read-only)                              ← log console  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Left** — a tab widget with **Files** and **Data** tabs.
+- **Centre** — a tab widget with **Reports** and **Plots** tabs.
+- **Right** — the **Selection panel** (profile controls + report/plot
+  checklists).
+- **Bottom** — the **Log console** (progress + streaming log).
+- The three top regions and the bottom are separated by draggable splitters.
+- Window title: **StarPost**; default size 1280×800.
+
+### 3.2 Toolbar
+
+A single toolbar at the top with three actions:
+
+| Action | Behaviour |
+|---|---|
+| **Run batch** | Extracts **every** `.sim` in the Files list. Prompts for an output folder (defaults to the configured output dir, else home). Warns if the Files list is empty or the STAR-CCM+ path isn't set. Disabled while a run is in progress. |
+| **Export…** | Opens the [Export dialog](#39-export-dialog). |
+| **Settings…** | Opens the [Settings dialog](#310-settings-dialog). |
+
+> The default Qt toolbar/dock right-click menu is intentionally **suppressed**
+> (its only entry would hide the toolbar with no way to restore it).
+
+### 3.3 Files panel
+
+The **Files** tab: the batch list of `.sim` files to process. The list is
+**persisted to disk** and restored on the next launch.
+
+**Buttons (bottom of the panel):**
+- **Add files…** — file picker filtered to `*.sim`; adds the chosen files.
+- **Add folder…** — folder picker; adds every `*.sim` directly inside it.
+- **Remove** — removes the selected rows (after a confirmation).
+- **Clear** — removes all files (after a confirmation). Styled as a danger button.
+
+**Interactions:**
+- **Multi-select** with Ctrl/Shift (extended selection).
+- **Double-click a row** → *Open* just that file (extract + view it).
+- **Right-click a row** → context menu with **Open** (extracts and views every
+  selected file, in top-to-bottom list order). Right-clicking a row outside the
+  current selection first selects just that row.
+- **Right-click the "Files" tab** → **sort menu** (the active mode is
+  checkmarked): **Name (A–Z)**, **Name (Z–A)**, **File size (largest)**,
+  **File size (smallest)**.
+
+**Notes:**
+- Only `.sim` files are added; duplicates (by resolved path) are ignored.
+- Each row shows the file name by default, or the full path if *Show full file
+  names* is enabled in Settings → Files; the full path is always in the tooltip.
+- *Opening* a file that is already loaded prompts to load only the new files,
+  force-reload, or cancel.
+
+### 3.4 Data panel
+
+The **Data** tab: one entry per result extracted so far, named after its source
+`.sim`. This is the set of results the Reports/Plots views draw from.
+
+**Interactions:**
+- Each entry has a **checkbox**; **clicking anywhere on a row toggles it**.
+- **No** entry checked or **one** checked → **per-file** view; **two or more**
+  checked → **comparison** view.
+- **Right-click the "Data" tab** → **sort menu**: **Name (A–Z)** / **Name (Z–A)**.
+
+**Buttons (bottom of the panel):**
+- **Export** *(see note below)*.
+- **Delete** — deletes the **checked** data sets from the store (after a
+  confirmation). Blocked while a batch is running. The underlying `.sim` files
+  stay in the Files list.
+- **Clear data** — wipes **all** loaded results (after a confirmation), leaving
+  the Files list intact so they can be re-run. Blocked while a batch is running.
+
+> **Known limitation:** the Data panel's **Export** button is not currently
+> wired to an action. Use the toolbar **Export…** instead (it is the working
+> export entry point). See [Limitations](#4-limitations).
+
+### 3.5 Reports view
+
+The **Reports** tab (centre): a numeric table of report values.
+
+- **Per-file mode** — three columns: **Report**, the **value** column (headed
+  with the data set's name), and **Units**.
+- **Comparison mode** — a **Report** column, then **one value column per
+  selected sim**, then a **Units** column. Report names that are ~0 across all
+  selected sims are dropped when *Hide empty reports* is on.
+- Values are formatted to the configured **decimal places**; magnitudes below
+  the **zero threshold** display as `0`.
+- **Right-click the table header** → **sort menu** (active sort checkmarked):
+  **Name (A–Z / Z–A)**, **Value (ascending / descending)**, **Units (A–Z /
+  Z–A)**. In comparison mode, "Value" orders rows by the across-sim mean.
+
+### 3.6 Plots view
+
+The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
+
+**The plot area:**
+- Overlays the selected monitor plots; grid, legend, title, and axis labels
+  shown. **Residuals** render on a **log Y axis**, **forces/other** on a
+  **linear Y axis**.
+- In per-file mode each series gets a distinct colour; in comparison mode lines
+  are coloured **by sim**.
+- A centred hint **"Select a monitor to begin"** shows while nothing is plotted.
+- The view auto-fits (auto-ranges) to the data on each redraw.
+
+**Per-category dropdowns (row beneath the plot):**
+- One dropdown per displayed monitor group, labelled **`Group (selected/total)`**.
+- Clicking it opens a **stay-open menu**: **Select all**, **Deselect all**, a
+  separator, then each monitor as a checkable item. The menu stays open so you
+  can toggle several; it closes on click-away/Esc/clicking the button again.
+- **Right-click a dropdown button** → **Sort A–Z / Sort Z–A** (reorders the
+  menu only; selection is unchanged).
+- A newly checked monitor group starts with **no** monitors shown until you pick
+  some.
+
+**Hover readout:**
+- Moving the cursor near a line pins a **marker** and a **coordinate label** to
+  the nearest data point (within ~25 px; log-axis aware). The label optionally
+  includes the monitor name and uses the configured X/Y decimal places.
+
+**Region statistics (Shift+drag):**
+- **Shift + left-drag** rubber-bands a rectangle; on release a shaded region is
+  drawn and a **statistics table** appears (one row per series; columns are the
+  enabled statistics plus a point-count `n`). The stats panel can be **dragged**
+  anywhere on the plot.
+- **Shift + click** (a zero-area drag) clears the selection.
+- The **Clear selection** button (bottom-right of the tab) is enabled while a
+  region is active and removes it.
+- Which statistics appear is set in Settings → Plots → Statistics (catalog:
+  Avg, Median, Std Dev, Var, Min, Max, Range).
+
+**Other:**
+- Without Shift, the usual pyqtgraph **pan (drag)** and **zoom (scroll)** apply,
+  and right-clicking the plot exposes pyqtgraph's built-in view-box menu.
+
+### 3.7 Selection panel (right)
+
+Chooses which reports and monitor plots are shown/exported, and manages profiles.
+It operates on the **union** of names across the loaded (and ticked) data.
+
+**Profile row (top):**
+- **Profile dropdown** — lists the built-in **Default** first, then saved
+  profiles.
+- **Load** — applies the selected profile (its reports, monitor groups, the
+  monitors shown per group, and its region statistics). Loading **Default**
+  selects every available report and no plots.
+- **Save as…** — prompts for a name and saves the current selection as a profile.
+  "Default" is reserved; overwriting an existing profile asks for confirmation.
+
+**"Reports" group:**
+- **Select all** / **Clear** buttons.
+- A checklist of report names (checked by default). Clicking a row toggles it.
+- **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
+
+**"Monitor plots" group:**
+- Same controls as Reports, but monitor plots default to **unchecked** (the plot
+  view starts blank, since drawing every plot at once is slow).
+
+### 3.8 Log console
+
+The bottom panel:
+- An **x/N counter** and a thin **progress bar** appear when a run starts (the
+  bar shows a sliver immediately), update per file, and fade out ~5 s after the
+  run finishes.
+- A **read-only log** streams the combined stdout/stderr of each STAR-CCM+
+  invocation plus starpost's own status lines (capped at 5000 lines).
+
+### 3.9 Export dialog
+
+Opened from the toolbar **Export…**. A tabbed dialog mirroring the main window's
+**Reports** / **Plots** split. The selections are pre-ticked to match the main
+window when the dialog opens.
+
+**Top bar:** a right-aligned **Profile** dropdown + **Load** (load only — saving
+profiles stays in the main window). Loading applies a profile's report and
+monitor selections to the dialog.
+
+**Bottom:** **Export** (acts on the front tab) and **Cancel**.
+
+#### Reports tab — three columns
+- **Data** — checklist of loaded data sets (kept in lock-step with the Plots
+  tab's Data column).
+- **Reports** — checklist of available reports.
+- **Options**:
+  - **File format** — **CSV / TSV / XLSX / ODS**.
+  - **Include units** — embed units in column headers (e.g. `Drag Force [N]`).
+  - **Separate files** — one file per data set instead of one combined file
+    (enabled only with two or more data sets selected).
+- **Export** writes a wide table (rows = sims, columns = reports). With
+  *Separate files* on, you name each file in turn; otherwise one file is written
+  (named after the single sim, or "reports" for several). The save dialog opens
+  in the default output folder.
+
+#### Plots tab — three columns (+ preview window)
+- **Data** — checklist of loaded data sets (mirrors the Reports tab).
+- **Monitors** — a **tree** of monitor groups, each with a checkbox. Checking a
+  group **reveals its monitors** (unticked, so you pick deliberately); unchecking
+  hides them. A checked monitor shows a **colour swatch**; **clicking the swatch**
+  opens a colour menu (palette colours + **Custom…**) that recolours that
+  monitor in the preview.
+- **Options**:
+  - **Aspect ratio** — `1:1`, `3:2`, `4:3`, `16:9`, or **Custom** (free resize).
+    Drives the preview window's shape.
+  - **Plot title**, **X axis label**, **Y axis label** — live-override the
+    preview's labels; empty reverts to the auto value.
+  - **Theme** — Light / Dark for the exported image (defaults to the app theme).
+  - **Format** — **PNG / JPG / TIFF / PDF**.
+- A separate **Plot preview** window opens to the right while the Plots tab is in
+  front, and live-updates as you change the selection/options.
+- **Export** captures the preview to a high-resolution image and saves it (named
+  after the single data set, or "plot" for several).
+
+### 3.10 Settings dialog
+
+Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
+**eight pages**, shown in a scrollable stack on the right. **Save** writes
+everything back to `settings.yaml`; **Cancel** discards (and reverts any live
+theme preview). Two actions take effect **immediately**, independent of
+Save/Cancel: **deleting a profile** and **Reset settings**.
+
+| Page | Contents |
+|---|---|
+| **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated). |
+| **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked behind a "click to show" cover that re-hides on focus loss) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
+| **Files** | **Show full file names** — list full paths in the Files panel instead of just names. |
+| **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
+| **Plots** | **Hide empty monitors** + **Zero threshold**; **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
+| **Profiles** | One row per profile (Default first). **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**. **Delete** (not shown for Default) removes the profile after confirmation, immediately. |
+| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle; **Checkmark colour** (hex + Pick… + chip, used when not matching the theme). All changes **preview live** across the whole UI. |
+| **Misc** | **Show setup menu on startup** (the welcome wizard); **Reset settings** — restores Files/Reports/Plots/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately. |
+
+### 3.11 Welcome / setup wizard
+
+Shown on startup while *Show setup menu on startup* is enabled (on by default for
+new users). It collects the essentials so a new user can get going without
+hunting through Settings:
+
+- **Header** — a short description of StarPost.
+- **STAR-CCM+** — **Executable Location** (+ Browse…) and **Output folder**
+  (+ Browse…).
+- **Licensing** — **Mode**, **POD key**, **License server** (prefilled with the
+  stock Siemens cloud server `1999@flex.cd-adapco.com`), **License file**
+  (+ Browse…). Fields enable/disable per mode.
+- **Appearance** — **Theme**, accent preset swatches, and **Pick…** for a custom
+  accent. Previews live.
+- **Show this setup on startup** checkbox (mirrors the Misc setting).
+- **Get Started** — saves the entries and closes.
+
+Closing without finishing (rejecting) discards the setup entries and reverts the
+theme preview, but still honours the *show on startup* choice.
+
+---
+
+## 4. Limitations
 
 ### Fundamental / architectural
 - **It does not parse `.sim` files directly.** The STAR-CCM+ `.sim` format is
@@ -151,27 +421,30 @@ are noted as possible future extensions.
   machine running starpost.
 - **Every extraction consumes a license checkout** and incurs STAR-CCM+ startup
   time. This is inherent to the batch-macro approach and is why runs are
-  sequential and results are cached.
-- The tool is only as fast as STAR-CCM+ batch startup allows; it is not a
-  lightweight file reader.
+  sequential and results are cached. The tool is not a lightweight file reader.
 
-### Scope (v1)
-- **Numeric data only** — reports and monitor plots. No 3D scenes, no field
-  visualization, no isosurfaces/streamlines/section rendering.
-- **Monitor plots only** for plot data — i.e. value-vs-iteration/time plots
-  (residuals, force histories). **XY plots** (a field along a line/probe) and
-  other plot types are not handled in v1.
+### Scope
+- **Numeric data only** — reports and monitor plots. No 3D scenes, field
+  visualization, isosurfaces, streamlines, or section rendering.
+- **Monitor plots only** for plot data (value-vs-iteration/time, e.g. residuals
+  and force histories). **XY plots** (a field along a line/probe) and other plot
+  types are not handled.
 - Reports are read as their current **monitor value**; the tool does not modify,
   create, or re-define reports/plots inside the `.sim`.
-- The tool **reads** simulations; it does not write changes back into `.sim`
-  files.
+- The tool **reads** simulations; it never writes changes back into `.sim` files.
 
-### Platform & distribution
-- Built and targeted for **Linux** first. Windows support is planned but not
-  implemented (the code uses XDG paths and forward-slash macro paths with that
-  portability in mind, but it is untested on Windows).
-- No installer yet; v1 is run from source. PyInstaller packaging (→ AppImage for
-  Linux) is scaffolded but not built.
+### Features not exposed in the v1 UI
+- **"Stop after current file"** is implemented in the batch worker
+  (`BatchWorker.request_stop`) but is **not wired to any UI control**. Once a
+  batch starts, it runs to completion (results are still checkpointed after each
+  file, and closing the app stops further files).
+- The **Data panel's "Export" button** emits a signal that nothing is connected
+  to, so it currently does nothing — use the toolbar **Export…**.
+- **Per-plot axis (log/linear) override** has no UI. Classification is by the
+  Settings keyword lists only. (A `Profile.axis_overrides` field is persisted in
+  the profile YAML but is not applied when a profile loads.)
+- The **~25-file batch ceiling** is a design expectation only; `MAX_FILES` is not
+  enforced and no warning fires when it is exceeded.
 
 ### Validation caveats
 - The **Java macro has not been validated against a live STAR-CCM+ install**
@@ -180,11 +453,16 @@ are noted as possible future extensions.
   across recent versions, but very old releases could differ.
 - The **exact CSV layout produced by `StarPlot.export()`** for monitor plots is
   the main unverified assumption. The parser handles the common single-X-column
-  layout but is flagged for tightening once tested on real exports.
+  layout and is flagged for tightening once tested on real exports.
+
+### Packaging
+- A PyInstaller spec is provided and builds a folder bundle, but **PyInstaller
+  does not cross-compile** — each OS's artifact must be built on that OS, and the
+  Windows build has not yet been produced/validated end-to-end.
 
 ---
 
-## 4. How It Works (Architecture)
+## 5. How It Works (Architecture)
 
 starpost is fundamentally an **orchestrator + viewer**, not a file parser. It
 sits on top of an installed STAR-CCM+ engine.
@@ -193,7 +471,7 @@ sits on top of an installed STAR-CCM+ engine.
 ┌──────────────────────────────────────────────────────────────────────┐
 │                          starpost (PySide6 GUI)                        │
 │                                                                        │
-│  File list ──► Batch queue ──► StarRunner ──► (subprocess)             │
+│  Files list ─► Batch queue ─► StarRunner ─► (subprocess)              │
 │                    │                │                                   │
 │                    │                ▼                                   │
 │                    │      starccm+ -batch extract_all.java \           │
@@ -202,7 +480,6 @@ sits on top of an installed STAR-CCM+ engine.
 │                    │                ▼                                   │
 │                    │      STAR-CCM+ opens .sim, runs macro,            │
 │                    │      exports CSVs (reports + plot series)         │
-│                    │                │                                   │
 │                    ▼                ▼                                   │
 │              ResultParser ◄── exported CSVs                            │
 │                    │                                                    │
@@ -211,53 +488,56 @@ sits on top of an installed STAR-CCM+ engine.
 │                    │                                                    │
 │         ┌──────────┼───────────────┐                                   │
 │         ▼          ▼               ▼                                    │
-│   ReportTable   PlotView    Selection/Profiles ──► Export (CSV/JPG/PDF)│
+│   ReportTable   PlotView    Selection/Profiles ─► Export (tables/plots)│
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Technology stack** (chosen as the best fit for this scenario):
+**Technology stack:**
 
 | Concern | Choice | Why |
 |---|---|---|
-| Language | Python 3.11+ | Best fit for subprocess orchestration + data handling; matches the proven prototype approach |
-| GUI | PySide6 (Qt) | Native Linux, cross-platform later, fully custom UI via QSS |
-| Plots (in-app) | pyqtgraph | Fast, interactive value-vs-iteration plotting with log-scale support |
-| Plot hover math | numpy | Nearest-point search for the in-plot hover readout |
-| Plots (export) | matplotlib | Publication-quality JPG/PDF rendering |
-| Tabular data | pandas | Wide/long report tables, easy CSV export |
+| Language | Python 3.11+ | Best fit for subprocess orchestration + data handling |
+| GUI | PySide6 (Qt) | Cross-platform, fully custom UI via QSS |
+| Plots (in-app) | pyqtgraph | Fast, interactive value-vs-iteration plotting with log scale |
+| Hover/region math | numpy | Nearest-point search and region statistics |
+| Plots (export) | Qt (QImage/QPdfWriter), Pillow fallback | High-resolution PNG/JPG/TIFF/PDF capture of the live plot |
+| Tabular data / export | pandas (+ openpyxl, odfpy) | Wide/long tables; CSV/TSV/XLSX/ODS export |
 | Config/profiles | PyYAML | Human-readable, editable config and profiles |
 | Macro templating | Jinja2 | Parameterized Java macro generation |
+| Per-OS paths | platformdirs | Native config/cache/log locations on Linux and Windows |
 | Engine interface | STAR-CCM+ Java macro API via `starccm+ -batch` | Only supported way to read `.sim` data |
 
 ---
 
-## 5. Data Flow, End to End
+## 6. Data Flow, End to End
 
-1. **User adds `.sim` files** to the batch list (individually or by folder) and
-   clicks **Run batch**, choosing an output folder.
+1. **User adds `.sim` files** to the Files list (individually or by folder) and
+   clicks **Run batch** (or right-click → **Open** / double-click a file),
+   choosing an output folder.
 2. For **each file, sequentially**, `StarRunner`:
    - renders the Java macro `extract_all.java` from its template (pointing it at
      the output folder),
-   - builds the command:
+   - builds the command
      `starccm+ -batch extract_all.java <license args> <extra args> file.sim`,
-   - launches it as a subprocess, streaming combined stdout/stderr to the log.
+   - launches it as a subprocess (with the console window suppressed on Windows),
+     streaming combined stdout/stderr to the log.
 3. **Inside STAR-CCM+**, the macro (one license checkout, one pass):
    - writes `<simname>_reports.csv` — `sim_file, report, value, units` for every
      report (per-report try/catch logs `ERROR` instead of aborting),
    - exports each monitor plot to `<simname>__plot__<plot>.csv`
      (X column + one column per series),
    - writes `<simname>__plots_index.csv` mapping plot name → CSV file.
-4. **`ResultParser`** reads those CSVs into a `SimResult` and **classifies each
-   plot** (residual → log Y, force → linear Y).
+4. **`ResultParser`** reads those CSVs (UTF-8) into a `SimResult` and
+   **classifies each plot** (residual → log Y, force → linear Y).
 5. **`ResultStore`** holds all `SimResult`s in memory and **checkpoints a JSON
    cache** after every file (crash recovery).
 6. After the batch, a **homogeneity check** warns if files differ in their
    report/plot sets.
-7. The GUI shows the **union** of report/plot names in the **selection panel**;
-   the user filters (or loads a **profile**).
+7. The GUI shows the **union** of report/plot names in the **Selection panel**;
+   the user ticks **Data** sets and filters reports/plots (or loads a **profile**).
 8. **Views** render the filtered data (per-file or comparison).
-9. **Export** writes the selected data to the chosen folder as CSV (numbers)
-   and/or JPG/PDF (plots).
+9. **Export** writes the selected data to the chosen folder as a table
+   (CSV/TSV/XLSX/ODS) and/or a plot image (PNG/JPG/TIFF/PDF).
 
 > **Key efficiency point:** because the macro extracts *everything* on the single
 > license-consuming pass, the user can change their selection, build comparisons,
@@ -265,36 +545,66 @@ sits on top of an installed STAR-CCM+ engine.
 
 ---
 
-## 6. Data Model
+## 7. Data Model
 
 Defined in `src/starpost/data/models.py`:
 
 - **`Report`** — `name`, `value` (`None` if extraction failed), `units`,
   optional `error`.
 - **`PlotSeries`** — one line on a plot: `name`, `x[]`, `y[]` (shared X axis).
-- **`MonitorPlot`** — `name`, `series[]`, `kind`
-  (`RESIDUAL` / `FORCE` / `OTHER`), `x_label`, `y_log` (resolved axis choice,
-  user-overridable), optional `error`.
+- **`MonitorPlot`** — `name`, `series[]`, `kind` (`RESIDUAL` / `FORCE` /
+  `OTHER`), `x_label`, `y_log` (resolved axis choice), optional `error`.
 - **`SimResult`** — everything from one `.sim`: `sim_path`, `reports[]`,
-  `plots[]`, `extracted_at` timestamp, optional batch-level `error`. Provides a
-  `signature()` (the set of report + plot names) used for the homogeneity check.
+  `plots[]`, `extracted_at` timestamp, optional batch-level `error`. Helpers:
+  `sim_name`, `report_names()`, `plot_names()`, and `signature()` (the set of
+  report + plot names, used for the homogeneity check).
 
-A related persistence type lives in `src/starpost/core/settings.py`:
+Persistence type in `src/starpost/core/settings.py`:
 
 - **`Profile`** — a saved selection: `name`, `reports[]`, `plots[]` (selected
-  monitor groups), `monitors` (`{plot_name: [monitor, ...]}` — which series are
-  shown per group; absent groups show all), and `axis_overrides`
-  (`{plot_name: "log" | "linear"}`). Stored one-per-YAML under the profiles dir.
-  The reserved **Default** profile (`DEFAULT_PROFILE_NAME`) is built-in and has
-  no file.
+  monitor groups), `monitors` (`{plot_name: [monitor, ...]}` — which series show
+  per group; absent groups show all), `axis_overrides` (`{plot_name: "log" |
+  "linear"}` — persisted but not currently applied), and `region_stats` (the
+  region-table statistics shown, or `None` for older profiles). Stored one per
+  YAML file under the profiles dir. The reserved **Default** profile is built-in
+  and has no file.
 
 ---
 
-## 7. Project Structure (File by File)
+## 8. Configuration Files & Locations
+
+starpost uses `platformdirs`, so locations are native to each OS. On Linux it
+honours `XDG_CONFIG_HOME` / `XDG_CACHE_HOME`.
+
+| What | Linux | Windows |
+|---|---|---|
+| Settings | `~/.config/starpost/settings.yaml` | `%APPDATA%\starpost\settings.yaml` |
+| Profiles | `~/.config/starpost/profiles/*.yaml` | `%APPDATA%\starpost\profiles\*.yaml` |
+| Results crash cache | `~/.cache/starpost/results_cache.json` | `%LOCALAPPDATA%\starpost\results_cache.json` |
+| Files-list cache | `~/.cache/starpost/file_list.json` | `%LOCALAPPDATA%\starpost\file_list.json` |
+| Log (rotating) | `~/.cache/starpost/starpost.log` | `%LOCALAPPDATA%\starpost\starpost.log` |
+
+`settings.yaml` is seeded from the packaged `config/default_settings.yaml` on
+first run, then edited via the Settings dialog (or by hand). Key fields:
+
+- `starccm_path` — path to the `starccm+` executable.
+- `license` — `mode` (`podkey_server` | `license_file`), `podkey`, `licpath`
+  (`<port>@<server>`), `license_file`.
+- `default_output_dir` — starting folder for export/extraction pickers.
+- `extra_args` — appended verbatim to every `starccm+` call.
+- Report/plot display options (`report_decimals`, `hide_empty_reports`,
+  `zero_threshold`, `hide_empty_monitors`, `monitor_zero_threshold`,
+  `hover_show_monitor_name`, `hover_x_decimals`, `hover_y_decimals`,
+  `region_stats`, `plot_classification`), `show_full_file_names`, `appearance`
+  (mode, accent, checkmark colour + match toggle), and `show_setup_on_startup`.
+
+---
+
+## 9. Project Structure (File by File)
 
 ```
 starpost/                           (repo; app/package = "starpost")
-├── README.md                       Quick orientation + dev quickstart
+├── README.md                       Quick orientation, install (Linux/Windows), usage
 ├── pyproject.toml                  Package metadata, deps, entry point, ruff config
 ├── requirements.txt                Runtime dependency pins
 ├── .gitignore                      Ignores .sim files, build artifacts, caches
@@ -306,7 +616,7 @@ starpost/                           (repo; app/package = "starpost")
 │   └── PROGRAM_OVERVIEW.md          This document
 │
 ├── packaging/
-│   └── starpost.spec               PyInstaller spec (Linux → AppImage later)
+│   └── starpost.spec               Cross-platform PyInstaller spec (per-OS icon)
 │
 ├── scripts/
 │   └── dev_run.py                  Launch the GUI from a source checkout (no install)
@@ -319,15 +629,15 @@ starpost/                           (repo; app/package = "starpost")
 │
 └── src/starpost/
     ├── __init__.py                 Version, APP_NAME
-    ├── app.py                      Entry point: QApplication, stylesheet, MainWindow
+    ├── app.py                      Entry point: QApplication, theme, MainWindow, wizard
     │
     ├── core/                       Engine interface & business logic (no GUI)
-    │   ├── settings.py             Settings + LicenseConfig + Profile (YAML I/O);
-    │   │                           list/delete profiles + built-in Default name
+    │   ├── settings.py             Settings + LicenseConfig + Profile (YAML I/O)
     │   ├── macro_generator.py      Renders extract_all.java from the Jinja2 template
-    │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log
+    │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log;
+    │   │                           exe placeholder/dialog-filter helpers
     │   ├── result_parser.py        Parses exported CSVs; classifies plots (log/linear)
-    │   └── plot_export.py          Renders a MonitorPlot to JPG/PDF (matplotlib)
+    │   └── plot_export.py          Renders a MonitorPlot to JPG/PDF (matplotlib helper)
     │
     ├── macros/
     │   └── extract_all.java.j2     Canonical Java macro: ALL reports + ALL plots, one pass
@@ -335,149 +645,36 @@ starpost/                           (repo; app/package = "starpost")
     ├── batch/                      Batch orchestration
     │   ├── job.py                  Job + JobState (pending/running/done/failed/skipped)
     │   ├── queue.py                BatchWorker (QObject): sequential, stop-after-current
-    │   └── aggregator.py           Wide/per-file report frames + CSV export
+    │   └── aggregator.py           Wide report frames + CSV/TSV/XLSX/ODS table export
     │
     ├── data/                       Data model & storage
     │   ├── models.py               Report, PlotSeries, MonitorPlot, SimResult, PlotKind
     │   └── store.py                ResultStore: in-memory + JSON crash cache; homogeneity
     │
     ├── gui/                        PySide6 user interface
-    │   ├── main_window.py          Assembles panels, wires the batch worker & views
+    │   ├── main_window.py          Toolbar, panels, batch worker wiring, view refresh
     │   ├── theme.py                Dark/light + accent QSS generator (build/apply)
     │   ├── icons.py                Loads the bundled app icon (QIcon)
+    │   ├── widgets.py              Shared small widgets (e.g. UniformTabBar)
     │   ├── resources/
-    │   │   └── StarPost-logo.png   Application / window icon
+    │   │   ├── StarPost-logo.png   Application / window icon
+    │   │   └── StarPost-logo.ico   Windows executable icon (used by the PyInstaller build)
     │   └── views/
-    │       ├── file_list.py        Batch list: add files/folder, remove, clear
-    │       ├── selection_panel.py  Report/plot checkboxes, Select All, profile load/save
-    │       ├── report_table.py     Numeric viewer (per-file long + comparison wide)
+    │       ├── file_list.py        Files tab: add files/folder, remove, clear, open, sort
+    │       ├── data_list.py        Data tab: tick data sets, delete/clear, sort
+    │       ├── selection_panel.py  Report/plot checklists, Select all, profile load/save
+    │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort
     │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-group
-    │       │                       monitor dropdowns, hover readout, theme-following
-    │       ├── settings_dialog.py  In-app settings (paged, scrollable) + profile mgmt
-    │       ├── log_console.py      Live log + progress bar
-    │       └── export_dialog.py    Export options (what + format + folder)
+    │       │                       dropdowns, hover readout, Shift+drag region stats
+    │       ├── settings_dialog.py  In-app settings (8 paged groups) + profile mgmt
+    │       ├── log_console.py      Live log + progress counter/bar
+    │       ├── export_dialog.py    Tabbed export (Reports/Plots) + live plot preview
+    │       └── welcome_dialog.py   First-run setup wizard
     │
     └── utils/
-        ├── paths.py                XDG config/cache/profile locations
+        ├── paths.py                platformdirs config/cache/profile locations
         └── logging.py              Stderr + rotating file logging
 ```
-
----
-
-## 8. Locked Design Decisions (from requirements gathering)
-
-These are the specifics gathered during the requirements conversation. They are
-the authoritative answers that shaped the v1 design.
-
-### Scope of data
-- **Data types:** report values (scalars) **and** monitor plots (value vs.
-  iteration — the type used for residuals and forces).
-- **Plot type:** **monitor plots only** in v1 (not XY plots or others).
-- **Numeric only:** no 3D scene rendering or complex visualization in v1; noted
-  as a *possible later feature*.
-
-### Selection & profiles
-- Users can **pick which reports/plots are output**, with a **Select All**
-  option.
-- A **profile feature** lets users save exactly which reports/plots they want and
-  reload that selection for files with similar contents.
-- **Extraction mechanism:** **extract-all-then-filter** — one license checkout
-  per file dumps all reports + monitor plots into cache; the selection/profile
-  filters what is shown and exported. (Chosen over "export only picked items,"
-  which would have required an extra discovery license checkout.)
-
-### Batch behavior
-- Support **batch processing**: multiple `.sim` files uploaded/added at once.
-- **Assume batches are homogeneous** (same reports/plots across files), but
-  **prompt/warn the user if they are not**.
-- **Maximum expected batch size: fewer than 25 files.**
-- Runs are **sequential** to keep at most one license checked out at a time.
-
-### Workflow / UI
-- **Per-file workflow is the default**, with an **additional comparison mode**
-  for comparing values/plots across sims.
-- The UI is **made from scratch and entirely custom** (custom QSS theme, not
-  default-looking native widgets).
-- **In-app viewing** of both numeric values and plots, plus export.
-
-### Plot rendering specifics
-- **Residual plots:** plot all values on the **same plot** in **different
-  colors**, with a **logarithmic Y axis**.
-- **Force plots:** use a **regular (linear) Y axis**.
-- (Implemented as automatic name-based classification, overridable per plot.)
-
-### Export
-- **Numeric values → `.csv`.**
-- **Plots → `.jpg` / `.pdf`** (rendered natively by the app).
-- Exports go to a **user-defined location** chosen per run.
-- Report comparison CSV uses a **wide layout** (one row per sim, one column per
-  report, units embedded in headers like `Drag Force [N]`); per-file CSV uses a
-  long `report, value, units` layout.
-
-### Configuration & licensing
-- **STAR-CCM+ executable path:** configurable **manually**, defaulting to a path
-  to be provided by the team (currently blank in `default_settings.yaml`).
-- **Licensing default:** **POD key + license server** —
-  `-power -podkey <KEY> -licpath <port>@<server>`.
-- **Alternative licensing:** option to use a **regular license file**.
-
-### Persistence
-- **Saving an extraction config (profile) is preferred** for reuse.
-- A **cache** is kept as a failsafe against crashes or other problems.
-
-### Platform & distribution
-- **Linux-native** initially, with **potential extension to Windows** later.
-- Distribution is to a **team of engineers**; an **installer is ideal** but **not
-  required initially**.
-
-### Technical environment
-- The software **runs on an engineer's local machine** (not a shared cluster /
-  HPC scheduler).
-- Implementation language: **any**, choosing the best fit → **Python 3.11+ with
-  PySide6**.
-
----
-
-## 9. Implementation Status
-
-**Implemented and working (logic verified where dependency-free):**
-- Java macro template (reports + all monitor plots, single pass).
-- Macro generation, subprocess runner with full license-flag handling.
-- CSV parsing and automatic plot classification (residual=log / force=linear).
-- Data model, in-memory store, JSON crash-recovery cache, homogeneity check.
-- Batch worker: sequential execution, progress/log signals, stop-after-current.
-- Report aggregation (wide comparison + per-file) and CSV export helpers.
-- Plot export to JPG/PDF (matplotlib) honoring axis choice.
-- Full GUI shell: file list, selection panel with profiles, report table, plot
-  viewer (per-file + comparison), log console, export dialog.
-- **In-app settings dialog** — paged, scrollable form covering every
-  `settings.yaml` field (STAR-CCM+ paths, license mode/key/server, reports,
-  plots, profiles, appearance); writes back and persists on Save.
-- **Appearance theming** — dark/light palettes + user accent colour generated
-  into QSS at runtime, previewed live; the pyqtgraph plot also follows the mode.
-- **Interactive plot viewer** — multiple monitor groups overlaid with per-group
-  monitor dropdowns, nearest-point hover readout (configurable), and empty-series
-  hiding.
-- **Profiles** — YAML persistence including per-group monitor selection, a
-  built-in Default profile, and in-dialog management (Show Details + Delete).
-- App window titled **StarPost** with a bundled application icon.
-- Unit tests for parser, classifier, aggregator, license flags, profile
-  round-trip, and empty-series detection.
-
-**Stubbed / TODO (clearly marked in code):**
-- **Export action wiring** — the export dialog collects options but does not yet
-  call the aggregator / plot exporter; the hookup points exist.
-- **Per-plot axis-override UI** — supported in the data model and profiles, and
-  the classification keywords are editable in settings, but there is no per-plot
-  log/linear toggle widget yet.
-- **`starccm_path` default** — blank pending the team's install path.
-- **`StarPlot.export()` CSV layout** — parser handles the common case; needs
-  validation against real exports and tightening.
-- **PyInstaller/AppImage build** — spec exists (now bundles the icon); not yet
-  produced.
-
-**Not validated:**
-- The Java macro has not been run against a live, licensed STAR-CCM+ install.
 
 ---
 
@@ -485,49 +682,131 @@ the authoritative answers that shaped the v1 design.
 
 ### Requirements
 - Python 3.11+
-- A local, licensed STAR-CCM+ installation (path set in settings)
-- Dependencies in `requirements.txt` / `pyproject.toml`
+- A local, licensed STAR-CCM+ installation (path set in Settings). The UI opens
+  without one; STAR-CCM+ is only needed to extract data.
+- Linux or Windows.
+- Dependencies in `requirements.txt` / `pyproject.toml`.
 
-### Run from source (development)
+### Install & run from source
+
+**Linux**
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
-python scripts/dev_run.py        # opens the GUI; no STAR-CCM+ needed just to open it
+python scripts/dev_run.py
 ```
 
-### Configuration
-- User settings: `~/.config/starpost/settings.yaml` (seeded from
-  `config/default_settings.yaml` on first run).
-- Profiles: `~/.config/starpost/profiles/*.yaml`.
-- Crash cache: `~/.cache/starpost/results_cache.json`.
-- Logs: `~/.cache/starpost/starpost.log`.
+**Windows** (PowerShell or Command Prompt)
+```powershell
+py -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"
+python scripts\dev_run.py
+```
 
 ### Typical workflow
-1. Set the STAR-CCM+ executable path and license details in settings.
-2. Add `.sim` files (or a folder of them).
-3. Run the batch and choose an output folder.
-4. Filter reports/plots (or load a profile); switch between per-file and
-   comparison modes.
-5. Export numbers to CSV and plots to JPG/PDF.
+1. Complete the **setup wizard** (or set the STAR-CCM+ path and licensing in
+   Settings).
+2. Add `.sim` files (or a folder of them) in the **Files** tab.
+3. **Run batch** and choose an output folder.
+4. Tick the extracted **Data** sets to view (two or more → comparison); filter
+   reports/plots in the Selection panel, or load a **Profile**.
+5. **Export…** the report tables and/or plot images.
 
-### Run tests
+### Build a standalone bundle
+```bash
+pip install -e ".[dev]"
+pyinstaller packaging/starpost.spec      # run on the target OS
+```
+Output lands in `dist/starpost/` (`starpost.exe` on Windows; the spec picks the
+`.ico` automatically).
+
+### Run the tests
 ```bash
 PYTHONPATH=src python -m pytest tests/ -q
 ```
 
 ---
 
-## 11. Open Questions / Future Work
+## 11. Implementation Status
+
+**Implemented and working:**
+- Java macro template (reports + all monitor plots, single pass).
+- Macro generation, subprocess runner with full license-flag handling
+  (Windows console suppressed), UTF-8 CSV parsing, automatic plot classification.
+- Data model, in-memory store, JSON crash-recovery cache, homogeneity check,
+  persisted Files list.
+- Batch worker: sequential execution, progress/log signals, cooperative
+  stop-after-current (worker-level).
+- The full GUI: toolbar, Files/Data tabs, Reports table (per-file + comparison,
+  sortable), interactive plot viewer (multi-group overlay, per-group monitor
+  dropdowns, hover readout, Shift+drag region statistics, theme-following), the
+  Selection panel with profiles, and the log console.
+- **Export** — reports to CSV/TSV/XLSX/ODS (combined or per-file, optional
+  units) and plots to PNG/JPG/TIFF/PDF via a live preview with custom title/axis
+  labels, per-monitor colours, theme, and aspect ratio.
+- **Settings dialog** — eight paged groups covering every `settings.yaml` field,
+  plus profile management (Show Details / Delete) and Reset.
+- **Appearance theming** — dark/light + accent + checkmark colour generated into
+  QSS at runtime, previewed live (the plot follows the mode too).
+- **Profiles** — YAML persistence including per-group monitor selection and
+  region statistics; built-in Default; in-dialog management.
+- **First-run setup wizard.**
+- **Cross-platform** config/cache/log locations via platformdirs; Windows
+  packaging support (icon, spec).
+- Unit tests for parser, classifier, aggregator, license flags, profile
+  round-trip, and empty-series detection.
+
+**Not yet exposed / pending:** see [Limitations](#4-limitations) — stop-after-
+current UI, the Data-panel Export button, per-plot axis-override UI, and an
+enforced batch-size warning.
+
+**Not validated:** the Java macro has not been run against a live, licensed
+STAR-CCM+ install, and the `StarPlot.export()` CSV layout is assumed.
+
+---
+
+## 12. Design Decisions (Requirements History)
+
+These were locked during requirements gathering and shaped the v1 design.
+
+- **Data types:** report values (scalars) **and** monitor plots (value vs.
+  iteration). **Monitor plots only** (not XY plots). **Numeric only** — no 3D
+  scene rendering.
+- **Selection & profiles:** users pick which reports/plots are output, with
+  Select All; profiles save and reload a named selection. **Extract-all-then-
+  filter** — one license checkout per file dumps everything; selection/profile
+  filters what is shown and exported.
+- **Batch behavior:** multiple `.sim` files at once; **assume homogeneous** but
+  warn if not; **expected ceiling < 25 files**; runs **sequential** (≤1 license).
+- **Workflow / UI:** per-file default plus a comparison mode; a fully custom QSS
+  UI; in-app viewing of numbers and plots, plus export.
+- **Plot rendering:** residuals on one plot in different colours with a **log Y
+  axis**; forces on a **linear** axis (implemented as name-based classification).
+- **Export:** numbers to spreadsheet formats; plots to image/PDF; to a
+  user-chosen location. Report comparison uses a **wide** layout (units embedded
+  in headers like `Drag Force [N]`).
+- **Configuration & licensing:** manual executable path; licensing defaults to
+  **POD key + license server**, with a license-file alternative.
+- **Persistence:** profiles for reuse; a cache as a crash failsafe.
+- **Platform & distribution:** Linux first with extension to Windows (now both);
+  team distribution, installer ideal but not required initially.
+- **Environment:** runs on an engineer's local machine (not an HPC scheduler).
+
+---
+
+## 13. Open Questions / Future Work
 
 - **Validate the Java macro** on a real STAR-CCM+ install and confirm the
   `StarPlot.export()` CSV layout across plot types; tighten the parser.
-- **Complete the stubbed actions** (export wiring, per-plot axis-override UI).
-- **Windows support** (swap XDG paths for `platformdirs`; verify subprocess and
-  executable auto-detection).
-- **Packaging/installer** for team distribution (AppImage on Linux; MSI/NSIS on
-  Windows later).
-- **Possible later features** (explicitly out of v1 scope): 3D scene/image
-  export, XY plots and other plot types, scene rendering, richer report
-  templating (e.g. full PDF reports), and optional multi-sim-per-session macro
-  runs to reduce license churn further.
+- **Surface stop-after-current** in the UI (a Stop button) and **wire the
+  Data-panel Export button** (or remove it in favour of the toolbar action).
+- **Per-plot axis-override UI** (and apply `Profile.axis_overrides` on load).
+- **Enforce/warn on the batch-size ceiling** if it remains a real constraint.
+- **Produce and validate the packaged builds** (AppImage on Linux; MSI/NSIS or a
+  signed `.exe` on Windows) for team distribution.
+- **Possible later features** (out of v1 scope): 3D scene/image export, XY plots
+  and other plot types, richer report templating (e.g. full PDF reports), and
+  optional multi-sim-per-session macro runs to reduce license churn further.
 ```

@@ -2,8 +2,10 @@
 
 Standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 **report values** and **monitor plots** (residuals, forces vs. iteration) from
-solved `.sim` files, lets you view and compare them, and exports to CSV / JPG /
-PDF.
+solved `.sim` files, lets you view and compare them, and exports tables to
+**CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**.
+
+Runs on **Linux and Windows**.
 
 ## How it works
 
@@ -25,40 +27,75 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **Batch extraction** of all report values and monitor plots from multiple
   `.sim` files, run sequentially (one license checkout at a time) with a live
   log and progress bar, and a crash-recovery cache.
-- **Per-file and comparison views** — a numeric report table and an interactive
-  plot viewer.
+- **Files / Data panels** — build a reusable list of `.sim` files (the *Files*
+  tab), then pick which extracted **Data** sets feed the views by ticking them.
+  Checking two or more switches the views into **comparison** mode automatically.
+- **Per-file and comparison views** — a numeric report table (sortable, with
+  configurable decimals and empty-value hiding) and an interactive plot viewer.
 - **Interactive plots** (pyqtgraph):
   - Overlay **several monitor groups at once**, each with its own dropdown for
     choosing which monitors (series) are shown.
   - **Hover readout** that snaps a marker + coordinate label to the nearest data
     point (optional monitor name, configurable X/Y decimals).
+  - **Shift+drag a region** to get a per-series statistics table (Avg, Median,
+    Std Dev, Var, Min, Max, Range — choose which appear in Settings).
   - Residuals on a log axis, forces on a linear axis (auto-classified by name).
   - Background, axes and legend **follow the light/dark theme**.
 - **Profiles** — save/reuse a named selection of reports and plots, *including
-  which monitors are shown per group*. A built-in **Default** profile selects
-  every report and no plots.
-- **In-app settings dialog** — STAR-CCM+ paths, licensing, report/plot display
-  options, profile management (view details / delete), and a **dark/light theme
-  with a custom accent colour** previewed live.
-- **Export** report values to CSV and plots to JPG/PDF *(export wiring is still
-  in progress — see the overview doc)*.
+  which monitors are shown per group* and which region statistics are shown. A
+  built-in **Default** profile selects every report and no plots.
+- **Export** (toolbar → *Export…*), a tabbed dialog mirroring the main window:
+  - **Reports → CSV / TSV / XLSX / ODS**, with optional units and an optional
+    one-file-per-data-set mode.
+  - **Plots → PNG / JPG / TIFF / PDF** with a live preview window, custom title
+    and axis labels, per-monitor colours, theme, and aspect ratio.
+- **In-app settings dialog** — STAR-CCM+ paths, licensing, file/report/plot
+  display options, profile management (view details / delete), a **dark/light
+  theme with custom accent and checkmark colours** previewed live, and a reset.
+- **First-run setup wizard** for the essentials (executable path, licensing,
+  theme), re-openable any time and toggleable from Settings.
 
 ## Requirements
 
-- Python 3.11+
-- A local STAR-CCM+ install (path configured in settings)
-- See `requirements.txt`
+- **Python 3.11+**
+- **A local, licensed STAR-CCM+ installation** (its executable path is set in
+  Settings). The UI opens and is fully navigable without one — STAR-CCM+ is only
+  needed to actually extract data from `.sim` files.
+- OS: **Linux or Windows**.
+- Python dependencies: see [`requirements.txt`](requirements.txt) /
+  [`pyproject.toml`](pyproject.toml).
 
-## Quick start (development)
+## Installation
+
+starpost is a Python application; install it into a virtual environment.
+
+### Linux
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate         # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-python scripts/dev_run.py         # launches the GUI (no STAR-CCM+ needed to open the UI)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"      # or: pip install -r requirements.txt
+python scripts/dev_run.py    # launch the GUI
 ```
 
-Runs on Linux and Windows (Python 3.11+ and PySide6 on both).
+If `python3 -m venv` fails, install your distro's venv package first
+(e.g. `sudo apt install python3-venv` on Debian/Ubuntu).
+
+### Windows
+
+Using PowerShell or Command Prompt, with Python 3.11+ from python.org installed
+(tick *Add Python to PATH* in the installer):
+
+```powershell
+py -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"      REM or: pip install -r requirements.txt
+python scripts\dev_run.py    REM launch the GUI
+```
+
+The same dependencies (PySide6, pyqtgraph, matplotlib, pandas, …) install on
+both platforms. Per-OS config/cache locations are handled automatically via
+`platformdirs` (see [Configuration](#configuration)).
 
 ## Configuration
 
@@ -98,9 +135,31 @@ pyinstaller packaging/starpost.spec
 Output lands in `dist/starpost/` (`starpost.exe` on Windows). The spec selects
 the Windows `.ico` automatically.
 
+## Usage at a glance
+
+1. On first run, the **setup wizard** prompts for the STAR-CCM+ executable path,
+   licensing, and theme. (Re-open it any time; it's also editable in Settings.)
+2. **Files** tab → *Add files…* / *Add folder…* to build the `.sim` list.
+3. **Run batch** (toolbar) and choose an output folder. STAR-CCM+ runs once per
+   file and the extracted data appears in the **Data** tab.
+4. Tick **Data** sets to view (two or more → comparison), then use the
+   **Reports** and **Plots** tabs plus the right-hand selection panel to filter.
+   Save a selection as a **Profile** to reuse it later.
+5. **Export…** (toolbar) writes report tables and/or plot images.
+
+Re-selecting, comparing, and re-exporting never re-run STAR-CCM+ — extraction
+happens once and is cached.
+
+## Documentation
+
+See [`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md) for the full reference:
+every menu, panel, and dialog; the data flow and architecture; and the program's
+limitations.
+
 ## Status
 
-v1. Core extraction/parsing, the in-app settings dialog, and the interactive
-plot viewer are implemented; batch **export wiring** is still stubbed (see
-[`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md)). Runs on Linux and
-Windows.
+v1. Core extraction/parsing, the Files/Data workspace, the interactive plot
+viewer, the full in-app settings dialog, and report/plot **export** are
+implemented. Runs on Linux and Windows. The Java extraction macro has not yet
+been validated against a live, licensed STAR-CCM+ install (see the overview doc's
+limitations).
