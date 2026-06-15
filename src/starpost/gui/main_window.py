@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QStyle,
-    QTabBar,
     QTabWidget,
     QToolBar,
     QWidget,
@@ -34,34 +33,16 @@ from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon
+from starpost.gui.widgets import UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
-from starpost.gui.views.plot_view import PlotView
+from starpost.gui.views.plot_view import PlotView, _series_is_empty
 from starpost.gui.views.report_table import ReportTable
 from starpost.gui.views.selection_panel import SelectionPanel
 from starpost.utils.logging import get_logger
 
 log = get_logger("ui")
-
-
-class _UniformTabBar(QTabBar):
-    """A tab bar whose tabs all render at one shared width (set externally), so
-    the Files/Data/Plots tabs can match the Reports tab exactly."""
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self._tab_width = 0  # 0 = use each tab's natural width
-
-    def set_tab_width(self, width: int) -> None:
-        self._tab_width = width
-        self.updateGeometry()
-
-    def tabSizeHint(self, index):  # noqa: N802 (Qt override)
-        size = super().tabSizeHint(index)
-        if self._tab_width:
-            size.setWidth(self._tab_width)
-        return size
 
 
 def _drop_zero_report_columns(df, threshold: float = 1e-5):
@@ -135,13 +116,13 @@ class MainWindow(QMainWindow):
     # --- layout ----------------------------------------------------------
     def _build_layout(self) -> None:
         tabs = QTabWidget()
-        tabs.setTabBar(_UniformTabBar())
+        tabs.setTabBar(UniformTabBar())
         tabs.addTab(self.report_table, "Reports")
         tabs.addTab(self.plot_view, "Plots")
 
         # Left side: Files (the batch list) and Data (loaded results) as tabs.
         left_tabs = QTabWidget()
-        left_tabs.setTabBar(_UniformTabBar())
+        left_tabs.setTabBar(UniformTabBar())
         left_tabs.addTab(self.file_list, "Files")
         left_tabs.addTab(self.data_list, "Data")
         # Preserve right-click-to-sort, now on the Files tab itself.
@@ -556,17 +537,49 @@ class MainWindow(QMainWindow):
     def _export(self) -> None:
         from starpost.gui.views.export_dialog import ExportDialog
 
-        dlg = ExportDialog(self.settings.default_output_dir, self)
-        if dlg.exec():
-            opts = dlg.options()
-            # TODO: call batch.aggregator + core.plot_export with opts and the
-            # current selection/mode. Stubbed for the scaffold.
-            QMessageBox.information(
-                self, "Export",
-                f"TODO: export to {opts.output_dir}\n"
-                f"reports_csv={opts.reports_csv}, plots={opts.plots_format}, "
-                f"comparison={opts.comparison}",
-            )
+        # The dialog mirrors the main window: the loaded data sets (Data tab),
+        # the available reports (selection panel), and the monitor groups/monitors
+        # (plot view), each pre-ticked to match what is selected here; the rest of
+        # the export wiring is built out in later steps.
+        results = [r for r in self.store.all() if r.error is None]
+        data_names = [r.sim_name for r in results]
+        checked_names = self.data_list.checked_names()
+        # Offer the same reports the main UI does, i.e. dropping empty ones when
+        # "Hide empty reports" is on.
+        report_names = self._available_report_names(results)
+        checked_reports = sorted(self.selection.selected_reports())
+
+        # Monitor groups are plots; their monitors are the plot's series. Build
+        # the union of series per plot across the loaded results, dropping empty
+        # monitors when "Hide empty monitors" is on (mirroring the plot view).
+        hide_monitors = self.settings.hide_empty_monitors
+        mon_threshold = self.settings.monitor_zero_threshold
+        monitor_groups: dict[str, list[str]] = {}
+        for r in results:
+            for p in r.plots:
+                names = monitor_groups.setdefault(p.name, [])
+                for s in p.series:
+                    if hide_monitors and _series_is_empty(s, mon_threshold):
+                        continue
+                    if s.name not in names:
+                        names.append(s.name)
+        checked_groups = sorted(self.selection.selected_plots())
+        checked_monitors = self.plot_view.monitor_selection()
+
+        dlg = ExportDialog(
+            self.settings.default_output_dir,
+            data_names,
+            checked_names,
+            report_names,
+            checked_reports,
+            monitor_groups,
+            checked_groups,
+            checked_monitors,
+            results,
+            self.settings,
+            self,
+        )
+        dlg.exec()
 
     def _apply_region_stats(self, labels) -> None:
         """Apply a profile's saved region statistics. A profile that specifies

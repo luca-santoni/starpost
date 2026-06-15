@@ -137,6 +137,38 @@ def _series_is_empty(series, zero_threshold: float) -> bool:
     return not series.y or max(abs(v) for v in series.y) < zero_threshold
 
 
+def _save_via_pillow(image, path) -> None:
+    """Save a QImage through Pillow (for formats Qt can't write, e.g. TIFF). The
+    QImage is round-tripped through PNG bytes, which Qt always supports."""
+    from io import BytesIO
+
+    from PIL import Image
+    from PySide6.QtCore import QBuffer, QByteArray
+
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QBuffer.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    buffer.close()
+    Image.open(BytesIO(bytes(data))).save(str(path))
+
+
+def _image_to_pdf(image, path) -> None:
+    """Write a rendered QImage into a tightly-cropped (no-margin) PDF page."""
+    from PySide6.QtCore import QMarginsF, QRect, QSizeF
+    from PySide6.QtGui import QPageSize, QPainter, QPdfWriter
+
+    dpi = 300
+    writer = QPdfWriter(str(path))
+    writer.setResolution(dpi)
+    page = QSizeF(image.width() / dpi * 25.4, image.height() / dpi * 25.4)
+    writer.setPageSize(QPageSize(page, QPageSize.Unit.Millimeter))
+    writer.setPageMargins(QMarginsF(0, 0, 0, 0))
+    painter = QPainter(writer)
+    painter.drawImage(QRect(0, 0, writer.width(), writer.height()), image)
+    painter.end()
+
+
 class _CategorySelector(QWidget):
     """A category name label beside a dropdown of its series (monitors).
 
@@ -389,8 +421,11 @@ class PlotView(QWidget):
         self._stats_label.hide()
 
         # One category (series) selector per displayed plot, laid out in a row.
+        # The row can be hidden (e.g. the export preview drives the series
+        # selection from elsewhere) while the selectors still hold the state.
         self._ctrl = QHBoxLayout()
         self._selectors: dict[str, _CategorySelector] = {}
+        self._category_controls_visible = True
         # Remember each category's series selection so it survives redraws
         # (toggling another checkbox re-shows the view from scratch).
         self._selection_memory: dict[str, set[str]] = {}
@@ -430,8 +465,22 @@ class PlotView(QWidget):
         # background, axes and legend text are coloured here instead.
         self._fg = "#e6e6e6"
         self._bg = "#1e1e1e"
+        # Effective labels currently on the plot, and the auto-derived values they
+        # fall back to. A non-empty override (set externally, e.g. from the export
+        # menu) replaces the auto value; clearing it reverts to auto.
         self._title = ""
+        self._x_axis_label = "Iteration"
         self._y_axis_label = "Value"
+        self._auto_title = ""
+        self._auto_x_label = "Iteration"
+        self._auto_y_label = "Value"
+        self._title_override = ""
+        self._x_label_override = ""
+        self._y_label_override = ""
+        # Per-series colour overrides (raw series name -> hex), and the colours
+        # actually drawn last render (raw series name -> hex) for read-back.
+        self._series_colors: dict[str, str] = {}
+        self._drawn_colors: dict[str, str] = {}
         self._plot.setBackground(self._bg)
         self._style_stats_label()
 
@@ -449,13 +498,36 @@ class PlotView(QWidget):
             ax.setTextPen(self._fg)
         self._legend.setLabelTextColor(self._fg)
         # Recolour the title and axis labels already on screen.
-        self._plot.setTitle(self._title, color=self._fg)
-        self._plot.setLabel("bottom", "Iteration", color=self._fg)
-        self._plot.setLabel("left", self._y_axis_label, color=self._fg)
+        self._refresh_labels()
         # Rebuild the current plot so its legend entries pick up the new text
         # colour (existing legend labels aren't recoloured retroactively).
         if self._mode is not None:
             self._render()
+
+    def _refresh_labels(self) -> None:
+        """Push the effective title and axis labels (override if set, else the
+        auto-derived value) onto the plot in the current foreground colour."""
+        self._title = self._title_override or self._auto_title
+        self._x_axis_label = self._x_label_override or self._auto_x_label
+        self._y_axis_label = self._y_label_override or self._auto_y_label
+        self._plot.setTitle(self._title, color=self._fg)
+        self._plot.setLabel("bottom", self._x_axis_label, color=self._fg)
+        self._plot.setLabel("left", self._y_axis_label, color=self._fg)
+
+    def set_title_override(self, text: str) -> None:
+        """Override the plot title (empty reverts to the auto title)."""
+        self._title_override = text or ""
+        self._refresh_labels()
+
+    def set_x_label_override(self, text: str) -> None:
+        """Override the X-axis label (empty reverts to the auto label)."""
+        self._x_label_override = text or ""
+        self._refresh_labels()
+
+    def set_y_label_override(self, text: str) -> None:
+        """Override the Y-axis label (empty reverts to the auto label)."""
+        self._y_label_override = text or ""
+        self._refresh_labels()
 
     def set_filter(self, hide_empty: bool, zero_threshold: float) -> None:
         """Configure hiding of empty monitors (those whose values are all ~0).
@@ -488,6 +560,52 @@ class PlotView(QWidget):
     def region_stats(self) -> list[str]:
         """The statistics currently shown in the region table (for profiles)."""
         return list(self._enabled_stats)
+
+    # --- per-series colours ---------------------------------------------
+    def series_color(self, name: str) -> str | None:
+        """The colour a monitor (raw series name) is drawn in, or its override if
+        it isn't currently on screen; None if unknown."""
+        return self._drawn_colors.get(name) or self._series_colors.get(name)
+
+    def set_series_color(self, name: str, color: str) -> None:
+        """Override a monitor's plot colour and redraw."""
+        self._series_colors[name] = color
+        if self._mode is not None:
+            self._render()
+
+    # --- export ----------------------------------------------------------
+    def has_content(self) -> bool:
+        """True when at least one curve is currently drawn."""
+        return bool(self._curves)
+
+    def export(self, path, fmt: str, scale: float = 3.0) -> None:
+        """Render just the plot (graph, title, axes, legend — none of the
+        surrounding controls) to ``path`` in ``fmt`` (png | jpg | tiff | pdf).
+
+        The plot widget is captured at ``scale``× device-pixel-ratio rather than
+        by upscaling the scene: that keeps line widths, legend and fonts in the
+        same proportion as the on-screen preview (pyqtgraph's image exporter
+        leaves cosmetic pens and the legend at a fixed pixel size when upscaled),
+        while still producing a high-resolution image."""
+        from PySide6.QtGui import QColor, QImage, QPainter  # noqa: F401
+        from PySide6.QtWidgets import QWidget
+
+        src = self._plot
+        w = max(src.width(), 1)
+        h = max(src.height(), 1)
+        image = QImage(round(w * scale), round(h * scale), QImage.Format.Format_ARGB32)
+        image.setDevicePixelRatio(scale)
+        image.fill(QColor(self._bg))
+        # Explicit QWidget.render (not QGraphicsView.render) — capture the widget
+        # as drawn, honouring the image's device-pixel-ratio.
+        QWidget.render(src, image)
+
+        if fmt.lower() == "pdf":
+            _image_to_pdf(image, path)
+        elif not image.save(str(path)):
+            # Qt couldn't write this format (e.g. TIFF often lacks a plugin);
+            # fall back to Pillow, which infers the format from the extension.
+            _save_via_pillow(image, path)
 
     # --- monitor selection (persisted in profiles) ----------------------
     def monitor_selection(self) -> dict[str, list[str]]:
@@ -550,8 +668,9 @@ class PlotView(QWidget):
         self._set_categories([])
         self._plot.clear()
         self._legend.clear()
-        self._title = ""
-        self._plot.setTitle("", color=self._fg)
+        # No plot, so the auto title is empty; any user title override still shows.
+        self._auto_title = ""
+        self._refresh_labels()
         self._curves = []
         self._hide_hover()
         self._clear_region()
@@ -612,9 +731,18 @@ class PlotView(QWidget):
                 category, names, initial, self._sort_memory.get(category, "az")
             )
             sel.changed.connect(self._render)
+            sel.setVisible(self._category_controls_visible)
             self._ctrl.addWidget(sel)
             self._selectors[category] = sel
         self._ctrl.addStretch(1)
+
+    def set_category_controls_visible(self, visible: bool) -> None:
+        """Show or hide the per-category series dropdowns. Hidden selectors still
+        hold the selection (set via set_monitor_selection), so the plot can be
+        driven entirely from elsewhere — e.g. the export menu's Monitors list."""
+        self._category_controls_visible = visible
+        for sel in self._selectors.values():
+            sel.setVisible(visible)
 
     def _selected_series(self, category: str) -> set[str]:
         sel = self._selectors.get(category)
@@ -624,12 +752,11 @@ class PlotView(QWidget):
     def _reset(self, title: str, y_log: bool, y_label: str = "Value") -> None:
         self._plot.clear()
         self._legend.clear()  # avoid stale/duplicate legend entries on re-render
-        self._title = title
-        self._y_axis_label = y_label
-        self._plot.setTitle(title, color=self._fg)
+        self._auto_title = title
+        self._auto_x_label = "Iteration"
+        self._auto_y_label = y_label
         self._plot.setLogMode(x=False, y=y_log)
-        self._plot.setLabel("bottom", "Iteration", color=self._fg)
-        self._plot.setLabel("left", y_label, color=self._fg)
+        self._refresh_labels()  # applies any overrides over the auto values
         # clear() drops every item, including the hover overlay — re-add it
         # (hidden) and start collecting the freshly drawn curves.
         self._y_log = y_log
@@ -660,16 +787,19 @@ class PlotView(QWidget):
     def _render_single(self, plots: list[MonitorPlot]) -> None:
         drawn: list[str] = []
         specs: list[tuple] = []
+        self._drawn_colors = {}
         # A running colour index across every category's series keeps each
         # line's colour stable regardless of which are filtered/deselected.
         color_i = 0
         for plot in plots:
             selected = self._selected_series(plot.name)
             for s in plot.series:
-                color = _COLORS[color_i % len(_COLORS)]
+                default = _COLORS[color_i % len(_COLORS)]
                 color_i += 1
                 if s.name not in selected or not self._visible(s):
                     continue
+                color = self._series_colors.get(s.name, default)
+                self._drawn_colors[s.name] = color
                 drawn.append(s.name)
                 specs.append((s.x, s.y, s.name, color))
         title = ", ".join(p.name for p in plots)
@@ -696,6 +826,7 @@ class PlotView(QWidget):
 
         drawn: list[str] = []
         specs: list[tuple] = []
+        self._drawn_colors = {}
         y_log = False
         for plot_name, pairs in categories:
             selected = self._selected_series(plot_name)
@@ -704,10 +835,14 @@ class PlotView(QWidget):
                 for s in plot.series:
                     if s.name not in selected or not self._visible(s):
                         continue
+                    # A per-series override forces that monitor's colour across
+                    # every sim; otherwise comparison colours by sim.
+                    color = self._series_colors.get(s.name, sim_color[sim_name])
+                    self._drawn_colors[s.name] = color
                     drawn.append(s.name)
                     disp = _display_name(s.name)
                     label = f"{sim_name}: {disp}" if multi else sim_name
-                    specs.append((s.x, s.y, label, sim_color[sim_name]))
+                    specs.append((s.x, s.y, label, color))
         title = ", ".join(name for name, _ in categories) + " (comparison)"
         self._reset(title, y_log, _y_label_for(drawn))
         for x, y, label, color in specs:

@@ -194,6 +194,9 @@ QHeaderView::section {
 QTableView QTableCornerButton::section { background: $header_bg; border: 1px solid $border; }
 
 QCheckBox { color: $text; }
+/* Disabled checkboxes (e.g. "Separate files" with <2 data sets) read clearly
+   greyed: faded label, faded box, matching the disabled buttons/combos. */
+QCheckBox:disabled { color: $dis_text; }
 
 /* Checkmarks (checkboxes + checkable list items). The checked glyph is a
    generated SVG tinted with the user's checkmark colour. */
@@ -205,6 +208,10 @@ QTreeView::indicator {
     border: 1px solid $check_border;
     border-radius: 3px;
     background: $input_bg;
+}
+QCheckBox::indicator:disabled {
+    border-color: $dis_border;
+    background: $dis_bg;
 }
 QCheckBox::indicator:checked,
 QListView::indicator:checked,

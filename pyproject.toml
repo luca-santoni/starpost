@@ -16,6 +16,9 @@ dependencies = [
     "numpy>=1.24",       # nearest-point hover search in the plot view
     "matplotlib>=3.8",   # used for PDF/JPG export rendering
     "pandas>=2.1",
+    "Pillow>=10.0",      # plot-export fallback for formats Qt can't write (TIFF)
+    "openpyxl>=3.1",     # report export to .xlsx
+    "odfpy>=1.4",        # report export to .ods
     "PyYAML>=6.0",
     "Jinja2>=3.1",       # Java macro templating
 ]

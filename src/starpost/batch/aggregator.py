@@ -14,9 +14,12 @@ from starpost.data.models import SimResult
 
 
 def reports_wide_frame(
-    results: list[SimResult], selected: Optional[set[str]] = None
+    results: list[SimResult],
+    selected: Optional[set[str]] = None,
+    include_units: bool = True,
 ) -> pd.DataFrame:
-    """Wide report table: rows = sims, columns = "Report [units]"."""
+    """Wide report table: rows = sims, columns = "Report [units]" (units embedded
+    only when ``include_units``)."""
     units: dict[str, str] = {}
     rows: list[dict] = []
     for res in results:
@@ -29,25 +32,26 @@ def reports_wide_frame(
         rows.append(row)
 
     df = pd.DataFrame(rows).set_index("sim") if rows else pd.DataFrame()
-    # Embed units in headers.
-    df = df.rename(
-        columns={
-            name: f"{name} [{units[name]}]" if units.get(name) else name
-            for name in df.columns
-        }
-    )
+    if include_units:
+        df = df.rename(
+            columns={
+                name: f"{name} [{units[name]}]" if units.get(name) else name
+                for name in df.columns
+            }
+        )
     return df
 
 
-def export_reports_csv(
-    results: list[SimResult], path: Path, selected: Optional[set[str]] = None
-) -> None:
-    reports_wide_frame(results, selected).to_csv(path)
-
-
-def export_single_sim_reports_csv(res: SimResult, path: Path) -> None:
-    """Per-file long CSV: report, value, units."""
-    df = pd.DataFrame(
-        [{"report": r.name, "value": r.value, "units": r.units} for r in res.reports]
-    )
-    df.to_csv(path, index=False)
+def write_report_table(df: pd.DataFrame, path: Path, fmt: str) -> None:
+    """Write a report table to ``path`` in ``fmt`` (csv | tsv | xlsx | ods)."""
+    fmt = fmt.lower()
+    if fmt == "csv":
+        df.to_csv(path, index=False)
+    elif fmt == "tsv":
+        df.to_csv(path, sep="\t", index=False)
+    elif fmt == "xlsx":
+        df.to_excel(path, index=False, engine="openpyxl")
+    elif fmt == "ods":
+        df.to_excel(path, index=False, engine="odf")
+    else:
+        raise ValueError(f"Unsupported export format: {fmt}")
