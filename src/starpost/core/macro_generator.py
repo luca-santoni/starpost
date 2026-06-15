@@ -31,5 +31,5 @@ def render_macro(output_dir: Path, dest_dir: Path) -> Path:
     text = _env.get_template(_TEMPLATE).render(output_dir=out)
 
     java_path = dest_dir / f"{_CLASS_NAME}.java"
-    java_path.write_text(text)
+    java_path.write_text(text, encoding="utf-8")
     return java_path

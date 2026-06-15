@@ -53,7 +53,7 @@ def _parse_reports(path: Path) -> list[Report]:
         log.warning("reports CSV missing: %s", path)
         return []
     reports: list[Report] = []
-    with path.open(newline="") as f:
+    with path.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             raw = (row.get("value") or "").strip()
             if raw == "" or raw.upper() == "ERROR":
@@ -83,7 +83,7 @@ def _parse_plots(
         return []
 
     plots: list[MonitorPlot] = []
-    with index.open(newline="") as f:
+    with index.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             name = row["plot"]
             csv_file = (row.get("csv_file") or "").strip()
@@ -106,7 +106,7 @@ def _parse_plot_series(path: Path) -> list[PlotSeries]:
     """
     if not path.exists():
         return []
-    with path.open(newline="") as f:
+    with path.open(newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     if len(rows) < 2:
         return []

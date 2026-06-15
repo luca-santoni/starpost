@@ -94,7 +94,7 @@ class Settings:
             default = packaged_default_settings()
             if default.exists():
                 shutil.copy(default, path)
-        data = yaml.safe_load(path.read_text()) if path.exists() else {}
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
         return cls.from_dict(data or {})
 
     @classmethod
@@ -170,7 +170,9 @@ class Settings:
         }
 
     def save(self) -> None:
-        settings_path().write_text(yaml.safe_dump(self.to_dict(), sort_keys=False))
+        settings_path().write_text(
+            yaml.safe_dump(self.to_dict(), sort_keys=False), encoding="utf-8"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -206,12 +208,15 @@ class Profile:
                     "region_stats": self.region_stats,
                 },
                 sort_keys=False,
-            )
+            ),
+            encoding="utf-8",
         )
 
     @classmethod
     def load(cls, name: str) -> "Profile":
-        data = yaml.safe_load((profiles_dir() / f"{name}.yaml").read_text())
+        data = yaml.safe_load(
+            (profiles_dir() / f"{name}.yaml").read_text(encoding="utf-8")
+        )
         rs = data.get("region_stats")
         return cls(
             name=data["name"],

@@ -10,6 +10,7 @@ most one license is checked out at a time.
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Callable, Optional
@@ -74,6 +75,11 @@ class StarRunner:
 
     def _stream(self, cmd: list[str], sink: LogSink) -> int:
         """Run cmd, forwarding combined stdout/stderr to the sink line by line."""
+        # On Windows the GUI build has no console, so each child STAR-CCM+
+        # process would otherwise flash its own console window. Suppress it.
+        creationflags = (
+            subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        )
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -81,6 +87,7 @@ class StarRunner:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                creationflags=creationflags,
             )
         except FileNotFoundError as e:
             raise StarRunError(f"Could not launch '{cmd[0]}': {e}") from e

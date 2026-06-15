@@ -50,13 +50,13 @@ class ResultStore:
     def save_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
         payload = {sp: asdict(r) for sp, r in self._results.items()}
-        path.write_text(json.dumps(payload, indent=2))
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def load_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
         if not path.exists():
             return
-        payload = json.loads(path.read_text())
+        payload = json.loads(path.read_text(encoding="utf-8"))
         self._results = {sp: _result_from_dict(d) for sp, d in payload.items()}
 
 

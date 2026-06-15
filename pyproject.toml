@@ -21,6 +21,7 @@ dependencies = [
     "odfpy>=1.4",        # report export to .ods
     "PyYAML>=6.0",
     "Jinja2>=3.1",       # Java macro templating
+    "platformdirs>=4.0", # per-OS config/cache locations (Linux XDG, Windows AppData)
 ]
 
 [project.optional-dependencies]
