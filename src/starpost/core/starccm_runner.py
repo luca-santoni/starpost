@@ -26,6 +26,25 @@ log = get_logger("runner")
 LogSink = Callable[[str], None]
 
 
+def exe_placeholder() -> str:
+    """Placeholder text for the STAR-CCM+ executable field, per platform."""
+    if sys.platform == "win32":
+        return r"C:\Program Files\Siemens\...\star\bin\starccm+.bat"
+    return "/path/to/starccm+"
+
+
+def exe_dialog_filter() -> str:
+    """QFileDialog name filter for picking the STAR-CCM+ launcher.
+
+    On Windows the launcher is starccm+.bat (or .exe); narrowing the dialog to
+    those saves the user hunting. Empty on Linux, where the binary has no
+    extension and any file should be selectable.
+    """
+    if sys.platform == "win32":
+        return "STAR-CCM+ launcher (starccm+.bat starccm+.exe);;All files (*.*)"
+    return ""
+
+
 class StarRunError(Exception):
     pass
 

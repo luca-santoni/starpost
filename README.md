@@ -52,16 +52,24 @@ A licensed STAR-CCM+ installation must be present on the machine.
 ## Quick start (development)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate         # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-python scripts/dev_run.py        # launches the GUI (no STAR-CCM+ needed to open the UI)
+python scripts/dev_run.py         # launches the GUI (no STAR-CCM+ needed to open the UI)
 ```
+
+Runs on Linux and Windows (Python 3.11+ and PySide6 on both).
 
 ## Configuration
 
 Most settings are editable in-app via **Settings** (paged dialog), or directly
-in `~/.config/starpost/settings.yaml` (seeded from `config/default_settings.yaml`
-on first run). Key fields:
+in the settings file (seeded from `config/default_settings.yaml` on first run).
+Per-OS locations (via `platformdirs`):
+
+- Linux: `~/.config/starpost/settings.yaml`
+- Windows: `%APPDATA%\starpost\settings.yaml`
+
+Key fields:
 
 - `starccm_path` — path to the `starccm+` executable (manual; default TBD).
 - `license` — default mode is POD key + license server
@@ -72,12 +80,27 @@ on first run). Key fields:
   label options, axis-classification keywords) and `appearance` (theme + accent).
 
 Extraction **profiles** (saved report/plot selections, the monitors shown per
-plot, and axis overrides) live in `~/.config/starpost/profiles/*.yaml`. The
-crash-recovery cache and logs live under `~/.cache/starpost/`.
+plot, and axis overrides) live alongside the settings file in `profiles/*.yaml`
+(Linux `~/.config/starpost/`, Windows `%APPDATA%\starpost\`). The crash-recovery
+cache and logs live under the per-OS cache dir (Linux `~/.cache/starpost/`,
+Windows `%LOCALAPPDATA%\starpost\`).
+
+## Packaging
+
+Build a standalone bundle with PyInstaller (run on the target OS — PyInstaller
+does not cross-compile):
+
+```bash
+pip install -e ".[dev]"
+pyinstaller packaging/starpost.spec
+```
+
+Output lands in `dist/starpost/` (`starpost.exe` on Windows). The spec selects
+the Windows `.ico` automatically.
 
 ## Status
 
 v1. Core extraction/parsing, the in-app settings dialog, and the interactive
 plot viewer are implemented; batch **export wiring** is still stubbed (see
-[`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md)). Built for Linux;
-Windows support planned.
+[`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md)). Runs on Linux and
+Windows.

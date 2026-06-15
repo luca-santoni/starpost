@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.core.settings import LicenseConfig, Settings
+from starpost.core.starccm_runner import exe_dialog_filter, exe_placeholder
 from starpost.gui.theme import (
     ACCENT_PRESETS,
     apply_theme,
@@ -116,7 +117,7 @@ class WelcomeDialog(QDialog):
 
     def _starccm_group(self) -> QWidget:
         self._exe = QLineEdit()
-        self._exe.setPlaceholderText("/path/to/starccm+")
+        self._exe.setPlaceholderText(exe_placeholder())
         self._out = QLineEdit()
         self._out.setPlaceholderText("Empty = your home folder")
 
@@ -211,7 +212,7 @@ class WelcomeDialog(QDialog):
 
     def _browse_exe(self) -> None:
         f, _ = QFileDialog.getOpenFileName(
-            self, "STAR-CCM+ executable", self._exe.text()
+            self, "STAR-CCM+ executable", self._exe.text(), exe_dialog_filter()
         )
         if f:
             self._exe.setText(f)

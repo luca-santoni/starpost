@@ -34,7 +34,12 @@ starpost = "starpost.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-starpost = ["macros/*.j2", "gui/resources/*.qss", "gui/resources/*.png"]
+starpost = [
+    "macros/*.j2",
+    "gui/resources/*.qss",
+    "gui/resources/*.png",
+    "gui/resources/*.ico",
+]
 
 [tool.ruff]
 line-length = 100
