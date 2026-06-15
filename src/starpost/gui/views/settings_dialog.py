@@ -158,6 +158,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
         self.resize(660, 460)
         self._settings = settings
+        # While populating the controls from the current settings, suppress the
+        # live theme preview: it would re-apply the already-active stylesheet to
+        # the whole app several times (slow, and a visual no-op). Real user edits
+        # after construction still preview live.
+        self._loading = True
 
         # Remember the live appearance so Cancel can revert the preview.
         self._orig_mode = settings.appearance.mode
@@ -203,6 +208,7 @@ class SettingsDialog(QDialog):
 
         self._load_from_settings()
         self._sync_license_mode()
+        self._loading = False
 
     # --- page construction ----------------------------------------------
     def _add_page(self, name: str, widget: QWidget) -> None:
@@ -737,6 +743,10 @@ class SettingsDialog(QDialog):
             self._set_checkmark_color(chosen.name())
 
     def _apply_preview(self) -> None:
+        # During initial population the active stylesheet already matches; skip
+        # the costly whole-app reapply (and the redundant preview_changed emit).
+        if self._loading:
+            return
         mode = self._current_mode()
         apply_theme(
             QApplication.instance(), mode, self._accent, self._effective_checkmark()
