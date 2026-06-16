@@ -18,5 +18,9 @@ venv/
 /tmp_macros/
 *.log
 
+# Packaging output (regenerable from packaging/build_appimage.sh)
+*.AppImage
+*.AppDir/
+
 # OS
 .DS_Store
