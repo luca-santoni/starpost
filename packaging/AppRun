@@ -1,0 +1,6 @@
+#!/bin/sh
+# AppImage entry point. Resolves its own location inside the mounted AppImage
+# and launches the PyInstaller-bundled StarPost binary, forwarding all args.
+HERE="$(dirname "$(readlink -f "$0")")"
+export PATH="$HERE/usr/bin:$PATH"
+exec "$HERE/usr/bin/starpost" "$@"

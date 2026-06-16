@@ -124,16 +124,49 @@ Windows `%LOCALAPPDATA%\starpost\`).
 
 ## Packaging
 
-Build a standalone bundle with PyInstaller (run on the target OS — PyInstaller
-does not cross-compile):
+PyInstaller does **not** cross-compile — build each platform's artifact on that
+platform.
+
+### Standalone bundle (Linux & Windows)
 
 ```bash
 pip install -e ".[dev]"
 pyinstaller packaging/starpost.spec
 ```
 
-Output lands in `dist/starpost/` (`starpost.exe` on Windows). The spec selects
-the Windows `.ico` automatically.
+Output lands in `dist/starpost/` — a folder containing the `starpost` executable
+(`starpost.exe` on Windows; the spec selects the Windows `.ico` automatically).
+
+### Linux: AppImage
+
+[`packaging/build_appimage.sh`](packaging/build_appimage.sh) wraps the
+PyInstaller bundle into a single portable `StarPost-<version>-<arch>.AppImage`
+that runs on most Linux distributions with **no install and no Python required
+on the user's machine** (the interpreter and all dependencies are bundled):
+
+```bash
+pip install -e ".[dev]"          # build host needs the deps + PyInstaller
+packaging/build_appimage.sh      # → StarPost-0.1.0-x86_64.AppImage
+```
+
+The script runs PyInstaller, assembles the AppDir (using
+[`packaging/AppRun`](packaging/AppRun) and
+[`packaging/starpost.desktop`](packaging/starpost.desktop) plus the app icon),
+and downloads `appimagetool` to pack it. Notes:
+
+- **Build on the oldest glibc you must support.** glibc is forward- but not
+  backward-compatible, so an AppImage built on a new distro may not start on
+  older ones. Building in an old container (e.g. an older Ubuntu LTS) gives the
+  widest reach.
+- The end user just runs `chmod +x StarPost-*.AppImage && ./StarPost-*.AppImage`.
+- Requires `curl` (to fetch appimagetool) and an internet connection on the
+  build host; FUSE is not required (the script uses
+  `--appimage-extract-and-run`).
+
+### Windows: installer
+
+See the project notes for wrapping `dist/starpost/` into a `Setup.exe` with
+Inno Setup (or an `.msi` with WiX). The bundle itself is portable as-is.
 
 ## Usage at a glance
 

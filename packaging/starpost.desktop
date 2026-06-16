@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=StarPost
+Comment=Automated post-processing for STAR-CCM+ reports and monitor plots
+Exec=starpost
+Icon=starpost
+Categories=Science;
+Terminal=false
