@@ -47,20 +47,22 @@ class DataListPanel(QWidget):
         self._list.setSelectionMode(QListWidget.NoSelection)
         self._list.itemChanged.connect(lambda _i: self.selection_changed.emit())
 
-        export = QPushButton("Export")
+        # Import is nonfunctional for now; wiring is added in a later step.
+        import_btn = QPushButton("Import")
+        export = QPushButton("Export Data")
         export.clicked.connect(self.export_requested)
         delete = QPushButton("Delete")
         delete.clicked.connect(self.delete_requested)
-        clear = QPushButton("Clear data")
+        clear = QPushButton("Clear Data")
         clear.setObjectName("clearDataButton")
         clear.clicked.connect(self.clear_requested)
-        # Export on the left; Delete and Clear data anchored to the bottom
-        # right, with Delete immediately left of Clear data.
+        # Buttons in a row with uniform spacing between them, left-aligned.
         buttons = QHBoxLayout()
+        buttons.addWidget(import_btn)
         buttons.addWidget(export)
-        buttons.addStretch(1)
         buttons.addWidget(delete)
         buttons.addWidget(clear)
+        buttons.addStretch(1)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._list)

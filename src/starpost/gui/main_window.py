@@ -362,12 +362,12 @@ class MainWindow(QMainWindow):
         """Wipe all loaded sim data after a confirmation, leaving a blank workspace."""
         if self._thread is not None and self._thread.isRunning():
             QMessageBox.information(
-                self, "Clear data",
+                self, "Clear Data",
                 "A batch is still running. Stop it before clearing data.",
             )
             return
         if QMessageBox.question(
-            self, "Clear data",
+            self, "Clear Data",
             "Clear all loaded simulation data? This cannot be undone.",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         ) != QMessageBox.Yes:
