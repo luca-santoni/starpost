@@ -34,6 +34,7 @@ class _CheckList(QListWidget):
 class DataListPanel(QWidget):
     # Emitted when the set of checked entries changes.
     selection_changed = Signal()
+    import_requested = Signal()
     export_requested = Signal()
     delete_requested = Signal()  # delete the checked data sets
     clear_requested = Signal()
@@ -47,8 +48,8 @@ class DataListPanel(QWidget):
         self._list.setSelectionMode(QListWidget.NoSelection)
         self._list.itemChanged.connect(lambda _i: self.selection_changed.emit())
 
-        # Import is nonfunctional for now; wiring is added in a later step.
         import_btn = QPushButton("Import")
+        import_btn.clicked.connect(self.import_requested)
         export = QPushButton("Export Data")
         export.clicked.connect(self.export_requested)
         delete = QPushButton("Delete")

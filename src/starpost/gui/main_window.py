@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_files)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
+        self.data_list.import_requested.connect(self._import_data)
         self.data_list.export_requested.connect(self._export_data)
         self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.clear_requested.connect(self._clear_data)
@@ -535,6 +536,99 @@ class MainWindow(QMainWindow):
                 self.plot_view.clear()
 
     # --- actions (scaffolded) -------------------------------------------
+    def _import_data(self) -> None:
+        """'Import' (Data tab): load one or more portable StarPost data CSVs
+        (as written by Export Data) straight into the workspace — no .sim or
+        STAR-CCM+ needed. Files that don't match the format are reported and
+        skipped; any valid files in the same selection still import."""
+        from starpost.data.portable import read_sim_csv
+
+        start_dir = self.settings.default_output_dir or str(Path.home())
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Import Data", start_dir, "CSV file (*.csv)"
+        )
+        if not paths:
+            return
+
+        # Names already loaded, mapped to their store key (sim_path), so a
+        # collision can replace the existing entry even if its path differs.
+        loaded: dict[str, str] = {
+            r.sim_name: r.sim_path for r in self.store.all() if r.error is None
+        }
+        overwrite_all: bool | None = None  # None until "to all" is chosen
+
+        imported = 0
+        failed: list[str] = []
+        for p in paths:
+            try:
+                result = read_sim_csv(p)
+            except Exception:  # wrong format or otherwise unreadable
+                log.exception("import failed for %s", p)
+                failed.append(Path(p).name)
+                continue
+
+            name = result.sim_name
+            if name in loaded:
+                overwrite = overwrite_all
+                if overwrite is None:
+                    overwrite, overwrite_all = self._ask_overwrite_import(name)
+                if not overwrite:
+                    continue  # keep the loaded data set; skip this file
+                # Drop the existing entry (its key may differ from the new one).
+                if loaded[name] != result.sim_path:
+                    self.store.remove(loaded[name])
+
+            self.store.put(result)
+            loaded[name] = result.sim_path  # later files collide with this one too
+            imported += 1
+
+        if imported:
+            self.store.save_cache()  # persist so the import survives restart
+            self._refresh_from_store()
+            self._check_homogeneity()
+
+        if failed:
+            listed = "\n".join(f"  • {n}" for n in failed)
+            if len(failed) == 1:
+                msg = (
+                    "The selected file failed to import because it does not "
+                    f"match the format:\n\n{listed}"
+                )
+            else:
+                msg = (
+                    f"{len(failed)} files failed to import because they do not "
+                    f"match the format:\n\n{listed}"
+                )
+            if imported:
+                msg += f"\n\nThe remaining {imported} file(s) were imported."
+            QMessageBox.warning(self, "Import", msg)
+
+    def _ask_overwrite_import(self, name: str) -> tuple[bool, bool | None]:
+        """Warn that ``name`` is already loaded and ask whether to overwrite it.
+
+        Returns ``(overwrite_this, apply_to_all)`` where apply_to_all is True
+        (overwrite all), False (skip all) or None (decide each one)."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Import")
+        box.setText(
+            f"A data set named “{name}” is already loaded.\n\n"
+            "Overwrite it with the imported file?"
+        )
+        box.setStandardButtons(
+            QMessageBox.Yes
+            | QMessageBox.No
+            | QMessageBox.YesToAll
+            | QMessageBox.NoToAll
+        )
+        box.setDefaultButton(QMessageBox.No)  # the safe choice: keep what's loaded
+        choice = box.exec()
+        if choice == QMessageBox.YesToAll:
+            return True, True
+        if choice == QMessageBox.NoToAll:
+            return False, False
+        return choice == QMessageBox.Yes, None
+
     def _export_data(self) -> None:
         """'Export Data' (Data tab): open a window listing the loaded data sets
         (pre-ticked to mirror the Data tab selection) where the user picks which
