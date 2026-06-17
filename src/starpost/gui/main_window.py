@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
 
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_files)
+        self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
         self.data_list.import_requested.connect(self._import_data)
         self.data_list.export_requested.connect(self._export_data)
@@ -536,6 +537,21 @@ class MainWindow(QMainWindow):
                 self.plot_view.clear()
 
     # --- actions (scaffolded) -------------------------------------------
+    def _show_file_properties(self, path) -> None:
+        """Files tab → right-click → Properties: show the file's size and, if it
+        has been extracted, its report/monitor/iteration counts."""
+        from starpost.gui.views.properties_dialog import PropertiesDialog
+
+        path = Path(path)
+        target = path.resolve()
+        # The store is keyed by the .sim path; match on the resolved path so a
+        # differently-spelled-but-equal path still finds the extracted data.
+        result = next(
+            (r for r in self.store.all() if Path(r.sim_path).resolve() == target),
+            None,
+        )
+        PropertiesDialog(path, result, self).exec()
+
     def _import_data(self) -> None:
         """'Import' (Data tab): load one or more portable StarPost data CSVs
         (as written by Export Data) straight into the workspace — no .sim or

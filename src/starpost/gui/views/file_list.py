@@ -25,6 +25,7 @@ MAX_FILES = 25  # v1 expected ceiling; warn beyond this
 class FileListPanel(QWidget):
     files_changed = Signal(list)  # list[Path]
     open_requested = Signal(list)  # list[Path] to extract & view (in order)
+    properties_requested = Signal(object)  # a single Path to show properties for
 
     def __init__(self, parent=None, *, show_full_names: bool = False) -> None:
         super().__init__(parent)
@@ -195,6 +196,7 @@ class FileListPanel(QWidget):
             self._list.setCurrentItem(item)
         menu = QMenu(self)
         open_act = menu.addAction("Open")
+        props_act = menu.addAction("Properties")
         chosen = menu.exec(self._list.mapToGlobal(pos))
         if chosen is open_act:
             # Open every selected file, in list (top-to-bottom) order.
@@ -205,6 +207,9 @@ class FileListPanel(QWidget):
             ]
             if paths:
                 self.open_requested.emit(paths)
+        elif chosen is props_act:
+            # Properties is about the single file that was right-clicked.
+            self.properties_requested.emit(self._item_path(item))
 
     def _clear_confirmed(self) -> None:
         """Clear the list only after the user confirms the warning."""
