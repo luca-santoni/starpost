@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         self.file_list.open_requested.connect(self._open_files)
         self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
+        self.data_list.properties_requested.connect(self._show_data_properties)
         self.data_list.import_requested.connect(self._import_data)
         self.data_list.export_requested.connect(self._export_data)
         self.data_list.delete_requested.connect(self._delete_selected_data)
@@ -551,6 +552,23 @@ class MainWindow(QMainWindow):
             None,
         )
         PropertiesDialog(path, result, self).exec()
+
+    def _show_data_properties(self, name) -> None:
+        """Data tab → right-click → Properties: show the data set's size as its
+        portable CSV (what Export Data would write) plus its report/monitor/
+        iteration counts."""
+        from starpost.data.portable import sim_csv_size
+        from starpost.gui.views.properties_dialog import PropertiesDialog
+
+        result = next(
+            (r for r in self.store.all() if r.error is None and r.sim_name == name),
+            None,
+        )
+        if result is None:
+            return
+        PropertiesDialog(
+            Path(result.sim_path), result, self, size_bytes=sim_csv_size(result)
+        ).exec()
 
     def _import_data(self) -> None:
         """'Import' (Data tab): load one or more portable StarPost data CSVs

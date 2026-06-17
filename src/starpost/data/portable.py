@@ -26,6 +26,7 @@ under the same plot. One file holds exactly one data set (sim).
 from __future__ import annotations
 
 import csv
+import io
 import math
 from pathlib import Path
 
@@ -73,45 +74,58 @@ def _group_series(series: list[PlotSeries]) -> list[tuple[list[float], list[Plot
     return [groups[k] for k in order]
 
 
+def _write_rows(result: SimResult, fh) -> None:
+    """Write the portable-CSV rows for ``result`` to an open text file object."""
+    w = csv.writer(fh)
+    w.writerow([FORMAT, VERSION])
+
+    w.writerow(["meta", "sim_path", result.sim_path])
+    w.writerow(["meta", "extracted_at", result.extracted_at])
+    if result.error:
+        w.writerow(["meta", "error", result.error])
+
+    for rep in result.reports:
+        w.writerow(
+            [
+                "report",
+                rep.name,
+                "" if rep.value is None else _num_str(rep.value),
+                rep.units,
+                rep.error or "",
+            ]
+        )
+
+    for plot in result.plots:
+        w.writerow(
+            [
+                "plot",
+                plot.name,
+                plot.kind.value,
+                plot.x_label,
+                _bool(plot.y_log),
+                plot.error or "",
+            ]
+        )
+        for xs, group in _group_series(plot.series):
+            # Column header, then one row per X value: X first, then each
+            # series' Y in column order.
+            w.writerow(["head", plot.x_label] + [s.name for s in group])
+            for i, x in enumerate(xs):
+                w.writerow([_num_str(x)] + [_num_str(s.y[i]) for s in group])
+
+
 def write_sim_csv(result: SimResult, path: Path | str) -> None:
     """Write ``result`` to ``path`` as a portable StarPost data CSV."""
     with Path(path).open("w", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        w.writerow([FORMAT, VERSION])
+        _write_rows(result, fh)
 
-        w.writerow(["meta", "sim_path", result.sim_path])
-        w.writerow(["meta", "extracted_at", result.extracted_at])
-        if result.error:
-            w.writerow(["meta", "error", result.error])
 
-        for rep in result.reports:
-            w.writerow(
-                [
-                    "report",
-                    rep.name,
-                    "" if rep.value is None else _num_str(rep.value),
-                    rep.units,
-                    rep.error or "",
-                ]
-            )
-
-        for plot in result.plots:
-            w.writerow(
-                [
-                    "plot",
-                    plot.name,
-                    plot.kind.value,
-                    plot.x_label,
-                    _bool(plot.y_log),
-                    plot.error or "",
-                ]
-            )
-            for xs, group in _group_series(plot.series):
-                # Column header, then one row per X value: X first, then each
-                # series' Y in column order.
-                w.writerow(["head", plot.x_label] + [s.name for s in group])
-                for i, x in enumerate(xs):
-                    w.writerow([_num_str(x)] + [_num_str(s.y[i]) for s in group])
+def sim_csv_size(result: SimResult) -> int:
+    """Byte size of the portable CSV ``result`` would serialise to (UTF-8), i.e.
+    the size of the file Export Data would write for this data set."""
+    buf = io.StringIO()
+    _write_rows(result, buf)
+    return len(buf.getvalue().encode("utf-8"))
 
 
 def _num(text: str) -> float | None:

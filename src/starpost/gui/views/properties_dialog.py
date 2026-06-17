@@ -26,15 +26,22 @@ def _human_size(num_bytes: int) -> str:
 
 
 class PropertiesDialog(QDialog):
-    def __init__(self, path: Path | str, result=None, parent=None) -> None:
+    def __init__(
+        self, path: Path | str, result=None, parent=None, size_bytes: int | None = None
+    ) -> None:
         super().__init__(parent)
         path = Path(path)
         self.setWindowTitle(f"Properties — {path.name}")
 
-        try:
-            size = _human_size(path.stat().st_size)
-        except OSError:  # file moved/deleted/unreadable
-            size = "—"
+        # When size_bytes is given (e.g. the Data tab passes the data set's
+        # portable-CSV size), use it; otherwise measure the file on disk.
+        if size_bytes is not None:
+            size = _human_size(size_bytes)
+        else:
+            try:
+                size = _human_size(path.stat().st_size)
+            except OSError:  # file moved/deleted/unreadable
+                size = "—"
 
         # Reports/monitors/iterations only exist once the file is extracted. A
         # monitor is a single series; iterations is the longest series' length.

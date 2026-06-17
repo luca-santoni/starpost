@@ -20,8 +20,10 @@ class _CheckList(QListWidget):
     on the small indicator."""
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # Only the left button toggles; right-click falls through so a context
+        # menu (e.g. the Data tab's "Properties") can open instead.
         item = self.itemAt(event.position().toPoint())
-        if item is not None:
+        if item is not None and event.button() == Qt.MouseButton.LeftButton:
             checked = item.checkState() == Qt.CheckState.Checked
             item.setCheckState(
                 Qt.CheckState.Unchecked if checked else Qt.CheckState.Checked
@@ -38,6 +40,7 @@ class DataListPanel(QWidget):
     export_requested = Signal()
     delete_requested = Signal()  # delete the checked data sets
     clear_requested = Signal()
+    properties_requested = Signal(object)  # a data set name to show properties for
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -47,6 +50,9 @@ class DataListPanel(QWidget):
         self._list = _CheckList()
         self._list.setSelectionMode(QListWidget.NoSelection)
         self._list.itemChanged.connect(lambda _i: self.selection_changed.emit())
+        # Right-click a data set for its Properties.
+        self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._list.customContextMenuRequested.connect(self._show_context_menu)
 
         import_btn = QPushButton("Import")
         import_btn.clicked.connect(self.import_requested)
@@ -81,6 +87,19 @@ class DataListPanel(QWidget):
             for i in range(self._list.count())
             if self._list.item(i).checkState() == Qt.CheckState.Checked
         ]
+
+    # --- context menu ----------------------------------------------------
+    def _show_context_menu(self, pos) -> None:
+        """Right-clicking a data set offers its Properties (size, report,
+        monitor and iteration counts)."""
+        item = self._list.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        props_act = menu.addAction("Properties")
+        chosen = menu.exec(self._list.mapToGlobal(pos))
+        if chosen is props_act:
+            self.properties_requested.emit(item.text())
 
     # --- sorting ---------------------------------------------------------
     def show_sort_menu(self, global_pos) -> None:
