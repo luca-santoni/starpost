@@ -73,3 +73,24 @@ class PropertiesDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+
+class FolderPropertiesDialog(QDialog):
+    """Properties for a Files-tab folder: the combined on-disk size of every
+    .sim it holds (recursively) and how many there are."""
+
+    def __init__(
+        self, name: str, total_bytes: int, file_count: int, parent=None
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Properties — {name}")
+
+        form = QFormLayout()
+        form.addRow("Total size", QLabel(_human_size(total_bytes)))
+        form.addRow("Sim files", QLabel(str(file_count)))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)

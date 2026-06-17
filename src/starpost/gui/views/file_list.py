@@ -344,6 +344,19 @@ class FileListPanel(QWidget):
         if paths:
             self.open_requested.emit(paths)
 
+    def _folder_properties(self, item: QTreeWidgetItem) -> None:
+        """Show the folder's combined .sim size and file count (recursively)."""
+        from starpost.gui.views.properties_dialog import FolderPropertiesDialog
+
+        paths = [Path(f.data(0, _PATH_ROLE)) for f in self._iter_files(item)]
+        total = 0
+        for p in paths:
+            try:
+                total += p.stat().st_size
+            except OSError:  # missing/unreadable file contributes nothing
+                pass
+        FolderPropertiesDialog(item.text(0), total, len(paths), self).exec()
+
     # --- slots -----------------------------------------------------------
     def _add_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
@@ -438,6 +451,8 @@ class FileListPanel(QWidget):
             menu.addSeparator()
             rename_act = menu.addAction("Rename")
             delete_act = menu.addAction("Delete folder")
+            menu.addSeparator()
+            props_act = menu.addAction("Properties")
             chosen = menu.exec(global_pos)
             if chosen is open_act:
                 self._open_folder(item)
@@ -447,6 +462,8 @@ class FileListPanel(QWidget):
                 self._rename_folder(item)
             elif chosen is delete_act:
                 self._delete_folder(item)
+            elif chosen is props_act:
+                self._folder_properties(item)
             return
 
         # A file: Open acts on every selected file (top-to-bottom); Properties
