@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.file_list.open_requested.connect(self._open_files)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
+        self.data_list.export_requested.connect(self._export_data)
         self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
@@ -534,6 +535,26 @@ class MainWindow(QMainWindow):
                 self.plot_view.clear()
 
     # --- actions (scaffolded) -------------------------------------------
+    def _export_data(self) -> None:
+        """'Export Data' (Data tab): open a window listing the loaded data sets
+        (pre-ticked to mirror the Data tab selection) where the user picks which
+        to dump to portable StarPost CSV — one re-importable file per data set."""
+        from starpost.gui.views.data_export_dialog import DataExportDialog
+
+        results = [r for r in self.store.all() if r.error is None]
+        if not results:
+            QMessageBox.information(self, "Export Data", "No data is loaded to export.")
+            return
+
+        dlg = DataExportDialog(
+            self.settings.default_output_dir,
+            [r.sim_name for r in results],
+            self.data_list.checked_names(),
+            results,
+            self,
+        )
+        dlg.exec()
+
     def _export(self) -> None:
         from starpost.gui.views.export_dialog import ExportDialog
 
