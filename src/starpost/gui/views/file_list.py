@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -49,6 +51,47 @@ CACHE_VERSION = 2  # nested-folder cache layout (v1 was a flat list of paths)
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
+
+
+class _NestedDashDelegate(QStyledItemDelegate):
+    """Marks nested files with a small dash, drawn one indent level to the left
+    of the row's content — i.e. lined up under the parent folder's icon. Nested
+    folders are skipped (their own expand/folder icon already reads clearly).
+    Purely visual: the stored name/path is untouched, and the dash follows a
+    file as it re-parents."""
+
+    _DASH = "–"
+
+    def __init__(self, view: QTreeWidget) -> None:
+        super().__init__(view)
+        self._view = view
+
+    def paint(self, painter, option, index) -> None:  # noqa: N802 (Qt override)
+        super().paint(painter, option, index)
+        # Only nested files get a dash; nested folders already read clearly
+        # thanks to their own expand/folder icon.
+        if not index.parent().isValid() or index.data(_TYPE_ROLE) == "folder":
+            return
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        # The parent's icon sits exactly one indentation level left of this
+        # row's content; centre the dash in that icon-width column.
+        indent = self._view.indentation()
+        icon_w = self._view.iconSize().width()
+        if icon_w <= 0:
+            icon_w = indent
+        rect = QRect(option.rect.left() - indent, option.rect.top(),
+                     icon_w, option.rect.height())
+        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        brush = opt.palette.highlightedText() if selected else opt.palette.text()
+        painter.save()
+        painter.setFont(opt.font)
+        painter.setPen(brush.color())
+        painter.drawText(
+            rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter,
+            self._DASH,
+        )
+        painter.restore()
 
 
 class _FileTree(QTreeWidget):
@@ -110,6 +153,8 @@ class FileListPanel(QWidget):
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
         self._tree.setColumnCount(1)
+        # A dash marks nested rows (files and subfolders) for legibility.
+        self._tree.setItemDelegateForColumn(0, _NestedDashDelegate(self._tree))
         self._tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
@@ -323,9 +368,21 @@ class FileListPanel(QWidget):
             self._changed()
 
     def _delete_folder(self, item: QTreeWidgetItem) -> None:
-        """Remove a folder, moving its contents up to its parent so no files are
-        lost."""
+        """Delete a folder, moving its contents up to the parent. Files and
+        subfolders move up together; moved subfolders keep their own contents.
+        A folder holding .sim files asks first."""
         parent = item.parent()
+        if list(self._iter_files(item)):
+            where = "the main files list" if parent is None else f"“{parent.text(0)}”"
+            if QMessageBox.warning(
+                self, "Delete folder",
+                f"“{item.text(0)}” will be deleted.\n\n"
+                f"Its contents will be moved up to {where}.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            ) != QMessageBox.Yes:
+                return
+        # Re-parent the immediate children (files and subfolders, each keeping
+        # its own contents), then drop the now-empty folder.
         for child in [item.child(i) for i in range(item.childCount())]:
             item.removeChild(child)
             if parent is None:
