@@ -36,6 +36,9 @@ MAX_FILES = 25  # v1 expected ceiling; warn beyond this
 # Item data roles and the type tag they carry.
 _PATH_ROLE = int(Qt.ItemDataRole.UserRole)      # a file item's full path (str)
 _TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 1  # "file" or "folder"
+_SORT_ROLE = int(Qt.ItemDataRole.UserRole) + 2  # a folder's chosen sort mode
+
+DEFAULT_SORT = "name_az"  # A–Z, used by the tab sort and each new folder
 
 # Files can be dragged but not dropped onto (so they never gain children);
 # folders accept drops so files/folders can be moved inside them.
@@ -146,8 +149,8 @@ class FileListPanel(QWidget):
         # Each file item stores its full path; the displayed text is either that
         # path or just the file name, per this flag.
         self._show_full_names = show_full_names
-        # Active sort, kept in sync with the header menu's checkmark.
-        self._sort_mode = "name_az"
+        # Active tab-wide sort, kept in sync with the header menu's checkmark.
+        self._sort_mode = DEFAULT_SORT
         self._folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
 
         self._tree = _FileTree()
@@ -230,12 +233,19 @@ class FileListPanel(QWidget):
         item.setFlags(_FILE_FLAGS)
         return item
 
-    def _make_folder_item(self, name: str) -> QTreeWidgetItem:
+    def _make_folder_item(
+        self, name: str, sort_mode: str = DEFAULT_SORT
+    ) -> QTreeWidgetItem:
         item = QTreeWidgetItem([name])
         item.setData(0, _TYPE_ROLE, "folder")
+        item.setData(0, _SORT_ROLE, sort_mode)
         item.setIcon(0, self._folder_icon)
         item.setFlags(_FOLDER_FLAGS)
         return item
+
+    @staticmethod
+    def _folder_sort_mode(item: QTreeWidgetItem) -> str:
+        return item.data(0, _SORT_ROLE) or DEFAULT_SORT
 
     def _add_paths(self, paths: list[Path]) -> None:
         """Add new .sim files at the top level, skipping any already present
@@ -283,25 +293,49 @@ class FileListPanel(QWidget):
         except OSError:
             return -1
 
-    def _sort_nodes(self, nodes: list[dict]) -> list[dict]:
-        """Sort one container's nodes by the active mode: folders first (always
-        by name), then files by the chosen key. Recurses into folders."""
-        folders = [n for n in nodes if "folder" in n]
+    def _sorted_level(self, nodes: list[dict], mode: str) -> list[dict]:
+        """Order one level of nodes by ``mode``: folders first (always by name),
+        then files by the chosen key. Does not recurse."""
+        folders = sorted(
+            (n for n in nodes if "folder" in n), key=lambda n: n["folder"].lower()
+        )
         files = [n for n in nodes if "file" in n]
-        reverse = self._sort_mode == "name_za"
-        folders.sort(key=lambda n: n["folder"].lower())
-        if self._sort_mode in ("name_az", "name_za"):
-            files.sort(key=lambda n: Path(n["file"]).name.lower(), reverse=reverse)
-        elif self._sort_mode == "size_large":
+        if mode in ("name_az", "name_za"):
+            files.sort(
+                key=lambda n: Path(n["file"]).name.lower(), reverse=mode == "name_za"
+            )
+        elif mode == "size_large":
             files.sort(key=lambda n: self._size(Path(n["file"])), reverse=True)
-        elif self._sort_mode == "size_small":
+        elif mode == "size_small":
             files.sort(key=lambda n: self._size(Path(n["file"])))
-        for n in folders:
-            n["items"] = self._sort_nodes(n.get("items", []))
-        return folders + files
+        return list(folders) + files
+
+    def _sort_nodes(self, nodes: list[dict], mode: str) -> list[dict]:
+        """Sort a container's nodes by ``mode``, recursing into every folder."""
+        ordered = self._sorted_level(nodes, mode)
+        for n in ordered:
+            if "folder" in n:
+                n["items"] = self._sort_nodes(n.get("items", []), mode)
+        return ordered
 
     def _apply_sort(self) -> None:
-        self._rebuild(self._sort_nodes(self._serialize()))
+        self._rebuild(self._sort_nodes(self._serialize(), self._sort_mode))
+
+    def _sort_folder(self, folder: QTreeWidgetItem, mode: str) -> None:
+        """Sort just ``folder``'s immediate contents by ``mode`` (folders first,
+        then files), leaving everything else — including each subfolder's own
+        internal order — untouched. The mode is remembered on the folder so its
+        menu shows the active choice."""
+        folder.setData(0, _SORT_ROLE, mode)
+        nodes = self._sorted_level(
+            [self._node(folder.child(i)) for i in range(folder.childCount())], mode
+        )
+        folder.takeChildren()
+        for node in nodes:
+            folder.addChild(self._build_item(node))
+        for node, i in zip(nodes, range(folder.childCount())):
+            self._restore_expansion(node, folder.child(i))
+        self._changed()
 
     # --- (de)serialisation of the tree -----------------------------------
     def _serialize(self) -> list[dict]:
@@ -315,13 +349,16 @@ class FileListPanel(QWidget):
             return {
                 "folder": item.text(0),
                 "expanded": item.isExpanded(),
+                "sort": self._folder_sort_mode(item),
                 "items": [self._node(item.child(i)) for i in range(item.childCount())],
             }
         return {"file": item.data(0, _PATH_ROLE)}
 
     def _build_item(self, node: dict) -> QTreeWidgetItem:
         if "folder" in node:
-            item = self._make_folder_item(node["folder"])
+            item = self._make_folder_item(
+                node["folder"], node.get("sort", DEFAULT_SORT)
+            )
             for child in node.get("items", []):
                 item.addChild(self._build_item(child))
             return item
@@ -505,6 +542,21 @@ class FileListPanel(QWidget):
         if _is_folder(item):
             open_act = menu.addAction("Open All")
             new_act = menu.addAction("New Nested Folder")
+            # Sort submenu: orders only this folder's contents. The folder's
+            # active mode (default A–Z) shows a checkmark.
+            sort_menu = menu.addMenu("Sort")
+            current_sort = self._folder_sort_mode(item)
+            sort_actions = {}
+            for label, mode in (
+                ("A–Z", "name_az"),
+                ("Z–A", "name_za"),
+                ("File Size Largest", "size_large"),
+                ("File Size Smallest", "size_small"),
+            ):
+                act = sort_menu.addAction(label)
+                act.setCheckable(True)
+                act.setChecked(mode == current_sort)
+                sort_actions[act] = mode
             menu.addSeparator()
             rename_act = menu.addAction("Rename")
             delete_act = menu.addAction("Delete folder")
@@ -515,6 +567,8 @@ class FileListPanel(QWidget):
                 self._open_folder(item)
             elif chosen is new_act:
                 self._new_folder(item)
+            elif chosen in sort_actions:
+                self._sort_folder(item, sort_actions[chosen])
             elif chosen is rename_act:
                 self._rename_folder(item)
             elif chosen is delete_act:
