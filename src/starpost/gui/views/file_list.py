@@ -619,13 +619,14 @@ class FileListPanel(QWidget):
             return
 
         # A file: Open acts on every selected file (top-to-bottom); Properties
-        # on just the right-clicked one.
-        open_act = menu.addAction("Open")
+        # on just the right-clicked one. With two or more files selected the
+        # action opens them all, so label it "Open All".
+        paths = [Path(f.data(0, _PATH_ROLE)) for f in self._iter_files()
+                 if f.isSelected()] or [Path(item.data(0, _PATH_ROLE))]
+        open_act = menu.addAction("Open All" if len(paths) >= 2 else "Open")
         props_act = menu.addAction("Properties")
         chosen = menu.exec(global_pos)
         if chosen is open_act:
-            paths = [Path(f.data(0, _PATH_ROLE)) for f in self._iter_files()
-                     if f.isSelected()] or [Path(item.data(0, _PATH_ROLE))]
             self.open_requested.emit(paths)
         elif chosen is props_act:
             self.properties_requested.emit(item.data(0, _PATH_ROLE))
