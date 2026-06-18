@@ -150,6 +150,9 @@ class SettingsDialog(QDialog):
     # Emitted while previewing with the current "dark"/"light" mode whenever it
     # changes, so non-QSS widgets (e.g. the plot) can follow the live preview.
     preview_changed = Signal(str)
+    # Emitted while previewing the Files-tab folder colour ("" == default icon),
+    # so the file list can follow the live preview.
+    folder_color_changed = Signal(str)
     # Emitted when the user resets settings to defaults, so the main view can
     # reload the Default profile.
     defaults_reset = Signal()
@@ -174,6 +177,10 @@ class SettingsDialog(QDialog):
         self._checkmark_color = normalize_accent(settings.appearance.checkmark_color)
         self._checkmark_match = settings.appearance.checkmark_match_theme
         self._orig_checkmark = settings.appearance.resolved_checkmark()
+        # Folder colour (live + revert state).
+        self._folder_color = normalize_accent(settings.appearance.folder_color)
+        self._folder_default = settings.appearance.folder_use_default
+        self._orig_folder_color = settings.appearance.resolved_folder_color()
 
         # Left nav (groups) drives the right stack (individual settings).
         self._nav = QListWidget()
@@ -498,19 +505,7 @@ class SettingsDialog(QDialog):
         self._theme.currentIndexChanged.connect(self._apply_preview)
 
         # Accent preset swatches
-        self._swatches: list[QPushButton] = []
-        grid = QGridLayout()
-        grid.setSpacing(6)
-        for i, (name, color) in enumerate(ACCENT_PRESETS):
-            btn = QPushButton()
-            btn.setToolTip(f"{name}  {color}")
-            btn.setFixedSize(30, 30)
-            btn.setProperty("accent_hex", color)
-            btn.clicked.connect(lambda _=False, c=color: self._set_accent(c))
-            self._swatches.append(btn)
-            grid.addWidget(btn, i // 4, i % 4)
-        swatch_box = QWidget()
-        swatch_box.setLayout(grid)
+        swatch_box, self._swatches = self._build_swatches(self._set_accent)
 
         # Custom hex + colour picker + live preview chip
         self._hex = QLineEdit()
@@ -553,12 +548,36 @@ class SettingsDialog(QDialog):
         cm_box = QWidget()
         cm_box.setLayout(cm_row)
 
+        # Folder colour: a "use default" toggle plus preset swatches and a custom
+        # hex + picker + preview, mirroring the accent controls.
+        self._folder_default_cb = QCheckBox("Use default colour")
+        self._folder_default_cb.toggled.connect(self._on_folder_default_toggled)
+        self._folder_hex = QLineEdit()
+        self._folder_hex.setMaxLength(7)
+        self._folder_hex.setPlaceholderText("#rrggbb")
+        self._folder_hex.setFixedWidth(110)
+        self._folder_hex.textEdited.connect(self._on_folder_hex_edited)
+        self._folder_pick = QPushButton("Pick…")
+        self._folder_pick.clicked.connect(self._on_folder_pick_color)
+        self._folder_preview = QLabel()
+        self._folder_preview.setFixedSize(30, 30)
+        folder_row = QHBoxLayout()
+        folder_row.setContentsMargins(0, 0, 0, 0)
+        folder_row.addWidget(self._folder_hex)
+        folder_row.addWidget(self._folder_pick)
+        folder_row.addWidget(self._folder_preview)
+        folder_row.addStretch(1)
+        folder_box = QWidget()
+        folder_box.setLayout(folder_row)
+
         form = QFormLayout()
         form.addRow("Theme", self._theme)
         form.addRow("Accent presets", swatch_box)
         form.addRow("Custom accent", custom_box)
         form.addRow("Checkmarks", self._cm_match)
         form.addRow("Checkmark colour", cm_box)
+        form.addRow("Folders", self._folder_default_cb)
+        form.addRow("Folder colour", folder_box)
         hint = QLabel("Changes preview instantly; click Save to keep them.")
         hint.setObjectName("hint")
         hint.setWordWrap(True)
@@ -626,6 +645,8 @@ class SettingsDialog(QDialog):
         s.appearance.accent = d.appearance.accent
         s.appearance.checkmark_color = d.appearance.checkmark_color
         s.appearance.checkmark_match_theme = d.appearance.checkmark_match_theme
+        s.appearance.folder_color = d.appearance.folder_color
+        s.appearance.folder_use_default = d.appearance.folder_use_default
         s.show_setup_on_startup = d.show_setup_on_startup
         s.save()
 
@@ -653,12 +674,16 @@ class SettingsDialog(QDialog):
         self._set_checkmark_color(d.appearance.checkmark_color)
         self._cm_match.setChecked(d.appearance.checkmark_match_theme)
         self._on_cm_match_toggled(d.appearance.checkmark_match_theme)
+        self._set_folder_color(d.appearance.folder_color)
+        self._folder_default_cb.setChecked(d.appearance.folder_use_default)
+        self._on_folder_default_toggled(d.appearance.folder_use_default)
         self._show_setup.setChecked(d.show_setup_on_startup)
 
         # The reset is committed, so a later Cancel must not revert the new theme.
         self._orig_mode = s.appearance.mode
         self._orig_accent = normalize_accent(s.appearance.accent)
         self._orig_checkmark = s.appearance.resolved_checkmark()
+        self._orig_folder_color = s.appearance.resolved_folder_color()
 
         self.defaults_reset.emit()
 
@@ -679,10 +704,29 @@ class SettingsDialog(QDialog):
         self._update_checkmark_preview()  # follows the accent when matching
         self._apply_preview()
 
-    def _refresh_swatches(self) -> None:
-        for btn in self._swatches:
+    def _build_swatches(self, on_pick):
+        """A grid of preset-colour swatch buttons; clicking one calls ``on_pick``
+        with its hex. Returns ``(widget, buttons)``."""
+        swatches: list[QPushButton] = []
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        for i, (name, color) in enumerate(ACCENT_PRESETS):
+            btn = QPushButton()
+            btn.setToolTip(f"{name}  {color}")
+            btn.setFixedSize(30, 30)
+            btn.setProperty("accent_hex", color)
+            btn.clicked.connect(lambda _=False, c=color: on_pick(c))
+            swatches.append(btn)
+            grid.addWidget(btn, i // 4, i % 4)
+        box = QWidget()
+        box.setLayout(grid)
+        return box, swatches
+
+    @staticmethod
+    def _refresh_swatch_grid(swatches: list[QPushButton], active: str) -> None:
+        for btn in swatches:
             color = btn.property("accent_hex")
-            selected = normalize_accent(color) == self._accent
+            selected = normalize_accent(color) == active
             ring = (
                 f"3px solid {contrast_color(color)}"
                 if selected
@@ -692,6 +736,9 @@ class SettingsDialog(QDialog):
                 f"background-color: {color}; border: {ring};"
                 " border-radius: 4px; padding: 0;"
             )
+
+    def _refresh_swatches(self) -> None:
+        self._refresh_swatch_grid(self._swatches, self._accent)
 
     def _on_hex_edited(self, text: str) -> None:
         h = text.lstrip("#")
@@ -742,6 +789,50 @@ class SettingsDialog(QDialog):
         )
         if chosen.isValid():
             self._set_checkmark_color(chosen.name())
+
+    # --- folder colour ---------------------------------------------------
+    def _effective_folder_color(self) -> str:
+        """The folder tint in effect: empty (default icon) when "use default" is
+        ticked, otherwise the chosen colour."""
+        return "" if self._folder_default else self._folder_color
+
+    def _update_folder_preview(self) -> None:
+        color = self._folder_color
+        self._folder_preview.setStyleSheet(
+            f"background-color: {color};"
+            f" border: 1px solid {contrast_color(color)}; border-radius: 4px;"
+        )
+
+    def _emit_folder_preview(self) -> None:
+        if self._loading:
+            return
+        self.folder_color_changed.emit(self._effective_folder_color())
+
+    def _on_folder_default_toggled(self, checked: bool) -> None:
+        self._folder_default = checked
+        # The colour controls are irrelevant while using the default icon.
+        self._folder_hex.setEnabled(not checked)
+        self._folder_pick.setEnabled(not checked)
+        self._emit_folder_preview()
+
+    def _set_folder_color(self, color: str, *, update_field: bool = True) -> None:
+        self._folder_color = normalize_accent(color)
+        if update_field:
+            self._folder_hex.setText(self._folder_color)
+        self._update_folder_preview()
+        self._emit_folder_preview()
+
+    def _on_folder_hex_edited(self, text: str) -> None:
+        h = text.lstrip("#")
+        if len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h):
+            self._set_folder_color(text, update_field=False)
+
+    def _on_folder_pick_color(self) -> None:
+        chosen = QColorDialog.getColor(
+            QColor(self._folder_color), self, "Folder colour"
+        )
+        if chosen.isValid():
+            self._set_folder_color(chosen.name())
 
     def _apply_preview(self) -> None:
         # During initial population the active stylesheet already matches; skip
@@ -833,12 +924,19 @@ class SettingsDialog(QDialog):
         self._cm_match.setChecked(s.appearance.checkmark_match_theme)
         self._on_cm_match_toggled(s.appearance.checkmark_match_theme)
 
+        # Folder colour: set the explicit colour, then the "use default" toggle.
+        self._set_folder_color(s.appearance.folder_color)
+        self._folder_default_cb.setChecked(s.appearance.folder_use_default)
+        self._on_folder_default_toggled(s.appearance.folder_use_default)
+
     def _on_accept(self) -> None:
         s = self._settings
         s.appearance.mode = self._current_mode()
         s.appearance.accent = self._accent
         s.appearance.checkmark_color = self._checkmark_color
         s.appearance.checkmark_match_theme = self._checkmark_match
+        s.appearance.folder_color = self._folder_color
+        s.appearance.folder_use_default = self._folder_default
         s.show_full_file_names = self._show_full_paths.isChecked()
         s.show_setup_on_startup = self._show_setup.isChecked()
         s.report_decimals = self._decimals.value()
@@ -887,4 +985,5 @@ class SettingsDialog(QDialog):
         if self._orig_mode != self._last_preview_mode:
             self._last_preview_mode = self._orig_mode
             self.preview_changed.emit(self._orig_mode)
+        self.folder_color_changed.emit(self._orig_folder_color)
         super().reject()

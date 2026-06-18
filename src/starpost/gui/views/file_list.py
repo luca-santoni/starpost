@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QRect, Qt, Signal
+from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -54,6 +55,20 @@ CACHE_VERSION = 2  # nested-folder cache layout (v1 was a flat list of paths)
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
+
+
+def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
+    """Recolour ``base``'s silhouette to ``color`` (keeping its alpha), e.g. to
+    tint the standard folder icon to the user's chosen folder colour."""
+    pixmap = base.pixmap(QSize(size, size))
+    tinted = QPixmap(pixmap.size())
+    tinted.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color))
+    painter.end()
+    return QIcon(tinted)
 
 
 class _NestedDashDelegate(QStyledItemDelegate):
@@ -144,14 +159,22 @@ class FileListPanel(QWidget):
     open_requested = Signal(list)  # list[Path] to extract & view (in order)
     properties_requested = Signal(object)  # a single Path to show properties for
 
-    def __init__(self, parent=None, *, show_full_names: bool = False) -> None:
+    def __init__(
+        self, parent=None, *, show_full_names: bool = False, folder_color: str = ""
+    ) -> None:
         super().__init__(parent)
         # Each file item stores its full path; the displayed text is either that
         # path or just the file name, per this flag.
         self._show_full_names = show_full_names
         # Active tab-wide sort, kept in sync with the header menu's checkmark.
         self._sort_mode = DEFAULT_SORT
-        self._folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        # Folder icon: the standard one, optionally tinted to a chosen colour
+        # ("" = leave the default icon as-is).
+        self._base_folder_icon = self.style().standardIcon(
+            QStyle.StandardPixmap.SP_DirIcon
+        )
+        self._folder_color = folder_color or ""
+        self._folder_icon = self._build_folder_icon()
 
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
@@ -246,6 +269,24 @@ class FileListPanel(QWidget):
     @staticmethod
     def _folder_sort_mode(item: QTreeWidgetItem) -> str:
         return item.data(0, _SORT_ROLE) or DEFAULT_SORT
+
+    def _build_folder_icon(self) -> QIcon:
+        """The folder icon for the active colour ("" keeps the default icon)."""
+        if not self._folder_color:
+            return self._base_folder_icon
+        return _tinted_icon(self._base_folder_icon, self._folder_color)
+
+    def set_folder_color(self, color: str) -> None:
+        """Tint every folder icon to ``color``; an empty string restores the
+        default folder icon. Mirrors the Appearance setting."""
+        color = color or ""
+        if color == self._folder_color:
+            return
+        self._folder_color = color
+        self._folder_icon = self._build_folder_icon()
+        for item in self._iter_all():
+            if _is_folder(item):
+                item.setIcon(0, self._folder_icon)
 
     def _add_paths(self, paths: list[Path]) -> None:
         """Add new .sim files at the top level, skipping any already present

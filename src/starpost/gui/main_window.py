@@ -75,7 +75,10 @@ class MainWindow(QMainWindow):
         self._worker: BatchWorker | None = None
 
         # Panels
-        self.file_list = FileListPanel(show_full_names=settings.show_full_file_names)
+        self.file_list = FileListPanel(
+            show_full_names=settings.show_full_file_names,
+            folder_color=settings.appearance.resolved_folder_color(),
+        )
         self.data_list = DataListPanel()
         self.selection = SelectionPanel()
         self.report_table = ReportTable(
@@ -746,6 +749,8 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.settings, self)
         # Live-preview the light/dark switch on the plot too (Cancel reverts it).
         dlg.preview_changed.connect(self.plot_view.apply_theme)
+        # Live-preview the folder colour on the Files tab (Cancel reverts it).
+        dlg.folder_color_changed.connect(self.file_list.set_folder_color)
         # Resetting settings is applied + saved immediately (independent of
         # Save/Cancel): push it to the views and reload the Default profile.
         dlg.defaults_reset.connect(self._on_settings_reset)
@@ -761,6 +766,7 @@ class MainWindow(QMainWindow):
         """Push the current settings onto every view that mirrors them. Used when
         the Settings dialog is saved and when settings are reset to defaults."""
         self.file_list.set_show_full_names(self.settings.show_full_file_names)
+        self.file_list.set_folder_color(self.settings.appearance.resolved_folder_color())
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
         self.plot_view.set_filter(

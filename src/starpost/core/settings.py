@@ -28,11 +28,18 @@ class AppearanceConfig:
     accent: str = "#ffc829"     # hex accent colour applied program-wide
     checkmark_color: str = "#ffc829"     # hex colour of checkmarks program-wide
     checkmark_match_theme: bool = True   # force checkmark colour to the accent
+    folder_color: str = "#ffc829"        # hex tint for Files-tab folder icons
+    folder_use_default: bool = True      # keep the standard (untinted) folder icon
 
     def resolved_checkmark(self) -> str:
         """The checkmark colour actually used: the accent when matching the
         theme, otherwise the explicit checkmark colour."""
         return self.accent if self.checkmark_match_theme else self.checkmark_color
+
+    def resolved_folder_color(self) -> str:
+        """The folder tint in effect: empty (the standard folder icon) when
+        using the default, otherwise the chosen colour."""
+        return "" if self.folder_use_default else self.folder_color
 
 
 @dataclass
@@ -116,6 +123,8 @@ class Settings:
                 checkmark_match_theme=bool(
                     appe.get("checkmark_match_theme", True)
                 ),
+                folder_color=appe.get("folder_color", "#ffc829"),
+                folder_use_default=bool(appe.get("folder_use_default", True)),
             ),
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
@@ -152,6 +161,8 @@ class Settings:
                 "accent": self.appearance.accent,
                 "checkmark_color": self.appearance.checkmark_color,
                 "checkmark_match_theme": self.appearance.checkmark_match_theme,
+                "folder_color": self.appearance.folder_color,
+                "folder_use_default": self.appearance.folder_use_default,
             },
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,
