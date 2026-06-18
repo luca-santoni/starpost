@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from starpost import __version__
 from starpost.core.settings import (
     DEFAULT_PROFILE_NAME,
     LicenseConfig,
@@ -54,6 +55,7 @@ from starpost.core.settings import (
     list_profiles,
 )
 from starpost.core.starccm_runner import exe_dialog_filter, exe_placeholder
+from starpost.gui.icons import logo_pixmap
 from starpost.gui.theme import (
     ACCENT_PRESETS,
     apply_theme,
@@ -196,6 +198,7 @@ class SettingsDialog(QDialog):
         self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Appearance", self._build_appearance_page())
         self._add_page("Misc", self._build_misc_page())
+        self._add_page("About", self._build_about_page())
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
@@ -608,6 +611,42 @@ class SettingsDialog(QDialog):
         reset_hint.setObjectName("hint")
         reset_hint.setWordWrap(True)
         form.addRow("", reset_hint)
+        return self._wrap(form)
+
+    def _build_about_page(self) -> QWidget:
+        logo = QLabel()
+        logo.setPixmap(
+            logo_pixmap().scaledToHeight(96, Qt.TransformationMode.SmoothTransformation)
+        )
+
+        about = QLabel(
+            "StarPost is a standalone desktop tool to automate STAR-CCM+ "
+            "post-processing. It extracts report values and monitor plots for "
+            "comparison and exports them for spreadsheet manipulation."
+        )
+        about.setWordWrap(True)
+
+        author = QLabel("Made by Luca Santoni.")
+        author.setWordWrap(True)
+
+        repo = QLabel(
+            '<a href="https://github.com/luca-santoni/starpost">'
+            "github.com/luca-santoni/starpost</a>"
+        )
+        repo.setOpenExternalLinks(True)
+        repo.setTextFormat(Qt.TextFormat.RichText)
+
+        version = QLabel(f"Version {__version__}")
+        version.setObjectName("hint")
+
+        form = QFormLayout()
+        # Roomier gap between each block of text on this (sparse) page.
+        form.setVerticalSpacing(18)
+        form.addRow(logo)
+        form.addRow(about)
+        form.addRow(author)
+        form.addRow("GitHub", repo)
+        form.addRow(version)
         return self._wrap(form)
 
     def _reset_settings(self) -> None:
