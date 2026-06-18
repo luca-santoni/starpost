@@ -144,17 +144,62 @@ spec automatically uses the Windows `.ico` for the executable icon. The folder
 is **portable as-is** — it can be zipped and shipped, and runs without
 installing Python.
 
-### Optional: wrap it in an installer
+### Installer: Inno Setup `Setup.exe`
 
-The repository does not ship an installer script; the portable folder is the
-baseline artifact. To produce a single `Setup.exe` or `.msi`, wrap
-`dist\starpost\` with a standard Windows installer tool:
+The portable folder is the baseline artifact, but the repository now ships an
+**Inno Setup** script — [`packaging/starpost.iss`](../packaging/starpost.iss) —
+that wraps `dist\starpost\` into a single `Setup.exe`.
 
-- **Inno Setup** — point the installer at `dist\starpost\*`, set the entry
-  `starpost.exe`, and add Start-menu / desktop shortcuts, producing a
-  `Setup.exe`.
-- **WiX Toolset** — author an `.msi` from the same `dist\starpost\` contents for
-  managed/MSI-based deployment.
+#### Prerequisite
+
+[Inno Setup 6](https://jrsoftware.org/isdl.php) on the build machine (provides
+the `ISCC.exe` command-line compiler). Install it once, e.g.:
+
+```powershell
+winget install JRSoftware.InnoSetup
+```
+
+A user-scope winget install places the compiler at
+`%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`; a machine-wide install puts it
+under `%ProgramFiles(x86)%\Inno Setup 6\`. `ISCC.exe` is not added to `PATH` by
+default, so call it by full path (or add it to `PATH` yourself).
+
+#### Build it
+
+After the PyInstaller bundle exists (`dist\starpost\`), from the repo root:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.1.0 packaging\starpost.iss
+```
+
+The result is `dist\StarPost-<version>-Setup.exe` (LZMA-compressed; the ~215 MB
+bundle compresses to ~68 MB). **The installer must be named
+`StarPost-<version>-Setup.exe`** (e.g. `StarPost-1.1.0-Setup.exe`); this is
+produced automatically by the `OutputBaseFilename` in
+[`starpost.iss`](../packaging/starpost.iss), so keep that setting in the format
+`StarPost-{#MyAppVersion}-Setup`. Running it installs per-machine into
+`C:\Program Files\StarPost` (requires elevation / UAC), shows the `LICENSE`,
+creates a Start-menu shortcut (plus an optional, unchecked desktop shortcut),
+registers an uninstaller in *Add/Remove Programs*, and offers to launch the app.
+
+The version defaults to `1.1.0` inside the script but **should be passed on the
+command line** (`/DMyAppVersion=<version>`) to match `version` in
+[`pyproject.toml`](../pyproject.toml). The script's `AppId` GUID is fixed — do
+not change it, or upgrades and uninstall will break for existing installs.
+
+#### Code signing
+
+`starpost.exe` and the generated `Setup.exe` are **unsigned**, so Windows
+SmartScreen / UAC shows an "unknown publisher" warning on first run. To remove
+it, sign both with a code-signing certificate (e.g. `signtool sign /fd SHA256`)
+— sign `dist\starpost\starpost.exe` *before* compiling the installer, then sign
+the resulting `Setup.exe`.
+
+#### Alternative: WiX `.msi`
+
+For managed/MSI-based deployment (Group Policy, Intune), author an `.msi` from
+the same `dist\starpost\` contents with the **WiX Toolset**. The repository does
+not ship a WiX project.
 
 ---
 
@@ -163,8 +208,11 @@ baseline artifact. To produce a single `Setup.exe` or `.msi`, wrap
 1. Bump `version` in [`pyproject.toml`](../pyproject.toml) (the AppImage name and
    any installer metadata derive from it).
 2. On **Linux**: run `packaging/build_appimage.sh` → `StarPost-<version>-<arch>.AppImage`.
-3. On **Windows**: run `pyinstaller packaging\starpost.spec`, then zip
-   `dist\starpost\` (or build a `Setup.exe`).
+3. On **Windows**: run `pyinstaller packaging\starpost.spec`, then build the
+   installer with
+   `ISCC.exe /DMyAppVersion=<version> packaging\starpost.iss` →
+   `dist\StarPost-<version>-Setup.exe` (or just zip `dist\starpost\` for the
+   portable build). Pass the same `<version>` as in `pyproject.toml`.
 4. Smoke-test each artifact on a clean machine (the AppImage on an older distro;
    the Windows build on a machine without Python).
 5. Publish both to the GitHub **Releases** page so the
