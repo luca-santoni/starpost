@@ -29,7 +29,7 @@ On the **build machine**:
   environment.)
 
 The version number stamped onto releases comes from `version` in
-[`pyproject.toml`](../pyproject.toml) (currently `0.1.0`).
+[`pyproject.toml`](../pyproject.toml).
 
 ---
 
@@ -79,7 +79,7 @@ user's machine**.
 
 ```bash
 pip install -e ".[dev]"          # build host needs the deps + PyInstaller
-packaging/build_appimage.sh      # → StarPost-0.1.0-x86_64.AppImage
+packaging/build_appimage.sh      # → StarPost-<version>-x86_64.AppImage
 ```
 
 Build for a non-host architecture by setting `ARCH`:
