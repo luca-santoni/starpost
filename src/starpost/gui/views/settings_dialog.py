@@ -192,12 +192,12 @@ class SettingsDialog(QDialog):
 
         self._add_page("STAR-CCM+", self._build_starccm_page())
         self._add_page("License", self._build_license_page())
+        self._add_page("Appearance", self._build_appearance_page())
         self._add_page("Files", self._build_files_page())
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
         self._add_page("Export", self._build_export_page())
         self._add_page("Profiles", self._build_profiles_page())
-        self._add_page("Appearance", self._build_appearance_page())
         self._add_page("Misc", self._build_misc_page())
         self._add_page("About", self._build_about_page())
 
@@ -304,7 +304,7 @@ class SettingsDialog(QDialog):
         return super().eventFilter(obj, event)
 
     def _build_files_page(self) -> QWidget:
-        self._show_full_paths = QCheckBox("Show full file names")
+        self._show_full_paths = QCheckBox("Show file path")
 
         form = QFormLayout()
         form.addRow("", self._show_full_paths)
@@ -410,7 +410,7 @@ class SettingsDialog(QDialog):
         form.addRow("Hover X decimals", self._hover_x_decimals)
         form.addRow("Hover Y decimals", self._hover_y_decimals)
         dec_hint = QLabel(
-            "Decimal places shown for the X and Y coordinates in the hover label."
+            "Decimal places shown for X and Y coordinates when hovering over a monitor."
         )
         dec_hint.setObjectName("hint")
         dec_hint.setWordWrap(True)
@@ -448,40 +448,30 @@ class SettingsDialog(QDialog):
         self._export_plot_theme.addItem("Dark", "dark")
 
         form = QFormLayout()
-        form.addRow("Report format", self._export_report_format)
+        form.addRow("Default report format", self._export_report_format)
         rep_hint = QLabel("Default file format for exported report tables.")
         rep_hint.setObjectName("hint")
         rep_hint.setWordWrap(True)
         form.addRow("", rep_hint)
-        form.addRow("Plot format", self._export_plot_format)
+        form.addRow("Default plot format", self._export_plot_format)
         plot_hint = QLabel("Default image format for exported plots.")
         plot_hint.setObjectName("hint")
         plot_hint.setWordWrap(True)
         form.addRow("", plot_hint)
-        form.addRow("Plot theme", self._export_plot_theme)
+        form.addRow("Default plot theme", self._export_plot_theme)
         theme_hint = QLabel(
             "Default light/dark theme the plot is rendered with when exported."
         )
         theme_hint.setObjectName("hint")
         theme_hint.setWordWrap(True)
         form.addRow("", theme_hint)
-        hint = QLabel(
-            "These only pre-fill the Export dialog; you can still change them for "
-            "an individual export."
-        )
-        hint.setObjectName("hint")
-        hint.setWordWrap(True)
-        form.addRow("", hint)
         return self._wrap(form)
 
     def _build_profiles_page(self) -> QWidget:
         # A header row plus one row per saved profile, rebuilt on delete.
         page = QWidget()
         outer = QVBoxLayout(page)
-        intro = QLabel(
-            "Selection profiles. Deleting one removes it permanently; the "
-            "built-in Default can't be deleted."
-        )
+        intro = QLabel("Deleting a profile removes it permanently")
         intro.setObjectName("hint")
         intro.setWordWrap(True)
         outer.addWidget(intro)
