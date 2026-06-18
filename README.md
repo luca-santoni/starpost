@@ -67,35 +67,33 @@ A licensed STAR-CCM+ installation must be present on the machine.
 
 ## Installation
 
-StarPost is a Python application; install it into a virtual environment.
+The recommended way to get StarPost is to **download the latest release** for
+your platform from the GitHub
+**[Releases page](https://github.com/luca-santoni/starpost/releases/latest)**.
+These are standalone builds — no Python or separate dependency install required.
 
-### Linux
+- **Linux** — download the `StarPost-<version>-<arch>.AppImage`, make it
+  executable, and run it:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"      # or: pip install -r requirements.txt
-python scripts/dev_run.py    # launch the GUI
-```
+  ```bash
+  chmod +x StarPost-*.AppImage
+  ./StarPost-*.AppImage
+  ```
 
-If `python3 -m venv` fails, install your distro's venv package first
-(e.g. `sudo apt install python3-venv` on Debian/Ubuntu).
+- **Windows** — download the Windows build from the same page and run
+  `starpost.exe`.
 
-### Windows
+A licensed STAR-CCM+ installation is still required to extract data from `.sim`
+files (see [Requirements](#requirements)); the app otherwise opens and is fully
+navigable on its own.
 
-Using PowerShell or Command Prompt, with Python 3.11+ from python.org installed
-(tick *Add Python to PATH* in the installer):
+### Run from the repository
 
-```powershell
-py -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"      REM or: pip install -r requirements.txt
-python scripts\dev_run.py    REM launch the GUI
-```
-
-The same dependencies (PySide6, pyqtgraph, matplotlib, pandas, …) install on
-both platforms. Per-OS config/cache locations are handled automatically via
-`platformdirs` (see [Configuration](#configuration)).
+You can also install and run StarPost directly from a clone or download of this
+repository as a Python script — recommended for development. See
+**[`docs/dev_install.md`](docs/dev_install.md)** for the full step-by-step
+instructions: setting up a virtual environment, installing the dependencies, and
+launching the GUI.
 
 ## Configuration
 
@@ -122,52 +120,6 @@ plot, and axis overrides) live alongside the settings file in `profiles/*.yaml`
 cache and logs live under the per-OS cache dir (Linux `~/.cache/starpost/`,
 Windows `%LOCALAPPDATA%\starpost\`).
 
-## Packaging
-
-PyInstaller does **not** cross-compile — build each platform's artifact on that
-platform.
-
-### Standalone bundle (Linux & Windows)
-
-```bash
-pip install -e ".[dev]"
-pyinstaller packaging/starpost.spec
-```
-
-Output lands in `dist/starpost/` — a folder containing the `starpost` executable
-(`starpost.exe` on Windows; the spec selects the Windows `.ico` automatically).
-
-### Linux: AppImage
-
-[`packaging/build_appimage.sh`](packaging/build_appimage.sh) wraps the
-PyInstaller bundle into a single portable `StarPost-<version>-<arch>.AppImage`
-that runs on most Linux distributions with **no install and no Python required
-on the user's machine** (the interpreter and all dependencies are bundled):
-
-```bash
-pip install -e ".[dev]"          # build host needs the deps + PyInstaller
-packaging/build_appimage.sh      # → StarPost-0.1.0-x86_64.AppImage
-```
-
-The script runs PyInstaller, assembles the AppDir (using
-[`packaging/AppRun`](packaging/AppRun) and
-[`packaging/starpost.desktop`](packaging/starpost.desktop) plus the app icon),
-and downloads `appimagetool` to pack it. Notes:
-
-- **Build on the oldest glibc you must support.** glibc is forward- but not
-  backward-compatible, so an AppImage built on a new distro may not start on
-  older ones. Building in an old container (e.g. an older Ubuntu LTS) gives the
-  widest reach.
-- The end user just runs `chmod +x StarPost-*.AppImage && ./StarPost-*.AppImage`.
-- Requires `curl` (to fetch appimagetool) and an internet connection on the
-  build host; FUSE is not required (the script uses
-  `--appimage-extract-and-run`).
-
-### Windows: installer
-
-See the project notes for wrapping `dist/starpost/` into a `Setup.exe` with
-Inno Setup (or an `.msi` with WiX). The bundle itself is portable as-is.
-
 ## Usage at a glance
 
 1. On first run, the **setup wizard** prompts for the STAR-CCM+ executable path,
@@ -185,9 +137,13 @@ happens once and is cached.
 
 ## Documentation
 
-See [`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md) for the full reference:
-every menu, panel, and dialog; the data flow and architecture; and the program's
-limitations.
+- [`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md) — the full reference:
+  every menu, panel, and dialog; the data flow and architecture; and the
+  program's limitations.
+- [`docs/dev_install.md`](docs/dev_install.md) — running StarPost from a source
+  checkout as a Python script.
+- [`docs/packaging.md`](docs/packaging.md) — building release artifacts (the
+  Linux AppImage and the Windows bundle).
 
 ## Status
 
