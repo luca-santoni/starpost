@@ -1,11 +1,41 @@
 # StarPost
 
-Standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
+StarPost is a standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 **report values** and **monitor plots** (residuals, forces vs. iteration) from
 solved `.sim` files, lets you view and compare them, and exports tables to
 **CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**.
 
 Runs on **Linux and Windows**.
+
+## Installation
+
+The recommended way to get StarPost is to **download the latest release** for
+your platform from the GitHub
+**[Releases page](https://github.com/luca-santoni/starpost/releases/latest)**.
+These are standalone builds — no Python or separate dependency install required.
+
+- **Linux** — download the `StarPost-<version>-<arch>.AppImage`, make it
+  executable, and run it:
+
+  ```bash
+  chmod +x StarPost-*.AppImage
+  ./StarPost-*.AppImage
+  ```
+
+- **Windows** — download the Windows build from the same page and run
+  `starpost.exe`.
+
+A licensed STAR-CCM+ installation is still required to extract data from `.sim`
+files (see [Requirements](#requirements)); the app otherwise opens and is fully
+navigable on its own.
+
+### Run from the repository
+
+You can also install and run StarPost directly from a clone or download of this
+repository as a Python script — recommended for development. See
+**[`docs/dev_install.md`](docs/dev_install.md)** for the full step-by-step
+instructions: setting up a virtual environment, installing the dependencies, and
+launching the GUI.
 
 ## How it works
 
@@ -65,36 +95,6 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - Python dependencies: see [`requirements.txt`](requirements.txt) /
   [`pyproject.toml`](pyproject.toml).
 
-## Installation
-
-The recommended way to get StarPost is to **download the latest release** for
-your platform from the GitHub
-**[Releases page](https://github.com/luca-santoni/starpost/releases/latest)**.
-These are standalone builds — no Python or separate dependency install required.
-
-- **Linux** — download the `StarPost-<version>-<arch>.AppImage`, make it
-  executable, and run it:
-
-  ```bash
-  chmod +x StarPost-*.AppImage
-  ./StarPost-*.AppImage
-  ```
-
-- **Windows** — download the Windows build from the same page and run
-  `starpost.exe`.
-
-A licensed STAR-CCM+ installation is still required to extract data from `.sim`
-files (see [Requirements](#requirements)); the app otherwise opens and is fully
-navigable on its own.
-
-### Run from the repository
-
-You can also install and run StarPost directly from a clone or download of this
-repository as a Python script — recommended for development. See
-**[`docs/dev_install.md`](docs/dev_install.md)** for the full step-by-step
-instructions: setting up a virtual environment, installing the dependencies, and
-launching the GUI.
-
 ## Configuration
 
 Most settings are editable in-app via **Settings** (paged dialog), or directly
@@ -144,11 +144,3 @@ happens once and is cached.
   checkout as a Python script.
 - [`docs/packaging.md`](docs/packaging.md) — building release artifacts (the
   Linux AppImage and the Windows bundle).
-
-## Status
-
-v1. Core extraction/parsing, the Files/Data workspace, the interactive plot
-viewer, the full in-app settings dialog, and report/plot **export** are
-implemented. Runs on Linux and Windows. The Java extraction macro has not yet
-been validated against a live, licensed STAR-CCM+ install (see the overview doc's
-limitations).
