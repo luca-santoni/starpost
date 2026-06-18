@@ -613,7 +613,7 @@ starpost/                           (repo; app/package = "starpost")
 │   └── default_settings.yaml       Shipped defaults; copied to user config on first run
 │
 ├── docs/
-│   └── PROGRAM_OVERVIEW.md          This document
+│   └── StarPost_Documentation.md    This document
 │
 ├── packaging/
 │   └── starpost.spec               Cross-platform PyInstaller spec (per-OS icon)

@@ -137,7 +137,7 @@ happens once and is cached.
 
 ## Documentation
 
-- [`docs/PROGRAM_OVERVIEW.md`](docs/PROGRAM_OVERVIEW.md) — the full reference:
+- [`docs/StarPost_Documentation.md`](docs/StarPost_Documentation.md) — the full reference:
   every menu, panel, and dialog; the data flow and architecture; and the
   program's limitations.
 - [`docs/dev_install.md`](docs/dev_install.md) — running StarPost from a source
