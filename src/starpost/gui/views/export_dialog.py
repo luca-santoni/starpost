@@ -468,7 +468,8 @@ class ExportDialog(QDialog):
             s.hover_show_monitor_name, s.hover_x_decimals, s.hover_y_decimals
         )
         self._preview.set_region_stats(s.region_stats)
-        self._preview.apply_theme(s.appearance.mode)
+        # Theme the preview to the Export default so it matches the Theme combo.
+        self._preview.apply_theme(s.export_plot_theme)
 
     def _on_tab_changed(self, _index) -> None:
         """Open the preview window beside the Plots tab; hide it otherwise."""
@@ -553,11 +554,15 @@ class ExportDialog(QDialog):
         self._plot_ylabel.textChanged.connect(
             lambda t: self._preview.set_y_label_override(t)
         )
-        # Theme defaults to the program's current theme (the preview is already
-        # themed to match); changing it re-themes the preview.
+        # Theme defaults to the Export setting (falling back to the program's
+        # current theme); changing it re-themes the preview.
         self._plot_theme = QComboBox()
         self._plot_theme.addItems(["Light", "Dark"])
-        mode = self._settings.appearance.mode if self._settings else "dark"
+        mode = (
+            self._settings.export_plot_theme
+            if self._settings
+            else "dark"
+        )
         self._plot_theme.setCurrentText(mode.capitalize())
         self._plot_theme.currentTextChanged.connect(
             lambda t: self._preview.apply_theme(t.lower())
@@ -565,6 +570,8 @@ class ExportDialog(QDialog):
         # Output image format for the rendered plot (wired to plot export later).
         self._plot_format = QComboBox()
         self._plot_format.addItems(["PNG", "JPG", "TIFF", "PDF"])
+        if self._settings is not None:
+            self._select_combo(self._plot_format, self._settings.export_plot_format)
 
         form = QFormLayout(box)
         form.addRow("Aspect ratio", self._plot_aspect)
@@ -752,6 +759,8 @@ class ExportDialog(QDialog):
         """Options column: output file format and a couple of toggles."""
         self._format = QComboBox()
         self._format.addItems(["CSV", "TSV", "XLSX", "ODS"])
+        if self._settings is not None:
+            self._select_combo(self._format, self._settings.export_report_format)
 
         self._include_units = QCheckBox("Include units")
         self._include_units.setChecked(True)
@@ -771,6 +780,13 @@ class ExportDialog(QDialog):
         """Grey out "Separate files" unless at least two data sets are selected —
         with fewer there is nothing to split apart."""
         self._separate_files.setEnabled(len(self.checked_data_names()) >= 2)
+
+    @staticmethod
+    def _select_combo(combo: QComboBox, text: str) -> None:
+        """Select the item matching ``text`` (case-insensitively), if present."""
+        idx = combo.findText(text, Qt.MatchFlag.MatchFixedString)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
 
     @staticmethod
     def _checklist(names: list[str], checked: set[str]) -> _CheckList:

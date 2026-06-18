@@ -91,6 +91,12 @@ class Settings:
     # Show the first-run welcome/setup wizard on startup. Defaults on so new
     # users see it; cleared once they opt out (in the wizard or Misc settings).
     show_setup_on_startup: bool = True
+    # Default selections for the Export dialog (the user can still change them
+    # per-export). Formats are the dialog's display strings; the plot theme is a
+    # "dark"/"light" mode like appearance.mode.
+    export_report_format: str = "CSV"   # CSV | TSV | XLSX | ODS
+    export_plot_format: str = "PNG"     # PNG | JPG | TIFF | PDF
+    export_plot_theme: str = "dark"     # "dark" | "light"
 
     # --- persistence -----------------------------------------------------
     @classmethod
@@ -145,6 +151,9 @@ class Settings:
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
             show_setup_on_startup=bool(d.get("show_setup_on_startup", True)),
+            export_report_format=str(d.get("export_report_format", "CSV")),
+            export_plot_format=str(d.get("export_plot_format", "PNG")),
+            export_plot_theme=str(d.get("export_plot_theme", "dark")),
         )
 
     def to_dict(self) -> dict:
@@ -178,6 +187,9 @@ class Settings:
             "region_stats": self.region_stats,
             "plot_classification": self.plot_classification,
             "show_setup_on_startup": self.show_setup_on_startup,
+            "export_report_format": self.export_report_format,
+            "export_plot_format": self.export_plot_format,
+            "export_plot_theme": self.export_plot_theme,
         }
 
     def save(self) -> None:

@@ -68,3 +68,10 @@ region_stats: [Avg, Std Dev, Range]
 plot_classification:
   residual_keywords: [residual, residuals]
   force_keywords: [force, drag, lift, moment, "cd", "cl"]
+
+# Default selections used by the Export dialog. These only pre-fill the dialog's
+# controls; the format/theme can still be changed per export. Editable in-app
+# via Settings -> Export.
+export_report_format: CSV    # report table format: CSV | TSV | XLSX | ODS
+export_plot_format: PNG      # plot image format:   PNG | JPG | TIFF | PDF
+export_plot_theme: dark      # plot export theme:   "dark" | "light"

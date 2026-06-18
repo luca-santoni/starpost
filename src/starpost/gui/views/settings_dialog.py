@@ -195,6 +195,7 @@ class SettingsDialog(QDialog):
         self._add_page("Files", self._build_files_page())
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
+        self._add_page("Export", self._build_export_page())
         self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Appearance", self._build_appearance_page())
         self._add_page("Misc", self._build_misc_page())
@@ -433,6 +434,46 @@ class SettingsDialog(QDialog):
         form.addRow("", hint)
         return self._wrap(form)
 
+    def _build_export_page(self) -> QWidget:
+        # Defaults that pre-fill the Export dialog's controls. Choices mirror the
+        # dialog's own combos (see ExportDialog._build_options / _build_plot_options).
+        self._export_report_format = QComboBox()
+        self._export_report_format.addItems(["CSV", "TSV", "XLSX", "ODS"])
+
+        self._export_plot_format = QComboBox()
+        self._export_plot_format.addItems(["PNG", "JPG", "TIFF", "PDF"])
+
+        self._export_plot_theme = QComboBox()
+        self._export_plot_theme.addItem("Light", "light")
+        self._export_plot_theme.addItem("Dark", "dark")
+
+        form = QFormLayout()
+        form.addRow("Report format", self._export_report_format)
+        rep_hint = QLabel("Default file format for exported report tables.")
+        rep_hint.setObjectName("hint")
+        rep_hint.setWordWrap(True)
+        form.addRow("", rep_hint)
+        form.addRow("Plot format", self._export_plot_format)
+        plot_hint = QLabel("Default image format for exported plots.")
+        plot_hint.setObjectName("hint")
+        plot_hint.setWordWrap(True)
+        form.addRow("", plot_hint)
+        form.addRow("Plot theme", self._export_plot_theme)
+        theme_hint = QLabel(
+            "Default light/dark theme the plot is rendered with when exported."
+        )
+        theme_hint.setObjectName("hint")
+        theme_hint.setWordWrap(True)
+        form.addRow("", theme_hint)
+        hint = QLabel(
+            "These only pre-fill the Export dialog; you can still change them for "
+            "an individual export."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+        return self._wrap(form)
+
     def _build_profiles_page(self) -> QWidget:
         # A header row plus one row per saved profile, rebuilt on delete.
         page = QWidget()
@@ -604,9 +645,9 @@ class SettingsDialog(QDialog):
         reset.clicked.connect(self._reset_settings)
         form.addRow("", reset)
         reset_hint = QLabel(
-            "Restore Files, Reports, Plots, Appearance and Misc settings to their "
-            "defaults and reload the Default profile. STAR-CCM+, License and saved "
-            "Profiles are left unchanged. Takes effect immediately."
+            "Restore Files, Reports, Plots, Export, Appearance and Misc settings to "
+            "their defaults and reload the Default profile. STAR-CCM+, License and "
+            "saved Profiles are left unchanged. Takes effect immediately."
         )
         reset_hint.setObjectName("hint")
         reset_hint.setWordWrap(True)
@@ -656,9 +697,9 @@ class SettingsDialog(QDialog):
         deferred to Save), so it stands even if the dialog is then cancelled."""
         if QMessageBox.warning(
             self, "Reset settings",
-            "Reset Files, Reports, Plots, Appearance and Misc settings to their "
-            "defaults now? This takes effect immediately and cannot be undone. "
-            "STAR-CCM+, License and saved profiles are left unchanged.",
+            "Reset Files, Reports, Plots, Export, Appearance and Misc settings to "
+            "their defaults now? This takes effect immediately and cannot be "
+            "undone. STAR-CCM+, License and saved profiles are left unchanged.",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         ) != QMessageBox.Yes:
             return
@@ -687,6 +728,9 @@ class SettingsDialog(QDialog):
         s.appearance.folder_color = d.appearance.folder_color
         s.appearance.folder_use_default = d.appearance.folder_use_default
         s.show_setup_on_startup = d.show_setup_on_startup
+        s.export_report_format = d.export_report_format
+        s.export_plot_format = d.export_plot_format
+        s.export_plot_theme = d.export_plot_theme
         s.save()
 
         # Mirror the reset into the form; the appearance setters live-preview it.
@@ -717,6 +761,16 @@ class SettingsDialog(QDialog):
         self._folder_default_cb.setChecked(d.appearance.folder_use_default)
         self._on_folder_default_toggled(d.appearance.folder_use_default)
         self._show_setup.setChecked(d.show_setup_on_startup)
+        ri = self._export_report_format.findText(
+            d.export_report_format, Qt.MatchFlag.MatchFixedString
+        )
+        self._export_report_format.setCurrentIndex(ri if ri >= 0 else 0)
+        pi = self._export_plot_format.findText(
+            d.export_plot_format, Qt.MatchFlag.MatchFixedString
+        )
+        self._export_plot_format.setCurrentIndex(pi if pi >= 0 else 0)
+        ti = self._export_plot_theme.findData(d.export_plot_theme)
+        self._export_plot_theme.setCurrentIndex(ti if ti >= 0 else 0)
 
         # The reset is committed, so a later Cancel must not revert the new theme.
         self._orig_mode = s.appearance.mode
@@ -953,6 +1007,19 @@ class SettingsDialog(QDialog):
         self._residual.setText(", ".join(pc.get("residual_keywords", [])))
         self._force.setText(", ".join(pc.get("force_keywords", [])))
 
+        # Export defaults: formats match by display text; the theme combo carries
+        # the "light"/"dark" mode as item data.
+        ri = self._export_report_format.findText(
+            s.export_report_format, Qt.MatchFlag.MatchFixedString
+        )
+        self._export_report_format.setCurrentIndex(ri if ri >= 0 else 0)
+        pi = self._export_plot_format.findText(
+            s.export_plot_format, Qt.MatchFlag.MatchFixedString
+        )
+        self._export_plot_format.setCurrentIndex(pi if pi >= 0 else 0)
+        ti = self._export_plot_theme.findData(s.export_plot_theme)
+        self._export_plot_theme.setCurrentIndex(ti if ti >= 0 else 0)
+
         idx = self._theme.findData(s.appearance.mode)
         self._theme.setCurrentIndex(idx if idx >= 0 else 0)
         self._set_accent(s.appearance.accent)
@@ -1010,6 +1077,9 @@ class SettingsDialog(QDialog):
             "residual_keywords": _csv(self._residual.text()),
             "force_keywords": _csv(self._force.text()),
         }
+        s.export_report_format = self._export_report_format.currentText()
+        s.export_plot_format = self._export_plot_format.currentText()
+        s.export_plot_theme = self._export_plot_theme.currentData()
         s.save()
         self.accept()
 
