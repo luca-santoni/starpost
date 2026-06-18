@@ -17,8 +17,10 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
     QSplitter,
     QStyle,
     QTabWidget,
@@ -27,6 +29,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from starpost import __version__
 from starpost.batch.job import Job
 from starpost.batch.queue import BatchWorker
 from starpost.core.settings import Settings
@@ -184,6 +187,18 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction("Export…", self._export)
         tb.addAction("Settings…", self._open_settings)
+
+        # An expanding spacer pushes the version label to the toolbar's far right.
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
+        # Grayed-out version, tied to the single version source used by the
+        # About settings tab so both always agree. A faint, theme-neutral gray
+        # (mid-gray with low alpha reads as muted on both light and dark).
+        version_label = QLabel(f"StarPost v{__version__}")
+        version_label.setContentsMargins(0, 0, 8, 0)
+        version_label.setStyleSheet("color: rgba(127, 127, 127, 0.55);")
+        tb.addWidget(version_label)
 
     # --- batch run -------------------------------------------------------
     def _busy(self) -> bool:
