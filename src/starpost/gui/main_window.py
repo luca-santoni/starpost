@@ -107,6 +107,12 @@ class MainWindow(QMainWindow):
         self.selection.set_region_stats_provider(
             self.plot_view.region_stats, self._apply_region_stats
         )
+        # Let the panel's monitor swatches reflect/edit the plot's line colours.
+        self.selection.set_plot_color_provider(
+            lambda: sorted(r.sim_name for r in self._active_results()),
+            self._plot_color_getter,
+            self._plot_color_setter,
+        )
         self.log_console = LogConsole()
 
         self._build_layout()
@@ -552,9 +558,26 @@ class MainWindow(QMainWindow):
         selected = self.selection.selected_plots()
         return [p for p in plot_union if p in selected]
 
+    def _plot_color_getter(self, sim, name: str):
+        """The colour a monitor's line is drawn in: per data set in comparison
+        mode (``sim`` given), or the single series colour (``sim`` None)."""
+        if sim is None:
+            return self.plot_view.series_color(name)
+        return self.plot_view.pair_color(sim, name)
+
+    def _plot_color_setter(self, sim, name: str, color: str) -> None:
+        """Recolour a monitor's line (redraw happens inside the plot view)."""
+        if sim is None:
+            self.plot_view.set_series_color(name, color)
+        else:
+            self.plot_view.set_pair_color(sim, name, color)
+
     def _refresh_views(self) -> None:
         self._render_reports()
         self._render_plot()
+        # The plot just (re)drew, so sync the panel's monitor colour swatches to
+        # the colours actually used (and to the current data-set count).
+        self.selection.refresh_monitor_swatches()
 
     def _render_reports(self) -> None:
         from starpost.batch.aggregator import reports_wide_frame

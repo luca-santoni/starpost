@@ -383,6 +383,11 @@ together.
   **unticked** so you pick deliberately.
 - **Select all** ticks every group and monitor; **Clear** unticks all.
   **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
+- A checked monitor shows a **colour swatch** to the left of its name; **clicking
+  the swatch** opens a colour menu (palette colours + **Custom…**) that recolours
+  that monitor's line in the plot. When **two or more data sets** are plotted,
+  each monitor shows **one swatch per data set** (left to right), so every line
+  can be recoloured individually — the same as the export menu's Monitors column.
 
 ### 3.8 Log console
 
