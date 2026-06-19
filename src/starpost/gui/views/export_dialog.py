@@ -175,11 +175,18 @@ class ExportDialog(QDialog):
         checked_monitors: dict[str, list[str]] | None = None,
         results=None,
         settings=None,
+        series_colors: dict[str, str] | None = None,
+        pair_colors: dict[tuple[str, str], str] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Export")
         self.resize(660, 460)
+
+        # Colour overrides mirrored from the main window's plot, so the preview
+        # opens with the same line colours the user chose there.
+        self._seed_series_colors = dict(series_colors or {})
+        self._seed_pair_colors = dict(pair_colors or {})
 
         # Kept for the export wiring that will live inside the tabs.
         self._default_dir = default_dir
@@ -497,6 +504,11 @@ class ExportDialog(QDialog):
         # The Monitors list in this dialog drives which series are shown, so the
         # plot's own per-category dropdowns are hidden on the preview.
         self._preview.set_category_controls_visible(False)
+        # Seed the preview with the main window's colour overrides so it mirrors
+        # the colours chosen there (applied before any render).
+        self._preview.set_color_overrides(
+            self._seed_series_colors, self._seed_pair_colors
+        )
         s = self._settings
         if s is None:
             return

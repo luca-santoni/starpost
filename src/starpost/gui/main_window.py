@@ -802,6 +802,8 @@ class MainWindow(QMainWindow):
         monitor_groups = self._monitor_groups_union(results)
         checked_groups = sorted(self.selection.selected_plots())
         checked_monitors = self.selection.selected_monitors()
+        # Mirror the colours chosen in the main UI's plot onto the export preview.
+        series_colors, pair_colors = self.plot_view.color_overrides()
 
         dlg = ExportDialog(
             self.settings.default_output_dir,
@@ -814,7 +816,9 @@ class MainWindow(QMainWindow):
             checked_monitors,
             results,
             self.settings,
-            self,
+            series_colors=series_colors,
+            pair_colors=pair_colors,
+            parent=self,
         )
         dlg.exec()
 

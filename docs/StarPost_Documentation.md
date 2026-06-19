@@ -434,7 +434,9 @@ monitor selections to the dialog.
   monitor in the preview. When **two or more data sets** are plotted, each
   monitor shows **one swatch per data set** (left to right, matching the
   comparison's per-sim colours), so every line on the plot can be recoloured
-  individually.
+  individually. The swatches **start from the colours chosen in the main UI's
+  Monitor plots tree** (the preview mirrors them); recolouring here affects only
+  the export.
 - **Options**:
   - **Aspect ratio** — `1:1`, `3:2`, `4:3`, `16:9`, or **Custom** (free resize).
     Drives the preview window's shape.

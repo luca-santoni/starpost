@@ -658,6 +658,21 @@ class PlotView(QWidget):
         if self._mode is not None:
             self._render()
 
+    def color_overrides(self) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+        """Copies of the user's explicit per-series and per-(data set, series)
+        colour overrides, for mirroring onto another view (e.g. the export
+        preview). The default cycle colours aren't included — they're derived the
+        same way in both views, so only the overrides need carrying across."""
+        return dict(self._series_colors), dict(self._pair_colors)
+
+    def set_color_overrides(self, series_colors, pair_colors) -> None:
+        """Replace the per-series and per-(data set, series) colour overrides (used
+        to seed this view with another's colours) and redraw."""
+        self._series_colors = dict(series_colors or {})
+        self._pair_colors = dict(pair_colors or {})
+        if self._mode is not None:
+            self._render()
+
     # --- export ----------------------------------------------------------
     def has_content(self) -> bool:
         """True when at least one curve is currently drawn."""
