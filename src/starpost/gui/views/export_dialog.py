@@ -55,6 +55,12 @@ _SWATCH_GAP = 3
 # set); its length tells the tree how many swatches to hit-test.
 _SWATCH_ROLE = Qt.ItemDataRole.UserRole + 1
 
+# Line-thickness slider range (pen width in px). The default matches PlotView's
+# own default so the slider opens reflecting the unchanged plot.
+_LINE_WIDTH_MIN = 0.5
+_LINE_WIDTH_MAX = 6.0
+_LINE_WIDTH_DEFAULT = 1.5
+
 
 class _PreviewWindow(QDialog):
     """Top-level window holding the plot preview. It can lock its size to a fixed
@@ -603,6 +609,14 @@ class ExportDialog(QDialog):
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._on_legend_scale_changed)
 
+        # Line thickness: a slider that sets the pen width of every line on the
+        # plot, from thin (left) to thick (right). Opens at the default width.
+        self._line_width = QSlider(Qt.Orientation.Horizontal)
+        self._line_width.setRange(0, 100)
+        self._line_width.setValue(self._line_width_slider(_LINE_WIDTH_DEFAULT))
+        self._line_width.setToolTip("Thickness of every line on the plot")
+        self._line_width.valueChanged.connect(self._on_line_width_changed)
+
         form = QFormLayout(box)
         form.addRow("Aspect ratio", self._plot_aspect)
         form.addRow("Plot title", self._plot_title)
@@ -610,6 +624,7 @@ class ExportDialog(QDialog):
         form.addRow("Y axis label", self._plot_ylabel)
         form.addRow("Theme", self._plot_theme)
         form.addRow("Legend scale", self._legend_scale)
+        form.addRow("Line thickness", self._line_width)
         form.addRow("Format", self._plot_format)
 
     @staticmethod
@@ -621,6 +636,23 @@ class ExportDialog(QDialog):
 
     def _on_legend_scale_changed(self, value: int) -> None:
         self._preview.set_legend_scale(self._legend_factor(value))
+
+    @staticmethod
+    def _line_width_for(value: int) -> float:
+        """Map the slider's 0–100 position to a pen width, linearly across the
+        thin–thick range."""
+        span = _LINE_WIDTH_MAX - _LINE_WIDTH_MIN
+        return _LINE_WIDTH_MIN + span * value / 100.0
+
+    @staticmethod
+    def _line_width_slider(width: float) -> int:
+        """The slider position that yields ``width`` — the inverse of
+        _line_width_for, used to seed the slider at the default width."""
+        span = _LINE_WIDTH_MAX - _LINE_WIDTH_MIN
+        return round((width - _LINE_WIDTH_MIN) / span * 100)
+
+    def _on_line_width_changed(self, value: int) -> None:
+        self._preview.set_line_width(self._line_width_for(value))
 
     def _on_aspect_changed(self, text: str) -> None:
         """Apply the chosen aspect ratio to the preview window. "Custom" (or any

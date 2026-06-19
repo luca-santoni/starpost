@@ -428,6 +428,9 @@ monitor selections to the dialog.
   - **Legend scale** — a slider that resizes the plot legend, from half size
     (left) to double size (right); its **mid-point is the natural 1.0× size**.
     The chosen size carries through to the exported image.
+  - **Line thickness** — a slider that sets the pen width of **every line on the
+    plot** at once, from thin (left) to thick (right). The chosen width carries
+    through to the exported image.
   - **Format** — **PNG / JPG / TIFF / PDF** (defaults to the *Default plot
     format* set in Settings → Export).
 - A separate **Plot preview** window opens to the right while the Plots tab is in

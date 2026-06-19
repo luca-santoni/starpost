@@ -477,6 +477,7 @@ class PlotView(QWidget):
         self._mode: str | None = None          # "single" | "comparison"
         self._current = None                    # list[MonitorPlot] | categories
         self._y_log = False                     # current Y-axis log state
+        self._line_width = 1.5                  # pen width for every plotted line
 
         # Empty-monitor filtering (mirrors the Reports settings).
         self._hide_empty = True
@@ -541,6 +542,13 @@ class PlotView(QWidget):
         the natural size; the factor carries through to the exported image."""
         self._legend_scale = factor
         self._legend.setScale(factor)
+
+    def set_line_width(self, width: float) -> None:
+        """Set the pen width used for every plotted line and redraw. Applies
+        globally to all series; carries through to the exported image."""
+        self._line_width = width
+        if self._mode is not None:
+            self._render()
 
     def _refresh_labels(self) -> None:
         """Push the effective title and axis labels (override if set, else the
@@ -863,7 +871,7 @@ class PlotView(QWidget):
         self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
         for x, y, name, color in specs:
             label = _display_name(name)
-            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=1.5))
+            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=self._line_width))
             self._record_curve(x, y, label, color)
 
     def _render_comparison(
@@ -910,7 +918,7 @@ class PlotView(QWidget):
         title = ", ".join(name for name, _ in categories) + " (comparison)"
         self._reset(title, y_log, _y_label_for(drawn))
         for x, y, label, color in specs:
-            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=1.5))
+            self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=self._line_width))
             self._record_curve(x, y, label, color)
 
     # --- hover readout ---------------------------------------------------
