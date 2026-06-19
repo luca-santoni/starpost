@@ -8,7 +8,9 @@ honoring XDG_CONFIG_HOME/XDG_CACHE_HOME); on Windows it maps to %APPDATA% and
 from __future__ import annotations
 
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import platformdirs
@@ -77,3 +79,70 @@ def _ensure(p: Path) -> Path:
     except OSError:
         pass
     return p
+
+
+# --------------------------------------------------------------------------- #
+# Temporary files ("Clear all temp files" in Settings → Misc)
+# --------------------------------------------------------------------------- #
+def temp_paths() -> list[Path]:
+    """Every temporary/cache item the app creates, as concrete paths.
+
+    Covers everything under the per-user cache dir — logs, the crash-recovery
+    results cache, the saved Files-tab list, generated theme icons, downloaded
+    update installers — plus any leftover ``starpost_macro_*`` working folders in
+    the system temp dir (these are normally auto-removed, but an interrupted run
+    can leave them behind). The user's settings and saved profiles live under the
+    *config* dir and are deliberately excluded.
+    """
+    paths: list[Path] = []
+    cache = cache_dir()
+    if cache.exists():
+        paths.extend(sorted(cache.iterdir()))
+    paths.extend(sorted(Path(tempfile.gettempdir()).glob("starpost_macro_*")))
+    return paths
+
+
+def describe_temp_paths(paths: list[Path]) -> list[str]:
+    """De-duplicated, human-readable descriptions of ``paths`` for a warning
+    dialog (so the user sees categories, not cryptic file names)."""
+    labels: list[str] = []
+
+    def add(label: str) -> None:
+        if label not in labels:
+            labels.append(label)
+
+    for p in paths:
+        name = p.name
+        if name.startswith("starpost.log"):
+            add("Application logs")
+        elif name == "results_cache.json":
+            add("Cached extraction results (crash recovery)")
+        elif name == "file_list.json":
+            add("Saved Files-tab list")
+        elif name.startswith("checkmark_"):
+            add("Generated theme icons")
+        elif name == "updates":
+            add("Downloaded update installers")
+        elif name.startswith("starpost_macro_"):
+            add("Leftover macro working folders")
+        else:
+            add("Other temporary files")
+    return labels
+
+
+def clear_temp_files() -> tuple[int, list[Path]]:
+    """Delete every item from :func:`temp_paths`. Returns ``(removed, failed)``
+    where ``removed`` is the count deleted and ``failed`` lists paths that could
+    not be removed (e.g. a file held open by another process on Windows)."""
+    removed = 0
+    failed: list[Path] = []
+    for p in temp_paths():
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            removed += 1
+        except OSError:
+            failed.append(p)
+    return removed, failed

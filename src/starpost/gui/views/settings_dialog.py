@@ -685,7 +685,59 @@ class SettingsDialog(QDialog):
         reset_hint.setObjectName("hint")
         reset_hint.setWordWrap(True)
         form.addRow("", reset_hint)
+
+        clear_temp = QPushButton("Clear all temp files")
+        clear_temp.setToolTip("Delete cached logs, generated icons and other temporary files")
+        clear_temp.clicked.connect(self._clear_temp_files)
+        form.addRow("", clear_temp)
+        temp_hint = QLabel(
+            "Delete StarPost's temporary and cache files (logs, the crash-recovery "
+            "data cache, generated theme icons and downloaded updates). Your "
+            "settings and saved profiles are not affected."
+        )
+        temp_hint.setObjectName("hint")
+        temp_hint.setWordWrap(True)
+        form.addRow("", temp_hint)
         return self._wrap(form)
+
+    def _clear_temp_files(self) -> None:
+        """Warn (listing what will go), then delete every temporary/cache file
+        on Yes. Settings and profiles live elsewhere and are left untouched."""
+        from starpost.utils.paths import (
+            clear_temp_files,
+            describe_temp_paths,
+            temp_paths,
+        )
+
+        paths = temp_paths()
+        if not paths:
+            QMessageBox.information(
+                self, "Clear all temp files", "There are no temporary files to clear."
+            )
+            return
+
+        listed = "\n".join(f"  • {d}" for d in describe_temp_paths(paths))
+        if QMessageBox.question(
+            self, "Clear all temp files",
+            "This will permanently delete the following temporary files:\n\n"
+            f"{listed}\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        removed, failed = clear_temp_files()
+        if failed:
+            names = "\n".join(f"  • {p.name}" for p in failed)
+            QMessageBox.warning(
+                self, "Clear all temp files",
+                f"Removed {removed} item(s). These could not be removed (they may "
+                f"be in use):\n\n{names}",
+            )
+        else:
+            QMessageBox.information(
+                self, "Clear all temp files",
+                f"Removed {removed} temporary item(s).",
+            )
 
     def _check_for_updates_now(self) -> None:
         """Manual update check from the Misc page. Always reports the outcome
