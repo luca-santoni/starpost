@@ -1,14 +1,23 @@
 """Numeric report viewer. Per-file long view and comparison wide view."""
 from __future__ import annotations
 
+import math
 import numbers
 import re
+from typing import TYPE_CHECKING
 
-import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, Qt
 from PySide6.QtWidgets import QMenu, QTableView, QVBoxLayout, QWidget
 
 from starpost.data.models import SimResult
+
+# pandas is imported lazily (only where a DataFrame is actually built/queried) so
+# it stays off the startup path — it's a heavy import (~175 ms) and the report
+# table does no work until a data set is selected. Type hints below are strings
+# (see ``from __future__ import annotations``); this import is for type checkers
+# only and never runs at import time.
+if TYPE_CHECKING:
+    import pandas as pd
 
 # Per-file report columns and the sort options offered on the header menu:
 # (label, column, ascending).
@@ -51,7 +60,9 @@ class _DataFrameModel(QAbstractTableModel):
         if not index.isValid() or role != Qt.DisplayRole:
             return None
         val = self._df.iat[index.row(), index.column()]
-        if pd.isna(val):
+        # Empty cell for missing values (None or a float NaN, incl. numpy's),
+        # without needing pandas here — this runs once per visible cell.
+        if val is None or (isinstance(val, float) and math.isnan(val)):
             return ""
         # Format real (non-integer) numbers to the configured precision.
         if isinstance(val, numbers.Real) and not isinstance(val, (bool, numbers.Integral)):
@@ -168,6 +179,8 @@ class ReportTable(QWidget):
         self, df: pd.DataFrame, key: str, ascending: bool
     ) -> pd.DataFrame:
         """Comparison view: rows are reports ("Name [unit]"), columns are sims."""
+        import pandas as pd
+
         if df.empty:
             return df
         if key == "value":
@@ -208,6 +221,8 @@ class ReportTable(QWidget):
     def show_single(
         self, result: SimResult, hide_zero: bool = False, selected: set[str] | None = None
     ) -> None:
+        import pandas as pd
+
         reports = result.reports
         if selected is not None:
             # Honour the selection panel: only show checked reports.

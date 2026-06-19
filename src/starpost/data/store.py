@@ -50,7 +50,10 @@ class ResultStore:
     def save_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
         payload = {sp: asdict(r) for sp, r in self._results.items()}
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # No indentation: this is a machine-only crash-recovery file, and the
+        # compact form is roughly half the size, so it writes and (re)loads
+        # faster on startup. load_cache reads either form.
+        path.write_text(json.dumps(payload), encoding="utf-8")
 
     def load_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
