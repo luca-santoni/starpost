@@ -61,6 +61,15 @@ _LINE_WIDTH_MIN = 0.5
 _LINE_WIDTH_MAX = 6.0
 _LINE_WIDTH_DEFAULT = 1.5
 
+# Title / axis-label font-size slider ranges (points). The defaults match
+# PlotView's out-of-the-box sizes, so the sliders open on the unchanged plot.
+_TITLE_PT_MIN = 6
+_TITLE_PT_MAX = 28
+_TITLE_PT_DEFAULT = 11
+_AXIS_LABEL_PT_MIN = 6
+_AXIS_LABEL_PT_MAX = 24
+_AXIS_LABEL_PT_DEFAULT = 9
+
 
 class _PreviewWindow(QDialog):
     """Top-level window holding the plot preview. It can lock its size to a fixed
@@ -617,11 +626,36 @@ class ExportDialog(QDialog):
         self._line_width.setToolTip("Thickness of every line on the plot")
         self._line_width.valueChanged.connect(self._on_line_width_changed)
 
+        # Title size: a slider setting the plot title's font size (points).
+        self._title_size = QSlider(Qt.Orientation.Horizontal)
+        self._title_size.setRange(0, 100)
+        self._title_size.setValue(
+            self._text_size_slider(_TITLE_PT_DEFAULT, _TITLE_PT_MIN, _TITLE_PT_MAX)
+        )
+        self._title_size.setToolTip("Font size of the plot title")
+        self._title_size.valueChanged.connect(self._on_title_size_changed)
+
+        # Axis label size: a slider setting the font size (points) of both axis
+        # labels together, so X and Y always match.
+        self._axis_label_size = QSlider(Qt.Orientation.Horizontal)
+        self._axis_label_size.setRange(0, 100)
+        self._axis_label_size.setValue(
+            self._text_size_slider(
+                _AXIS_LABEL_PT_DEFAULT, _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX
+            )
+        )
+        self._axis_label_size.setToolTip(
+            "Font size of both axis labels (X and Y change together)"
+        )
+        self._axis_label_size.valueChanged.connect(self._on_axis_label_size_changed)
+
         form = QFormLayout(box)
         form.addRow("Aspect ratio", self._plot_aspect)
         form.addRow("Plot title", self._plot_title)
+        form.addRow("Title size", self._title_size)
         form.addRow("X axis label", self._plot_xlabel)
         form.addRow("Y axis label", self._plot_ylabel)
+        form.addRow("Axis label size", self._axis_label_size)
         form.addRow("Theme", self._plot_theme)
         form.addRow("Legend scale", self._legend_scale)
         form.addRow("Line thickness", self._line_width)
@@ -653,6 +687,27 @@ class ExportDialog(QDialog):
 
     def _on_line_width_changed(self, value: int) -> None:
         self._preview.set_line_width(self._line_width_for(value))
+
+    @staticmethod
+    def _text_size_for(value: int, lo: int, hi: int) -> int:
+        """Map a slider's 0–100 position to a font size (points) in [lo, hi]."""
+        return round(lo + (hi - lo) * value / 100.0)
+
+    @staticmethod
+    def _text_size_slider(pt: float, lo: int, hi: int) -> int:
+        """The slider position that yields ``pt`` — the inverse of _text_size_for,
+        used to seed a slider at its default size."""
+        return round((pt - lo) / (hi - lo) * 100)
+
+    def _on_title_size_changed(self, value: int) -> None:
+        self._preview.set_title_size(
+            self._text_size_for(value, _TITLE_PT_MIN, _TITLE_PT_MAX)
+        )
+
+    def _on_axis_label_size_changed(self, value: int) -> None:
+        self._preview.set_axis_label_size(
+            self._text_size_for(value, _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX)
+        )
 
     def _on_aspect_changed(self, text: str) -> None:
         """Apply the chosen aspect ratio to the preview window. "Custom" (or any

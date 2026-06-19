@@ -505,6 +505,11 @@ class PlotView(QWidget):
         self._title_override = ""
         self._x_label_override = ""
         self._y_label_override = ""
+        # Font sizes (points) for the title and the axis labels, adjustable from
+        # the export menu. Defaults match pyqtgraph's out-of-the-box sizes so the
+        # plot looks unchanged until a slider is moved.
+        self._title_size = 11.0
+        self._axis_label_size = 9.0
         # Per-series colour overrides (raw series name -> hex), and the colours
         # actually drawn last render (raw series name -> hex) for read-back.
         self._series_colors: dict[str, str] = {}
@@ -550,15 +555,28 @@ class PlotView(QWidget):
         if self._mode is not None:
             self._render()
 
+    def set_title_size(self, pt: float) -> None:
+        """Set the plot title's font size (points) and refresh the labels."""
+        self._title_size = pt
+        self._refresh_labels()
+
+    def set_axis_label_size(self, pt: float) -> None:
+        """Set both axis labels' font size (points), kept equal, and refresh."""
+        self._axis_label_size = pt
+        self._refresh_labels()
+
     def _refresh_labels(self) -> None:
         """Push the effective title and axis labels (override if set, else the
         auto-derived value) onto the plot in the current foreground colour."""
         self._title = self._title_override or self._auto_title
         self._x_axis_label = self._x_label_override or self._auto_x_label
         self._y_axis_label = self._y_label_override or self._auto_y_label
-        self._plot.setTitle(self._title, color=self._fg)
-        self._plot.setLabel("bottom", self._x_axis_label, color=self._fg)
-        self._plot.setLabel("left", self._y_axis_label, color=self._fg)
+        self._plot.setTitle(
+            self._title, color=self._fg, size=f"{self._title_size:g}pt"
+        )
+        axis_style = {"color": self._fg, "font-size": f"{self._axis_label_size:g}pt"}
+        self._plot.setLabel("bottom", self._x_axis_label, **axis_style)
+        self._plot.setLabel("left", self._y_axis_label, **axis_style)
 
     def set_title_override(self, text: str) -> None:
         """Override the plot title (empty reverts to the auto title)."""

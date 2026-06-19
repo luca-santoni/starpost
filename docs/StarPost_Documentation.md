@@ -425,6 +425,9 @@ monitor selections to the dialog.
     Drives the preview window's shape.
   - **Plot title**, **X axis label**, **Y axis label** — live-override the
     preview's labels; empty reverts to the auto value.
+  - **Title size** — a slider that sets the plot title's text size.
+  - **Axis label size** — a slider that sets both axis labels' text size at
+    once, so the X and Y labels always match.
   - **Theme** — Light / Dark for the exported image (defaults to the *Default
     plot theme* set in Settings → Export).
   - **Legend scale** — a slider that resizes the plot legend, from half size
