@@ -483,6 +483,11 @@ class PlotView(QWidget):
         # actually drawn last render (raw series name -> hex) for read-back.
         self._series_colors: dict[str, str] = {}
         self._drawn_colors: dict[str, str] = {}
+        # In comparison mode a monitor is drawn once per data set, so colours are
+        # tracked per (data set, raw series name) pair too: overrides set from the
+        # export menu, and the colours actually drawn last render for read-back.
+        self._pair_colors: dict[tuple[str, str], str] = {}
+        self._drawn_pair_colors: dict[tuple[str, str], str] = {}
         self._plot.setBackground(self._bg)
         self._style_stats_label()
 
@@ -572,6 +577,23 @@ class PlotView(QWidget):
     def set_series_color(self, name: str, color: str) -> None:
         """Override a monitor's plot colour and redraw."""
         self._series_colors[name] = color
+        if self._mode is not None:
+            self._render()
+
+    def pair_color(self, sim: str, name: str) -> str | None:
+        """In comparison mode, the colour a single data set's copy of a monitor
+        is drawn in (or its override / series-wide override if it isn't currently
+        on screen); None if unknown."""
+        return (
+            self._drawn_pair_colors.get((sim, name))
+            or self._pair_colors.get((sim, name))
+            or self._series_colors.get(name)
+        )
+
+    def set_pair_color(self, sim: str, name: str, color: str) -> None:
+        """Override one data set's copy of a monitor (comparison mode) and redraw.
+        This takes precedence over any series-wide override for that pair."""
+        self._pair_colors[(sim, name)] = color
         if self._mode is not None:
             self._render()
 
@@ -790,6 +812,7 @@ class PlotView(QWidget):
         drawn: list[str] = []
         specs: list[tuple] = []
         self._drawn_colors = {}
+        self._drawn_pair_colors = {}  # populated only in comparison mode
         # A running colour index across every category's series keeps each
         # line's colour stable regardless of which are filtered/deselected.
         color_i = 0
@@ -829,6 +852,7 @@ class PlotView(QWidget):
         drawn: list[str] = []
         specs: list[tuple] = []
         self._drawn_colors = {}
+        self._drawn_pair_colors = {}
         y_log = False
         for plot_name, pairs in categories:
             selected = self._selected_series(plot_name)
@@ -837,10 +861,16 @@ class PlotView(QWidget):
                 for s in plot.series:
                     if s.name not in selected or not self._visible(s):
                         continue
-                    # A per-series override forces that monitor's colour across
-                    # every sim; otherwise comparison colours by sim.
-                    color = self._series_colors.get(s.name, sim_color[sim_name])
+                    # A per-(data set, monitor) override colours just that line; a
+                    # series-wide override forces the monitor's colour across every
+                    # data set; otherwise comparison colours by data set.
+                    color = (
+                        self._pair_colors.get((sim_name, s.name))
+                        or self._series_colors.get(s.name)
+                        or sim_color[sim_name]
+                    )
                     self._drawn_colors[s.name] = color
+                    self._drawn_pair_colors[(sim_name, s.name)] = color
                     drawn.append(s.name)
                     disp = _display_name(s.name)
                     label = f"{sim_name}: {disp}" if multi else sim_name

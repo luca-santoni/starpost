@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QCursor, QIcon, QPixmap
+from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -44,6 +44,15 @@ from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
 from starpost.gui.views.data_list import _CheckList
 from starpost.gui.views.plot_view import _COLORS, PlotView, _display_name
 from starpost.gui.widgets import UniformTabBar
+
+# Geometry of a single colour swatch drawn next to a monitor, and the gap between
+# adjacent swatches when several data sets are plotted at once. Shared by the
+# pixmap builder and the click hit-testing so the two stay aligned.
+_SWATCH_SIZE = 14
+_SWATCH_GAP = 3
+# Per-item role holding a monitor's list of swatch colours (one per plotted data
+# set); its length tells the tree how many swatches to hit-test.
+_SWATCH_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class _PreviewWindow(QDialog):
@@ -91,30 +100,32 @@ class _PreviewWindow(QDialog):
 
 
 class _MonitorTree(QTreeWidget):
-    """The Monitors tree, plus detection of clicks on a monitor's colour swatch
-    (the icon between its checkbox and name). Such clicks emit ``swatch_clicked``
-    instead of toggling the checkbox."""
+    """The Monitors tree, plus detection of clicks on a monitor's colour swatches
+    (the icon between its checkbox and name). When several data sets are plotted a
+    monitor carries one swatch per data set, packed into a single wide icon. A
+    click on any swatch emits ``swatch_clicked`` with the item and the swatch's
+    index, instead of toggling the checkbox."""
 
-    swatch_clicked = Signal(object)  # the monitor item whose swatch was clicked
+    swatch_clicked = Signal(object, int)  # the monitor item, and which swatch
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         pos = event.position().toPoint()
         item = self.itemAt(pos)
-        # Only monitors (children) carry a swatch, and only while checked (icon set).
-        if (
-            item is not None
-            and item.parent() is not None
-            and not item.icon(0).isNull()
-            and self._swatch_rect(item).contains(pos)
-        ):
-            self.swatch_clicked.emit(item)
-            event.accept()
-            return
+        # Only monitors (children) carry swatches, and only while checked.
+        if item is not None and item.parent() is not None:
+            for i, rect in enumerate(self._swatch_rects(item)):
+                if rect.contains(pos):
+                    self.swatch_clicked.emit(item, i)
+                    event.accept()
+                    return
         super().mousePressEvent(event)
 
-    def _swatch_rect(self, item) -> QRect:
-        """The clickable band of the colour swatch: just right of the checkbox,
-        one icon wide."""
+    def _swatch_rects(self, item) -> list[QRect]:
+        """The clickable band of each colour swatch, laid out left-to-right just
+        right of the checkbox. Empty when the monitor has no swatches."""
+        colors = item.data(0, _SWATCH_ROLE)
+        if not colors:
+            return []
         index = self.indexFromItem(item, 0)
         item_rect = self.visualRect(index)
         opt = QStyleOptionViewItem()
@@ -125,10 +136,14 @@ class _MonitorTree(QTreeWidget):
         check = self.style().subElementRect(
             QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, self
         )
-        return QRect(
-            check.right() + 2, item_rect.top(), self.iconSize().width() + 6,
-            item_rect.height(),
-        )
+        start = check.right() + 2  # where the packed swatch icon begins
+        rects = []
+        for i in range(len(colors)):
+            x = start + i * (_SWATCH_SIZE + _SWATCH_GAP)
+            rects.append(
+                QRect(x, item_rect.top(), _SWATCH_SIZE, item_rect.height())
+            )
+        return rects
 
 
 class ExportDialog(QDialog):
@@ -679,35 +694,81 @@ class ExportDialog(QDialog):
     # --- monitor colour swatches ----------------------------------------
     @staticmethod
     def _color_icon(color: str) -> QIcon:
-        """A filled square swatch of ``color`` for the tree / colour menu."""
-        px = QPixmap(14, 14)
+        """A filled square swatch of ``color`` for the colour menu."""
+        px = QPixmap(_SWATCH_SIZE, _SWATCH_SIZE)
         px.fill(QColor(color))
         return QIcon(px)
 
+    @staticmethod
+    def _swatches_icon(colors: list[str]) -> QIcon:
+        """A single icon packing ``colors`` into a row of swatches (one per
+        plotted data set), laid out to match _MonitorTree._swatch_rects."""
+        n = len(colors)
+        width = n * _SWATCH_SIZE + (n - 1) * _SWATCH_GAP
+        px = QPixmap(width, _SWATCH_SIZE)
+        px.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(px)
+        x = 0
+        for color in colors:
+            painter.fillRect(x, 0, _SWATCH_SIZE, _SWATCH_SIZE, QColor(color))
+            x += _SWATCH_SIZE + _SWATCH_GAP
+        painter.end()
+        return QIcon(px)
+
+    def _swatch_sims(self) -> list[str]:
+        """The plotted data sets, in a stable order, that each checked monitor
+        gets a swatch for. A single data set keeps one swatch (single-file mode);
+        two or more give one swatch each (the comparison's per-line colours)."""
+        return sorted(self.checked_data_names(), key=str.lower)
+
+    def _monitor_swatch_colors(self, name: str, sims: list[str]) -> list[str]:
+        """The swatch colours for monitor ``name``: one per data set in comparison
+        mode, or the single series colour when only one data set is plotted."""
+        if len(sims) >= 2:
+            return [self._preview.pair_color(s, name) or "#888888" for s in sims]
+        return [self._preview.series_color(name) or "#888888"]
+
     def _refresh_monitor_swatches(self) -> None:
-        """Give every checked monitor a colour swatch matching its plot colour;
-        clear the swatch on unchecked ones. Done with signals blocked so setting
-        an icon doesn't re-trigger itemChanged."""
+        """Give every checked monitor its row of colour swatches (one per plotted
+        data set) matching the colours actually drawn; clear them on unchecked
+        monitors. Done with signals blocked so setting an icon doesn't re-trigger
+        itemChanged."""
         tree = self._monitor_tree
+        sims = self._swatch_sims()
+        # Size the icon column to hold all swatches for the current data-set count.
+        count = max(1, len(sims)) if len(sims) >= 2 else 1
+        width = count * _SWATCH_SIZE + (count - 1) * _SWATCH_GAP
+        tree.setIconSize(QSize(width, _SWATCH_SIZE))
         tree.blockSignals(True)
         root = tree.invisibleRootItem()
         for i in range(root.childCount()):
             group = root.child(i)
             for j in range(group.childCount()):
                 m = group.child(j)
-                if m.checkState(0) == Qt.CheckState.Checked:
+                if m.checkState(0) == Qt.CheckState.Checked and sims:
                     name = m.data(0, Qt.ItemDataRole.UserRole)
-                    color = self._preview.series_color(name) or "#888888"
-                    m.setIcon(0, self._color_icon(color))
+                    colors = self._monitor_swatch_colors(name, sims)
+                    m.setData(0, _SWATCH_ROLE, colors)
+                    m.setIcon(0, self._swatches_icon(colors))
                 else:
+                    m.setData(0, _SWATCH_ROLE, None)
                     m.setIcon(0, QIcon())
         tree.blockSignals(False)
 
-    def _pick_monitor_color(self, item) -> None:
-        """Colour menu for a monitor's swatch: pick a palette colour (or a custom
-        one); the choice recolours the monitor in the preview and its swatch."""
+    def _pick_monitor_color(self, item, swatch: int) -> None:
+        """Colour menu for one of a monitor's swatches: pick a palette colour (or
+        a custom one); the choice recolours that monitor's line in the preview (the
+        line belonging to swatch ``swatch``'s data set, when several are plotted)
+        and updates the swatch."""
         name = item.data(0, Qt.ItemDataRole.UserRole)
-        current = self._preview.series_color(name)
+        sims = self._swatch_sims()
+        multi = len(sims) >= 2
+        sim = sims[swatch] if multi and swatch < len(sims) else None
+        current = (
+            self._preview.pair_color(sim, name)
+            if sim is not None
+            else self._preview.series_color(name)
+        )
         menu = QMenu(self)
         for c in _COLORS:
             act = menu.addAction(self._color_icon(c), c)
@@ -726,7 +787,10 @@ class ExportDialog(QDialog):
             color = picked.name()
         else:
             color = chosen.data()
-        self._preview.set_series_color(name, color)
+        if sim is not None:
+            self._preview.set_pair_color(sim, name, color)
+        else:
+            self._preview.set_series_color(name, color)
         self._refresh_monitor_swatches()
 
     def _wire_data_sync(self) -> None:

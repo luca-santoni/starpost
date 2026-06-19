@@ -414,7 +414,10 @@ monitor selections to the dialog.
   group **reveals its monitors** (unticked, so you pick deliberately); unchecking
   hides them. A checked monitor shows a **colour swatch**; **clicking the swatch**
   opens a colour menu (palette colours + **Custom…**) that recolours that
-  monitor in the preview.
+  monitor in the preview. When **two or more data sets** are plotted, each
+  monitor shows **one swatch per data set** (left to right, matching the
+  comparison's per-sim colours), so every line on the plot can be recoloured
+  individually.
 - **Options**:
   - **Aspect ratio** — `1:1`, `3:2`, `4:3`, `16:9`, or **Custom** (free resize).
     Drives the preview window's shape.
