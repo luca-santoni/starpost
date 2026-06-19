@@ -118,8 +118,9 @@ rendering and complex visualization are out of scope (see
     **logarithmic Y axis**; **force/other plots** → **linear Y axis**.
   - Axis type is auto-classified by plot name (keyword lists configurable in
     Settings).
-  - **Multiple monitor groups at once**, each with its **own dropdown** for
-    choosing which of its series (monitors) are drawn.
+  - **Multiple monitor groups at once**; which of each group's series (monitors)
+    are drawn is chosen in the selection panel's **Monitor plots** tree (check a
+    group to reveal its monitors).
   - **Hover readout**: a marker + coordinate label snapped to the nearest data
     point (log-axis aware; optional monitor name; configurable X/Y decimals).
   - **Region statistics**: **Shift+drag** a rectangle to get a per-series table
@@ -321,13 +322,9 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 - A centred hint **"Select a monitor to begin"** shows while nothing is plotted.
 - The view auto-fits (auto-ranges) to the data on each redraw.
 
-**Per-category dropdowns (row beneath the plot):**
-- One dropdown per displayed monitor group, labelled **`Group (selected/total)`**.
-- Clicking it opens a **stay-open menu**: **Select all**, **Deselect all**, a
-  separator, then each monitor as a checkable item. The menu stays open so you
-  can toggle several; it closes on click-away/Esc/clicking the button again.
-- **Right-click a dropdown button** → **Sort A–Z / Sort Z–A** (reorders the
-  menu only; selection is unchanged).
+**Choosing which monitors are drawn:**
+- This lives in the selection panel's **Monitor plots** tree (right), not under
+  the plot: check a group to reveal its monitors, then tick the ones to draw.
 - A newly checked monitor group starts with **no** monitors shown until you pick
   some.
 
@@ -378,8 +375,14 @@ together.
 - **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
 
 **"Monitor plots" group:**
-- Same controls as Reports, but monitor plots default to **unchecked** (the plot
-  view starts blank, since drawing every plot at once is slow).
+- A **tree** of monitor-plot groups (each a checkbox). Checking a group **reveals
+  its monitors** as checkable children; the **ticked monitors are the ones
+  drawn** — so the per-monitor choice lives here rather than under the plot.
+- Groups default to **unchecked** (the plot view starts blank, since drawing
+  every plot at once is slow), and a freshly checked group reveals its monitors
+  **unticked** so you pick deliberately.
+- **Select all** ticks every group and monitor; **Clear** unticks all.
+  **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
 
 ### 3.8 Log console
 

@@ -99,11 +99,11 @@ class MainWindow(QMainWindow):
         )
         self.plot_view.set_region_stats(settings.region_stats)
         self.plot_view.apply_theme(settings.appearance.mode)
-        # Let profiles persist which monitors are shown per plot.
-        self.selection.set_monitor_provider(
-            self.plot_view.monitor_selection, self.plot_view.set_monitor_selection
-        )
-        # …and which region statistics are shown.
+        # The per-monitor selection now lives in the selection panel's plot tree,
+        # so the plot view's own under-plot category dropdowns are hidden; the
+        # panel drives which monitors are drawn (applied in _render_plot).
+        self.plot_view.set_category_controls_visible(False)
+        # Let profiles persist which region statistics are shown.
         self.selection.set_region_stats_provider(
             self.plot_view.region_stats, self._apply_region_stats
         )
@@ -489,6 +489,24 @@ class MainWindow(QMainWindow):
             names = [n for n in names if not self._report_is_empty(n, scope)]
         return names
 
+    def _monitor_groups_union(self, results) -> dict[str, list[str]]:
+        """Build ``{plot group: [monitor series, ...]}`` as the union across
+        ``results``, dropping empty monitors when "Hide empty monitors" is on
+        (mirroring the plot view). Drives the selection panel's plot tree and the
+        export menu's Monitors column."""
+        hide = self.settings.hide_empty_monitors
+        threshold = self.settings.monitor_zero_threshold
+        groups: dict[str, list[str]] = {}
+        for r in results:
+            for p in r.plots:
+                names = groups.setdefault(p.name, [])
+                for s in p.series:
+                    if hide and _series_is_empty(s, threshold):
+                        continue
+                    if s.name not in names:
+                        names.append(s.name)
+        return groups
+
     def _refresh_report_choices(self) -> None:
         """Update the report checkbox list for the current mode/file, keeping
         the user's selection."""
@@ -502,8 +520,8 @@ class MainWindow(QMainWindow):
         self.data_list.set_entries([r.sim_name for r in results])
 
         report_union = self._available_report_names(results)
-        plot_union = sorted({n for r in results for n in r.plot_names()})
-        self.selection.populate(report_union, plot_union)
+        plot_groups = self._monitor_groups_union(results)
+        self.selection.populate(report_union, plot_groups)
 
         self._refresh_views()
 
@@ -581,6 +599,7 @@ class MainWindow(QMainWindow):
                     categories.append((plot_name, pairs))
             if categories:
                 self.plot_view.show_comparison(categories)
+                self.plot_view.set_monitor_selection(self.selection.selected_monitors())
             else:
                 self.plot_view.clear()
         else:
@@ -589,6 +608,7 @@ class MainWindow(QMainWindow):
             plots = [p for p in res.plots if p.name in plot_names]
             if plots:
                 self.plot_view.show_plots(plots)
+                self.plot_view.set_monitor_selection(self.selection.selected_monitors())
             else:
                 self.plot_view.clear()
 
@@ -753,22 +773,12 @@ class MainWindow(QMainWindow):
         report_names = self._available_report_names(results)
         checked_reports = sorted(self.selection.selected_reports())
 
-        # Monitor groups are plots; their monitors are the plot's series. Build
-        # the union of series per plot across the loaded results, dropping empty
-        # monitors when "Hide empty monitors" is on (mirroring the plot view).
-        hide_monitors = self.settings.hide_empty_monitors
-        mon_threshold = self.settings.monitor_zero_threshold
-        monitor_groups: dict[str, list[str]] = {}
-        for r in results:
-            for p in r.plots:
-                names = monitor_groups.setdefault(p.name, [])
-                for s in p.series:
-                    if hide_monitors and _series_is_empty(s, mon_threshold):
-                        continue
-                    if s.name not in names:
-                        names.append(s.name)
+        # Monitor groups are plots; their monitors are the plot's series. The
+        # union of series per plot mirrors the plot view (empties dropped when
+        # "Hide empty monitors" is on); the ticked monitors come from the panel.
+        monitor_groups = self._monitor_groups_union(results)
         checked_groups = sorted(self.selection.selected_plots())
-        checked_monitors = self.plot_view.monitor_selection()
+        checked_monitors = self.selection.selected_monitors()
 
         dlg = ExportDialog(
             self.settings.default_output_dir,
@@ -832,10 +842,11 @@ class MainWindow(QMainWindow):
         )
         self.plot_view.set_region_stats(self.settings.region_stats)
         self.plot_view.apply_theme(self.settings.appearance.mode)
-        # The hide-empty/threshold settings change which reports qualify as
-        # empty: refresh the checkbox list (preserving the current selection).
+        # The hide-empty/threshold settings change which reports and monitors
+        # qualify as empty: refresh both lists (preserving the current selection).
         results = [r for r in self.store.all() if r.error is None]
         self.selection.set_available_reports(self._available_report_names(results))
+        self.selection.set_available_plots(self._monitor_groups_union(results))
         self._refresh_views()
 
     def _on_settings_reset(self) -> None:

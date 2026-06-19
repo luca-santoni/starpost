@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QListWidget,
@@ -20,11 +21,14 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionGroupBox,
     QStyleOptionViewItem,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
+from starpost.gui.views.plot_view import _display_name
 
 
 class _CheckList(QListWidget):
@@ -125,6 +129,151 @@ class _CheckList(QListWidget):
         self.blockSignals(False)
 
 
+class _MonitorPlotTree(QTreeWidget):
+    """Monitor-plot picker: a tree of plot groups, each a checkable parent whose
+    monitors appear as checkable children. Checking a group reveals its monitors
+    (unticked, so the user picks deliberately); the checked monitors are the ones
+    drawn. This mirrors the Monitors column of the export menu, moving the old
+    under-plot dropdowns into the selection list itself.
+
+    Exposes ``set_all`` / ``sort_mode`` / ``set_sort_mode`` so it slots into the
+    same group box (Select all / Clear, right-click-to-sort) the report list uses.
+    """
+
+    changed = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setHeaderHidden(True)
+        # Group expansion is driven solely by the group checkbox, so disable the
+        # user-facing expand controls (arrows, double-click).
+        self.setRootIsDecorated(False)
+        self.setItemsExpandable(False)
+        self.setExpandsOnDoubleClick(False)
+        self.setSelectionMode(self.SelectionMode.NoSelection)
+        # Show full monitor names: scroll horizontally rather than eliding.
+        self.setTextElideMode(Qt.ElideNone)
+        self.header().setStretchLastSection(False)
+        self.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # Active sort, A–Z by default (matches the report list).
+        self.sort_mode = "az"
+        self._groups: dict[str, list[str]] = {}
+        self.itemChanged.connect(self._on_item_changed)
+
+    def _sorted(self, names) -> list[str]:
+        return sorted(names, key=str.lower, reverse=self.sort_mode == "za")
+
+    def set_items(self, groups: dict[str, list[str]], preserve: bool = False) -> None:
+        """Rebuild the tree from ``{group: [monitor, ...]}``. With ``preserve`` the
+        prior group/monitor check state is carried across (for sorting and for
+        setting-driven refreshes); otherwise everything starts unticked."""
+        prev_groups = set(self.checked_groups()) if preserve else set()
+        prev_monitors = self.checked_monitors() if preserve else {}
+        self._groups = {g: list(m) for g, m in groups.items()}
+        self.blockSignals(True)
+        self.clear()
+        for g in self._sorted(self._groups):
+            gi = QTreeWidgetItem([g])
+            gi.setFlags((gi.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable)
+            group_on = g in prev_groups
+            gi.setCheckState(0, Qt.Checked if group_on else Qt.Unchecked)
+            selected = set(prev_monitors.get(g, []))
+            for m in self._sorted(self._groups[g]):
+                # Show the collapsed label, keep the raw series name as the key.
+                mi = QTreeWidgetItem([_display_name(m)])
+                mi.setData(0, Qt.UserRole, m)
+                mi.setFlags(
+                    (mi.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable
+                )
+                mi.setCheckState(0, Qt.Checked if m in selected else Qt.Unchecked)
+                gi.addChild(mi)
+            self.addTopLevelItem(gi)
+            gi.setExpanded(group_on)  # reveal monitors only for checked groups
+        self.blockSignals(False)
+
+    def _on_item_changed(self, item, _column) -> None:
+        """Toggling a group reveals (expands) or hides (collapses) its monitors; a
+        freshly checked group reveals them unticked so the user picks
+        deliberately. Either change re-emits ``changed`` to drive a redraw."""
+        if item.parent() is None:  # a group, not one of its monitors
+            checked = item.checkState(0) == Qt.Checked
+            item.setExpanded(checked)
+            if checked:
+                self.blockSignals(True)
+                for j in range(item.childCount()):
+                    item.child(j).setCheckState(0, Qt.Unchecked)
+                self.blockSignals(False)
+        self.changed.emit()
+
+    # --- read ------------------------------------------------------------
+    def checked_groups(self) -> list[str]:
+        root = self.invisibleRootItem()
+        return [
+            root.child(i).text(0)
+            for i in range(root.childCount())
+            if root.child(i).checkState(0) == Qt.Checked
+        ]
+
+    def checked_monitors(self) -> dict[str, list[str]]:
+        """The checked monitors per checked group (unchecked groups omitted)."""
+        out: dict[str, list[str]] = {}
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            if g.checkState(0) != Qt.Checked:
+                continue
+            out[g.text(0)] = [
+                g.child(j).data(0, Qt.UserRole)
+                for j in range(g.childCount())
+                if g.child(j).checkState(0) == Qt.Checked
+            ]
+        return out
+
+    # --- write -----------------------------------------------------------
+    def set_all(self, state: bool) -> None:
+        """Check/uncheck every group and monitor (Select all / Clear)."""
+        self.blockSignals(True)
+        cs = Qt.Checked if state else Qt.Unchecked
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            g.setCheckState(0, cs)
+            for j in range(g.childCount()):
+                g.child(j).setCheckState(0, cs)
+            g.setExpanded(state)
+        self.blockSignals(False)
+
+    def set_selection(self, groups: set[str], monitors: dict[str, list[str]]) -> None:
+        """Apply a profile: check exactly ``groups`` and, for each, the monitors in
+        ``monitors[group]``. A group absent from the map shows all its monitors
+        (matching how older profiles, which stored no monitor map, load)."""
+        self.blockSignals(True)
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            on = g.text(0) in groups
+            g.setCheckState(0, Qt.Checked if on else Qt.Unchecked)
+            if g.text(0) in monitors:
+                sel = set(monitors[g.text(0)])
+            else:
+                sel = {g.child(j).data(0, Qt.UserRole) for j in range(g.childCount())}
+            for j in range(g.childCount()):
+                m = g.child(j)
+                m.setCheckState(
+                    0, Qt.Checked if m.data(0, Qt.UserRole) in sel else Qt.Unchecked
+                )
+            g.setExpanded(on)
+        self.blockSignals(False)
+
+    def set_sort_mode(self, mode: str) -> None:
+        """Re-sort groups and monitors A–Z/Z–A, preserving the selection."""
+        if mode == self.sort_mode:
+            return
+        self.sort_mode = mode
+        self.set_items(self._groups, preserve=True)
+
+
 class _SortableGroupBox(QGroupBox):
     """A group box whose title responds to a right-click: clicking the title
     text invokes ``on_sort(global_pos)`` (to raise a sort menu). Right-clicks
@@ -155,16 +304,15 @@ class SelectionPanel(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.reports = _CheckList()
-        self.plots = _CheckList()
+        # Monitor plots: a tree of groups whose checked monitors are the ones
+        # drawn (the per-monitor selection lives here, not under the plot).
+        self.plots = _MonitorPlotTree()
         self.reports.changed.connect(self.selection_changed)
         self.plots.changed.connect(self.selection_changed)
 
-        # Optional hooks (wired by MainWindow) to read/restore which monitors
-        # are shown per plot, so profiles can persist that selection too.
-        self._monitor_getter = None   # () -> dict[str, list[str]]
-        self._monitor_setter = None   # (dict[str, list[str]]) -> None
-        # Likewise for the region-statistics selection. The setter takes a list
-        # of stat labels, or None to reset to the application default.
+        # Region-statistics selection hooks (wired by MainWindow), so profiles can
+        # persist it. The setter takes a list of stat labels, or None to reset to
+        # the application default.
         self._region_stats_getter = None   # () -> list[str]
         self._region_stats_setter = None   # (list[str] | None) -> None
 
@@ -242,11 +390,14 @@ class SelectionPanel(QWidget):
             lst.set_sort_mode(actions[chosen])
 
     # --- data ------------------------------------------------------------
-    def populate(self, report_names: list[str], plot_names: list[str]) -> None:
-        # Reports default to selected; plots default to *deselected* so the plot
-        # view starts blank (rendering every monitor plot is slow with many).
+    def populate(
+        self, report_names: list[str], plot_groups: dict[str, list[str]]
+    ) -> None:
+        # Reports default to selected; plot groups default to *deselected* so the
+        # plot view starts blank (rendering every monitor plot is slow with many).
+        # ``plot_groups`` maps each plot group to its member monitor (series) names.
         self.reports.set_items(sorted(report_names), checked=True)
-        self.plots.set_items(sorted(plot_names), checked=False)
+        self.plots.set_items(plot_groups, preserve=False)
 
     def set_available_reports(self, report_names: list[str]) -> None:
         """Replace the available report list while preserving check state.
@@ -262,20 +413,22 @@ class SelectionPanel(QWidget):
         self.reports.set_items(names, checked=False)
         self.reports.set_checked(keep)
 
+    def set_available_plots(self, plot_groups: dict[str, list[str]]) -> None:
+        """Refresh the monitor tree's groups/monitors while preserving the current
+        selection — used when a setting (e.g. hide-empty-monitors) changes the
+        visible set without reloading data."""
+        self.plots.set_items(plot_groups, preserve=True)
+
     def selected_reports(self) -> set[str]:
         return set(self.reports.checked())
 
     def selected_plots(self) -> set[str]:
-        return set(self.plots.checked())
+        """The checked monitor-plot groups."""
+        return set(self.plots.checked_groups())
 
-    def set_monitor_provider(self, getter, setter) -> None:
-        """Wire callbacks for reading/restoring the per-plot monitor selection.
-
-        `getter()` returns ``{plot_name: [monitor, ...]}``; `setter(mapping)`
-        applies one. Used so profiles can save and load which monitors show.
-        """
-        self._monitor_getter = getter
-        self._monitor_setter = setter
+    def selected_monitors(self) -> dict[str, list[str]]:
+        """The checked monitors per checked group: ``{group: [monitor, ...]}``."""
+        return self.plots.checked_monitors()
 
     def set_region_stats_provider(self, getter, setter) -> None:
         """Wire callbacks for reading/restoring the region-statistics selection.
@@ -314,8 +467,6 @@ class SelectionPanel(QWidget):
             return
         if name == DEFAULT_PROFILE_NAME:
             # Built-in: every available report, no monitor plots.
-            if self._monitor_setter is not None:
-                self._monitor_setter({})
             if self._region_stats_setter is not None:
                 self._region_stats_setter(None)  # reset stats to the app default
             self.reports.set_all(True)
@@ -323,16 +474,13 @@ class SelectionPanel(QWidget):
             self.selection_changed.emit()
             return
         prof = Profile.load(name)
-        # Prime the per-plot monitor selection *before* re-checking the plots,
-        # so the redraw triggered below picks it up.
-        if self._monitor_setter is not None:
-            self._monitor_setter(prof.monitors)
         # Restore the saved region statistics; profiles predating this leave the
         # current selection untouched (region_stats is None).
         if self._region_stats_setter is not None and prof.region_stats is not None:
             self._region_stats_setter(prof.region_stats)
         self.reports.set_checked(set(prof.reports))
-        self.plots.set_checked(set(prof.plots))
+        # Apply the saved plot groups and their per-group monitor selection.
+        self.plots.set_selection(set(prof.plots), prof.monitors)
         self.selection_changed.emit()
 
     def _save_profile(self) -> None:
@@ -356,8 +504,9 @@ class SelectionPanel(QWidget):
                 return
         # Save the monitor selection only for the plots in this profile.
         plots = self.selected_plots()
-        all_monitors = self._monitor_getter() if self._monitor_getter else {}
-        monitors = {p: m for p, m in all_monitors.items() if p in plots}
+        monitors = {
+            p: m for p, m in self.plots.checked_monitors().items() if p in plots
+        }
         region_stats = (
             self._region_stats_getter() if self._region_stats_getter else None
         )
