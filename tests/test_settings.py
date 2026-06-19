@@ -1,6 +1,23 @@
+import pytest
 import yaml
 
 from starpost.core.settings import LicenseConfig, Profile, Settings
+
+
+@pytest.fixture(autouse=True)
+def isolated_profiles(monkeypatch, tmp_path):
+    """Redirect profile storage to a temp dir on every platform.
+
+    Profiles resolve through ``starpost.core.settings.profiles_dir``. Patching it
+    directly works on Windows, Linux and macOS alike. (The old approach set
+    XDG_CONFIG_HOME, which platformdirs only honors on Linux, so on Windows
+    profiles still resolved to the real %LOCALAPPDATA% — the legacy-file tests
+    then couldn't find what they had written.) Returns the temp profiles dir.
+    """
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    monkeypatch.setattr("starpost.core.settings.profiles_dir", lambda: profiles)
+    return profiles
 
 
 def test_podkey_server_args():
@@ -34,9 +51,7 @@ def test_monitor_settings_round_trip():
     assert Settings.from_dict(d).monitor_zero_threshold == 1e-3
 
 
-def test_profile_round_trips_monitor_selection(monkeypatch, tmp_path):
-    # Profiles live under the XDG config dir; isolate it to tmp_path.
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+def test_profile_round_trips_monitor_selection():
     Profile(
         name="aero",
         reports=["Cd"],
@@ -49,11 +64,9 @@ def test_profile_round_trips_monitor_selection(monkeypatch, tmp_path):
     assert loaded.monitors == {"Downforce": ["Front Downforce (N)"]}
 
 
-def test_profile_without_monitors_defaults_to_empty(monkeypatch, tmp_path):
+def test_profile_without_monitors_defaults_to_empty(isolated_profiles):
     # Profiles saved before the monitor selection existed have no "monitors" key.
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    (tmp_path / "starpost" / "profiles").mkdir(parents=True)
-    (tmp_path / "starpost" / "profiles" / "legacy.yaml").write_text(
+    (isolated_profiles / "legacy.yaml").write_text(
         yaml.safe_dump({"name": "legacy", "reports": ["Cd"], "plots": ["Drag"]})
     )
 
@@ -62,20 +75,17 @@ def test_profile_without_monitors_defaults_to_empty(monkeypatch, tmp_path):
     assert loaded.monitors == {}  # absent -> show all monitors on load
 
 
-def test_profile_round_trips_region_stats(monkeypatch, tmp_path):
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+def test_profile_round_trips_region_stats():
     Profile(name="aero", region_stats=["Avg", "Range"]).save()
 
     loaded = Profile.load("aero")
     assert loaded.region_stats == ["Avg", "Range"]
 
 
-def test_profile_without_region_stats_is_none(monkeypatch, tmp_path):
+def test_profile_without_region_stats_is_none(isolated_profiles):
     # Profiles saved before region stats existed have no "region_stats" key;
     # load as None so the current selection is left unchanged.
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    (tmp_path / "starpost" / "profiles").mkdir(parents=True)
-    (tmp_path / "starpost" / "profiles" / "legacy.yaml").write_text(
+    (isolated_profiles / "legacy.yaml").write_text(
         yaml.safe_dump({"name": "legacy", "reports": ["Cd"], "plots": ["Drag"]})
     )
 
