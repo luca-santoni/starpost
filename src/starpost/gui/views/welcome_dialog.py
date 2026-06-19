@@ -41,6 +41,7 @@ from starpost.gui.theme import (
     contrast_color,
     normalize_accent,
 )
+from starpost.gui.widgets import SecretLineEdit
 
 # Sensible default for the POD license server, prefilled so users on the stock
 # Siemens cloud server only have to enter their key.
@@ -134,7 +135,7 @@ class WelcomeDialog(QDialog):
         self._mode.addItem("License file", "license_file")
         self._mode.currentIndexChanged.connect(self._sync_license_mode)
 
-        self._podkey = QLineEdit()
+        self._podkey = SecretLineEdit()
         self._podkey.setPlaceholderText("Power-on-Demand key")
         self._licpath = QLineEdit()
         self._licpath.setPlaceholderText(DEFAULT_POD_SERVER)
