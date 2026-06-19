@@ -190,6 +190,7 @@ class _CategorySelector(QWidget):
 
         self._btn = QToolButton()
         self._btn.setObjectName("monitorSelect")
+        self._btn.setToolTip("Show or hide individual monitors in this plot")
         self._btn.setPopupMode(QToolButton.InstantPopup)
         self._menu = _StayOpenMenu(self._btn)
         self._btn.setMenu(self._menu)
@@ -435,6 +436,7 @@ class PlotView(QWidget):
         # "Clear selection" sits at the bottom-right, past the category
         # dropdowns; enabled only while a Shift+drag region is active.
         self._clear_sel_btn = QPushButton("Clear selection")
+        self._clear_sel_btn.setToolTip("Clear the Shift+drag region selection")
         self._clear_sel_btn.setEnabled(False)
         self._clear_sel_btn.clicked.connect(self._clear_region)
 

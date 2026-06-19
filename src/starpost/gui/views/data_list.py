@@ -55,13 +55,17 @@ class DataListPanel(QWidget):
         self._list.customContextMenuRequested.connect(self._show_context_menu)
 
         import_btn = QPushButton("Import")
+        import_btn.setToolTip("Import data from a portable StarPost CSV file")
         import_btn.clicked.connect(self.import_requested)
         export = QPushButton("Export Data")
+        export.setToolTip("Export loaded data sets to portable StarPost CSV files")
         export.clicked.connect(self.export_requested)
         delete = QPushButton("Delete")
+        delete.setToolTip("Delete the selected data sets")
         delete.clicked.connect(self.delete_requested)
         clear = QPushButton("Clear Data")
         clear.setObjectName("clearDataButton")
+        clear.setToolTip("Remove all loaded data")
         clear.clicked.connect(self.clear_requested)
         # Buttons in a row with uniform spacing between them, left-aligned.
         buttons = QHBoxLayout()

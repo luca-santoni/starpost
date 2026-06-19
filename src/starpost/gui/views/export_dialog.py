@@ -193,7 +193,12 @@ class ExportDialog(QDialog):
         bar.set_tab_width(width)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Export")
+        export_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        export_btn.setText("Export")
+        export_btn.setToolTip("Export the current tab's selection to a file")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setToolTip(
+            "Close without exporting"
+        )
         buttons.accepted.connect(self._on_export)
         buttons.rejected.connect(self.reject)
 
@@ -213,6 +218,7 @@ class ExportDialog(QDialog):
         ]
         self._profile_box.addItems(names)
         load_btn = QPushButton("Load")
+        load_btn.setToolTip("Apply the selected profile's report and monitor selection")
         load_btn.clicked.connect(self._load_profile)
 
         row = QHBoxLayout()

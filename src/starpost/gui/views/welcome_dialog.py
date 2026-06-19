@@ -81,7 +81,8 @@ class WelcomeDialog(QDialog):
         self._show_again.setChecked(settings.show_setup_on_startup)
 
         buttons = QDialogButtonBox()
-        buttons.addButton("Get Started", QDialogButtonBox.AcceptRole)
+        get_started = buttons.addButton("Get Started", QDialogButtonBox.AcceptRole)
+        get_started.setToolTip("Save these settings and open StarPost")
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
 
@@ -123,8 +124,20 @@ class WelcomeDialog(QDialog):
         self._out.setPlaceholderText("Empty = your home folder")
 
         form = QFormLayout()
-        form.addRow("Executable Location", self._path_row(self._exe, self._browse_exe))
-        form.addRow("Output folder", self._path_row(self._out, self._browse_out))
+        form.addRow(
+            "Executable Location",
+            self._path_row(
+                self._exe, self._browse_exe,
+                "Browse for the STAR-CCM+ executable",
+            ),
+        )
+        form.addRow(
+            "Output folder",
+            self._path_row(
+                self._out, self._browse_out,
+                "Browse for the default output folder",
+            ),
+        )
         group = QGroupBox("STAR-CCM+")
         group.setLayout(form)
         return group
@@ -150,7 +163,11 @@ class WelcomeDialog(QDialog):
         form.addRow(self._licpath_label, self._licpath)
         self._licfile_label = QLabel("License file")
         form.addRow(
-            self._licfile_label, self._path_row(self._licfile, self._browse_licfile)
+            self._licfile_label,
+            self._path_row(
+                self._licfile, self._browse_licfile,
+                "Browse for the license file",
+            ),
         )
         group = QGroupBox("Licensing")
         group.setLayout(form)
@@ -178,6 +195,7 @@ class WelcomeDialog(QDialog):
         swatch_box.setLayout(grid)
 
         pick = QPushButton("Pick…")
+        pick.setToolTip("Choose a custom accent colour")
         pick.clicked.connect(self._pick_accent)
 
         form = QFormLayout()
@@ -200,11 +218,14 @@ class WelcomeDialog(QDialog):
 
     # --- small helpers ---------------------------------------------------
     @staticmethod
-    def _path_row(line: QLineEdit, on_browse) -> QWidget:
+    def _path_row(
+        line: QLineEdit, on_browse, tooltip: str = "Browse for a file or folder"
+    ) -> QWidget:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(line)
         btn = QPushButton("Browse…")
+        btn.setToolTip(tooltip)
         btn.clicked.connect(on_browse)
         row.addWidget(btn)
         wrap = QWidget()

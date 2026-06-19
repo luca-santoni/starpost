@@ -184,9 +184,14 @@ class MainWindow(QMainWindow):
         self.addToolBar(tb)
 
         self._run_action = tb.addAction("Run batch", self._run_batch)
+        self._run_action.setToolTip(
+            "Extract reports and plots from every .sim file in the list"
+        )
         tb.addSeparator()
-        tb.addAction("Export…", self._export)
-        tb.addAction("Settings…", self._open_settings)
+        export_action = tb.addAction("Export…", self._export)
+        export_action.setToolTip("Export the selected reports and plots to files")
+        settings_action = tb.addAction("Settings…", self._open_settings)
+        settings_action.setToolTip("Open the application settings")
 
         # An expanding spacer pushes the version label to the toolbar's far right.
         spacer = QWidget()

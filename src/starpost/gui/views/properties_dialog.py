@@ -71,6 +71,9 @@ class PropertiesDialog(QDialog):
             note.setWordWrap(True)
             layout.addWidget(note)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
@@ -92,5 +95,8 @@ class FolderPropertiesDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

@@ -71,12 +71,15 @@ def _csv(text: str) -> list[str]:
     return [t.strip() for t in text.split(",") if t.strip()]
 
 
-def _path_row(line: QLineEdit, on_browse) -> QHBoxLayout:
-    """A line edit followed by a Browse… button."""
+def _path_row(
+    line: QLineEdit, on_browse, tooltip: str = "Browse for a file or folder"
+) -> QHBoxLayout:
+    """A line edit followed by a Browse… button (with a descriptive tooltip)."""
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
     row.addWidget(line)
     btn = QPushButton("Browse…")
+    btn.setToolTip(tooltip)
     btn.clicked.connect(on_browse)
     row.addWidget(btn)
     return row
@@ -132,6 +135,9 @@ class ProfileDetailsDialog(QDialog):
         cols.addLayout(self._column("Statistics", stats), 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
 
@@ -212,6 +218,12 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.Save | QDialogButtonBox.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Save).setToolTip(
+            "Save the settings and close"
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setToolTip(
+            "Discard changes and close"
+        )
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
 
@@ -252,8 +264,20 @@ class SettingsDialog(QDialog):
         self._extra.setPlaceholderText("e.g.  -np 4 -mpi openmpi")
 
         form = QFormLayout()
-        form.addRow("Executable path", _path_row(self._exe, self._browse_exe))
-        form.addRow("Default output folder", _path_row(self._out, self._browse_out))
+        form.addRow(
+            "Executable path",
+            _path_row(
+                self._exe, self._browse_exe,
+                "Browse for the STAR-CCM+ executable",
+            ),
+        )
+        form.addRow(
+            "Default output folder",
+            _path_row(
+                self._out, self._browse_out,
+                "Browse for the default output folder",
+            ),
+        )
         form.addRow("Extra arguments", self._extra)
         hint = QLabel("Appended verbatim to every starccm+ call (space-separated).")
         hint.setObjectName("hint")
@@ -284,7 +308,11 @@ class SettingsDialog(QDialog):
         form.addRow(self._licpath_label, self._licpath)
         self._licfile_label = QLabel("License file")
         form.addRow(
-            self._licfile_label, _path_row(self._licfile, self._browse_licfile)
+            self._licfile_label,
+            _path_row(
+                self._licfile, self._browse_licfile,
+                "Browse for the license file",
+            ),
         )
         return self._wrap(form)
 
@@ -490,11 +518,13 @@ class SettingsDialog(QDialog):
         for r, name in enumerate(names):
             self._profiles_list.addWidget(QLabel(name), r, 0)
             details = QPushButton("Show Details")
+            details.setToolTip("View this profile's selected reports and plots")
             details.clicked.connect(lambda _=False, n=name: self._show_profile_details(n))
             self._profiles_list.addWidget(details, r, 1)
             if name != DEFAULT_PROFILE_NAME:
                 btn = QPushButton("Delete")
                 btn.setObjectName("dangerButton")
+                btn.setToolTip("Delete this profile permanently")
                 btn.clicked.connect(lambda _=False, n=name: self._delete_profile(n))
                 self._profiles_list.addWidget(btn, r, 2)
 
@@ -533,6 +563,7 @@ class SettingsDialog(QDialog):
         self._hex.setFixedWidth(110)
         self._hex.textEdited.connect(self._on_hex_edited)
         pick = QPushButton("Pick…")
+        pick.setToolTip("Choose a custom accent colour")
         pick.clicked.connect(self._on_pick_color)
         self._preview = QLabel()
         self._preview.setFixedSize(30, 30)
@@ -555,6 +586,7 @@ class SettingsDialog(QDialog):
         self._cm_hex.setFixedWidth(110)
         self._cm_hex.textEdited.connect(self._on_cm_hex_edited)
         self._cm_pick = QPushButton("Pick…")
+        self._cm_pick.setToolTip("Choose a custom checkmark colour")
         self._cm_pick.clicked.connect(self._on_cm_pick_color)
         self._cm_preview = QLabel()
         self._cm_preview.setFixedSize(30, 30)
@@ -577,6 +609,7 @@ class SettingsDialog(QDialog):
         self._folder_hex.setFixedWidth(110)
         self._folder_hex.textEdited.connect(self._on_folder_hex_edited)
         self._folder_pick = QPushButton("Pick…")
+        self._folder_pick.setToolTip("Choose a custom folder colour")
         self._folder_pick.clicked.connect(self._on_folder_pick_color)
         self._folder_preview = QLabel()
         self._folder_preview.setFixedSize(30, 30)
@@ -629,6 +662,7 @@ class SettingsDialog(QDialog):
         form.addRow("", upd_hint)
 
         check_now = QPushButton("Check for updates")
+        check_now.setToolTip("Check GitHub now for a newer version")
         check_now.clicked.connect(self._check_for_updates_now)
         form.addRow("", check_now)
         check_hint = QLabel(
@@ -640,6 +674,7 @@ class SettingsDialog(QDialog):
         form.addRow("", check_hint)
 
         reset = QPushButton("Reset settings")
+        reset.setToolTip("Restore most settings to their defaults")
         reset.clicked.connect(self._reset_settings)
         form.addRow("", reset)
         reset_hint = QLabel(

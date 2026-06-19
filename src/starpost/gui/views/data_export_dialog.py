@@ -60,8 +60,10 @@ class DataExportDialog(QDialog):
 
         # Top: bulk selection controls.
         select_all = QPushButton("Select all")
+        select_all.setToolTip("Select every data set")
         select_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
         clear = QPushButton("Clear")
+        clear.setToolTip("Deselect every data set")
         clear.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         top = QHBoxLayout()
         top.addWidget(select_all)
@@ -74,11 +76,13 @@ class DataExportDialog(QDialog):
         cancel.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
         )
+        cancel.setToolTip("Close without exporting")
         cancel.clicked.connect(self.reject)
         export = QPushButton("Export")
         export.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOkButton)
         )
+        export.setToolTip("Write each selected data set to a CSV file")
         export.clicked.connect(self._on_export)
         bottom = QHBoxLayout()
         bottom.addWidget(cancel)
