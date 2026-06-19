@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "starpost"
-version = "1.1.0"
+# Single source of truth: the version is read from src/starpost/__init__.py
+# (__version__). See [tool.setuptools.dynamic] below.
+dynamic = ["version"]
 description = "Automated post-processing for STAR-CCM+ reports and monitor plots"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,6 +31,9 @@ dev = ["pytest>=7.4", "ruff>=0.1", "pyinstaller>=6.0"]
 
 [project.gui-scripts]
 starpost = "starpost.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "starpost.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

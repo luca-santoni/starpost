@@ -34,7 +34,9 @@ cd "$ROOT"
 APP="starpost"                 # PyInstaller binary name / .desktop basename
 NAME="StarPost"                # human-facing app name
 ARCH="${ARCH:-$(uname -m)}"    # x86_64, aarch64, ...
-VERSION="$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+# Version is the single source of truth in src/starpost/__init__.py
+# (pyproject.toml derives it from there via setuptools' dynamic attr).
+VERSION="$(grep -m1 '^__version__' src/starpost/__init__.py | sed -E 's/.*"([^"]+)".*/\1/')"
 
 DIST="dist/${APP}"
 APPDIR="build/${NAME}.AppDir"

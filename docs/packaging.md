@@ -28,8 +28,10 @@ On the **build machine**:
   (See [`dev_install.md`](dev_install.md) for setting up the virtual
   environment.)
 
-The version number stamped onto releases comes from `version` in
-[`pyproject.toml`](../pyproject.toml).
+The version number stamped onto releases is the **single source of truth** in
+`__version__` in [`src/starpost/__init__.py`](../src/starpost/__init__.py).
+`pyproject.toml` derives its version from there (via setuptools' dynamic
+`attr`), and the AppImage build script reads it from there too.
 
 ---
 
@@ -103,7 +105,7 @@ ARCH=aarch64 packaging/build_appimage.sh
    otherwise downloads it from the AppImage project, then packs the AppDir with
    `--appimage-extract-and-run` (so no working FUSE mount is needed).
 
-The version is read automatically from `pyproject.toml`; the output is
+The version is read automatically from `src/starpost/__init__.py`; the output is
 `StarPost-<version>-<arch>.AppImage` in the repo root.
 
 ### Requirements & gotchas
@@ -183,8 +185,9 @@ creates a Start-menu shortcut (plus an optional, unchecked desktop shortcut),
 registers an uninstaller in *Add/Remove Programs*, and offers to launch the app.
 
 The version defaults to `1.1.0` inside the script but **should be passed on the
-command line** (`/DMyAppVersion=<version>`) to match `version` in
-[`pyproject.toml`](../pyproject.toml). The script's `AppId` GUID is fixed — do
+command line** (`/DMyAppVersion=<version>`) to match `__version__` in
+[`src/starpost/__init__.py`](../src/starpost/__init__.py). The script's `AppId`
+GUID is fixed — do
 not change it, or upgrades and uninstall will break for existing installs.
 
 #### Code signing
@@ -205,24 +208,16 @@ not ship a WiX project.
 
 ## Release checklist
 
-1. Bump the version in **both** places, keeping them identical:
-   - `version` in [`pyproject.toml`](../pyproject.toml) (the AppImage name and
-     installer metadata derive from it), and
-   - `__version__` in [`src/starpost/__init__.py`](../src/starpost/__init__.py)
-     (what the running app reports and what the in-app updater compares against
-     the latest GitHub release tag).
-
-   If these drift, the in-app update check misbehaves — e.g. an installer built
-   as `1.2.0` while the app still reports `1.1.0` would keep offering an "update"
-   to a version that's already installed. (A future cleanup could make
-   `pyproject.toml` read the version from `__init__.py` so there's a single
-   source of truth.)
+1. Bump `__version__` in [`src/starpost/__init__.py`](../src/starpost/__init__.py)
+   — the **single source of truth**. `pyproject.toml` (installer/AppImage
+   metadata), the AppImage build script, the running app, and the in-app update
+   check all read from it, so there's only one value to change.
 2. On **Linux**: run `packaging/build_appimage.sh` → `StarPost-<version>-<arch>.AppImage`.
 3. On **Windows**: run `pyinstaller packaging\starpost.spec`, then build the
    installer with
    `ISCC.exe /DMyAppVersion=<version> packaging\starpost.iss` →
    `dist\StarPost-<version>-Setup.exe` (or just zip `dist\starpost\` for the
-   portable build). Pass the same `<version>` as in `pyproject.toml`.
+   portable build). Pass the same `<version>` as `__version__`.
 4. Smoke-test each artifact on a clean machine (the AppImage on an older distro;
    the Windows build on a machine without Python).
 5. Publish both to the GitHub **Releases** page so the
