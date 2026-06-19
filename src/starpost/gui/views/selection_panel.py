@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -183,11 +182,29 @@ class SelectionPanel(QWidget):
         prof_row.addWidget(load_btn)
         prof_row.addWidget(save_btn)
 
+        # Only one checklist is shown at a time, matching the active centre tab
+        # (Reports table vs. Plots view); the visible one expands to fill the
+        # panel. set_active_section toggles between them.
+        self._reports_group = self._group("Reports", self.reports)
+        self._plots_group = self._group("Monitor plots", self.plots)
+
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
         layout.addLayout(prof_row)
-        layout.addWidget(self._group("Reports", self.reports))
-        layout.addWidget(self._group("Monitor plots", self.plots))
+        # Stretch 1 so the shown checklist fills all the vertical space the panel
+        # has — including whatever the hidden section would have used.
+        layout.addWidget(self._reports_group, 1)
+        layout.addWidget(self._plots_group, 1)
+        # Default to the Reports section (the centre opens on the Reports tab).
+        self.set_active_section("reports")
+
+    def set_active_section(self, section: str) -> None:
+        """Show only the checklist relevant to the active centre tab: ``"reports"``
+        shows the Reports list, any other value shows the Monitor plots list. The
+        hidden group's space is given to the visible one, which fills the panel."""
+        reports = section == "reports"
+        self._reports_group.setVisible(reports)
+        self._plots_group.setVisible(not reports)
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.

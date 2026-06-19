@@ -129,6 +129,10 @@ class MainWindow(QMainWindow):
         tabs.setTabBar(UniformTabBar())
         tabs.addTab(self.report_table, "Reports")
         tabs.addTab(self.plot_view, "Plots")
+        # The selection panel shows only the checklist for the active centre tab:
+        # Reports list on the Reports tab, Monitor plots list on the Plots tab.
+        self._center_tabs = tabs
+        tabs.currentChanged.connect(self._on_center_tab_changed)
 
         # Left side: Files (the batch list) and Data (loaded results) as tabs.
         left_tabs = QTabWidget()
@@ -169,6 +173,14 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(outer)
         self.setCentralWidget(container)
+
+    def _on_center_tab_changed(self, index: int) -> None:
+        """Sync the selection panel to the active centre tab: show the Reports
+        checklist for the Reports table, the Monitor plots checklist for Plots."""
+        widget = self._center_tabs.widget(index)
+        self.selection.set_active_section(
+            "reports" if widget is self.report_table else "plots"
+        )
 
     def _left_tab_menu(self, tabs: QTabWidget, pos) -> None:
         """Right-clicking the Files or Data tab opens its sort menu."""

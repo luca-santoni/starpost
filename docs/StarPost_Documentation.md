@@ -356,6 +356,13 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 Chooses which reports and monitor plots are shown/exported, and manages profiles.
 It operates on the **union** of names across the loaded (and ticked) data.
 
+The panel shows **one checklist at a time, matching the active centre tab**: the
+**Reports** list while the centre is on the Reports tab, the **Monitor plots**
+list while it is on the Plots tab. The shown list expands to fill the panel.
+Both selections are always remembered — switching tabs only changes which list
+is visible, never what is ticked — and profiles still cover reports and plots
+together.
+
 **Profile row (top):**
 - **Profile dropdown** — lists the built-in **Default** first, then saved
   profiles.
