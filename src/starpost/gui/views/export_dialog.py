@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSlider,
     QStyle,
     QStyleOptionViewItem,
     QTabWidget,
@@ -594,13 +595,32 @@ class ExportDialog(QDialog):
         if self._settings is not None:
             self._select_combo(self._plot_format, self._settings.export_plot_format)
 
+        # Legend size: a slider whose mid-point is the natural size (1.0×) and
+        # which scales the legend down (left) or up (right) symmetrically.
+        self._legend_scale = QSlider(Qt.Orientation.Horizontal)
+        self._legend_scale.setRange(0, 100)
+        self._legend_scale.setValue(50)  # middle of the track == default 1.0×
+        self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
+        self._legend_scale.valueChanged.connect(self._on_legend_scale_changed)
+
         form = QFormLayout(box)
         form.addRow("Aspect ratio", self._plot_aspect)
         form.addRow("Plot title", self._plot_title)
         form.addRow("X axis label", self._plot_xlabel)
         form.addRow("Y axis label", self._plot_ylabel)
         form.addRow("Theme", self._plot_theme)
+        form.addRow("Legend scale", self._legend_scale)
         form.addRow("Format", self._plot_format)
+
+    @staticmethod
+    def _legend_factor(value: int) -> float:
+        """Map the slider's 0–100 position to a legend scale factor, with the
+        midpoint (50) at 1.0×. Each half spans one octave, so the ends are 0.5×
+        (left) and 2.0× (right) and the growth is smooth across the centre."""
+        return 2.0 ** ((value - 50) / 50.0)
+
+    def _on_legend_scale_changed(self, value: int) -> None:
+        self._preview.set_legend_scale(self._legend_factor(value))
 
     def _on_aspect_changed(self, text: str) -> None:
         """Apply the chosen aspect ratio to the preview window. "Custom" (or any

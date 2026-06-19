@@ -425,6 +425,9 @@ monitor selections to the dialog.
     preview's labels; empty reverts to the auto value.
   - **Theme** — Light / Dark for the exported image (defaults to the *Default
     plot theme* set in Settings → Export).
+  - **Legend scale** — a slider that resizes the plot legend, from half size
+    (left) to double size (right); its **mid-point is the natural 1.0× size**.
+    The chosen size carries through to the exported image.
   - **Format** — **PNG / JPG / TIFF / PDF** (defaults to the *Default plot
     format* set in Settings → Export).
 - A separate **Plot preview** window opens to the right while the Plots tab is in

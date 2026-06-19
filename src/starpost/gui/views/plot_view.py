@@ -365,6 +365,24 @@ class _DraggableLabel(QLabel):
             super().mouseReleaseEvent(ev)
 
 
+class _DragFollowLegend(pg.LegendItem):
+    """A LegendItem whose drag tracks the cursor 1:1 at any scale.
+
+    pyqtgraph's own handler measures the drag delta in the legend's *local*
+    coordinates (which a ``setScale`` shrinks or grows) and adds it straight to
+    the legend's position in its *parent's* coordinates — so a scaled legend
+    drifts faster than the mouse when shrunk and slower when enlarged. Mapping
+    the delta through the legend's transform into the parent's coordinates first
+    cancels the scale, so the legend always follows the cursor.
+    """
+
+    def mouseDragEvent(self, ev) -> None:  # noqa: N802 (pyqtgraph override)
+        if ev.button() == Qt.MouseButton.LeftButton:
+            ev.accept()
+            dpos = self.mapToParent(ev.pos()) - self.mapToParent(ev.lastPos())
+            self.autoAnchor(self.pos() + dpos)
+
+
 class PlotView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -372,7 +390,14 @@ class PlotView(QWidget):
         self._vb = _RegionSelectViewBox()
         self._plot = pg.PlotWidget(viewBox=self._vb)
         self._vb.region_selected.connect(self._on_region_selected)
-        self._legend = self._plot.addLegend()
+        # Use our drag-corrected legend rather than the default from addLegend so
+        # a scaled legend still tracks the cursor. Registering it on the PlotItem
+        # is what makes named curves (self._plot.plot(..., name=...)) appear in it.
+        plot_item = self._plot.getPlotItem()
+        self._legend = _DragFollowLegend(offset=(30, 30))
+        self._legend.setParentItem(plot_item.vb)
+        plot_item.legend = self._legend
+        self._legend_scale = 1.0  # legend size multiplier (export menu slider)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
         # Hint shown centred over the plot when nothing is drawn. Kept subtle
@@ -510,6 +535,12 @@ class PlotView(QWidget):
         # colour (existing legend labels aren't recoloured retroactively).
         if self._mode is not None:
             self._render()
+
+    def set_legend_scale(self, factor: float) -> None:
+        """Scale the plot's legend uniformly (its text and colour samples). 1.0 is
+        the natural size; the factor carries through to the exported image."""
+        self._legend_scale = factor
+        self._legend.setScale(factor)
 
     def _refresh_labels(self) -> None:
         """Push the effective title and axis labels (override if set, else the
@@ -776,6 +807,7 @@ class PlotView(QWidget):
     def _reset(self, title: str, y_log: bool, y_label: str = "Value") -> None:
         self._plot.clear()
         self._legend.clear()  # avoid stale/duplicate legend entries on re-render
+        self._legend.setScale(self._legend_scale)  # keep the chosen legend size
         self._auto_title = title
         self._auto_x_label = "Iteration"
         self._auto_y_label = y_label
