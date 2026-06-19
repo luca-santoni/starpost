@@ -58,8 +58,11 @@ A licensed STAR-CCM+ installation must be present on the machine.
   `.sim` files, run sequentially (one license checkout at a time) with a live
   log and progress bar, and a crash-recovery cache.
 - **Files / Data panels** — build a reusable list of `.sim` files (the *Files*
-  tab), then pick which extracted **Data** sets feed the views by ticking them.
-  Checking two or more switches the views into **comparison** mode automatically.
+  tab), optionally organised into **virtual folders** (nest, drag-drop, sort
+  per folder), then pick which extracted **Data** sets feed the views by ticking
+  them. Checking two or more switches the views into **comparison** mode
+  automatically. Data sets can be **exported to / imported from portable CSVs**
+  (shareable, re-loadable without STAR-CCM+).
 - **Per-file and comparison views** — a numeric report table (sortable, with
   configurable decimals and empty-value hiding) and an interactive plot viewer.
 - **Interactive plots** (pyqtgraph):
@@ -79,11 +82,17 @@ A licensed STAR-CCM+ installation must be present on the machine.
     one-file-per-data-set mode.
   - **Plots → PNG / JPG / TIFF / PDF** with a live preview window, custom title
     and axis labels, per-monitor colours, theme, and aspect ratio.
-- **In-app settings dialog** — STAR-CCM+ paths, licensing, file/report/plot
-  display options, profile management (view details / delete), a **dark/light
-  theme with custom accent and checkmark colours** previewed live, and a reset.
+- **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
+  key), file/report/plot display options, export defaults, profile management
+  (view details / delete), a **dark/light theme with custom accent, checkmark and
+  folder colours** previewed live, a reset, and a *Clear all temp files* action.
+- **In-app updates** — checks GitHub releases on startup (and on demand); shows a
+  toolbar note when a newer version is available and, on the Windows build, can
+  download and install it in place.
 - **First-run setup wizard** for the essentials (executable path, licensing,
   theme), re-openable any time and toggleable from Settings.
+- **Credential safety** — the POD key is masked in the UI, the settings file and
+  log are written owner-only, and license credentials are redacted from logs.
 
 ## Requirements
 
@@ -112,7 +121,10 @@ Key fields:
   is also supported.
 - `default_output_dir` — where exports are written (user-defined per run).
 - Report/plot display options (decimals, empty-value hiding + thresholds, hover
-  label options, axis-classification keywords) and `appearance` (theme + accent).
+  label options, axis-classification keywords), export defaults
+  (`export_report_format`, `export_plot_format`, `export_plot_theme`),
+  `appearance` (theme, accent, checkmark + folder colours), and
+  `check_updates_on_startup`.
 
 Extraction **profiles** (saved report/plot selections, the monitors shown per
 plot, and axis overrides) live alongside the settings file in `profiles/*.yaml`

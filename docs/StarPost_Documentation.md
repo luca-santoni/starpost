@@ -2,12 +2,14 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Status: v1 — runnable cross-platform (Linux + Windows) GUI with batch
-> extraction, the Files/Data workspace, an interactive plot viewer, the full
-> in-app settings dialog, and report/plot export all implemented. The Java
-> extraction macro has not yet been validated against a live STAR-CCM+ install
-> (see [Limitations](#4-limitations)).
-> Document last updated: 2026-06-15
+> Version: **1.2.0**
+> Status: cross-platform (Linux + Windows) GUI with batch extraction, the
+> Files/Data workspace (virtual folders + portable data import/export), an
+> interactive plot viewer, the full in-app settings dialog, report/plot export,
+> an in-app update check, and packaged builds (Linux AppImage + Windows Inno
+> Setup installer). The Java extraction macro has not yet been validated against
+> a live STAR-CCM+ install (see [Limitations](#4-limitations)).
+> Document last updated: 2026-06-18
 
 ---
 
@@ -27,6 +29,7 @@
    - [3.9 Export dialog](#39-export-dialog)
    - [3.10 Settings dialog](#310-settings-dialog)
    - [3.11 Welcome / setup wizard](#311-welcome--setup-wizard)
+   - [3.12 Updates](#312-updates)
 4. [Limitations](#4-limitations)
 5. [How It Works (Architecture)](#5-how-it-works-architecture)
 6. [Data Flow, End to End](#6-data-flow-end-to-end)
@@ -89,10 +92,19 @@ rendering and complex visualization are out of scope (see
   they don't, the user is warned and the **union** of all names is shown.
 
 ### The Files / Data workspace
-- A persistent **Files** list of `.sim` files to process (survives restarts).
+- A persistent **Files** list of `.sim` files to process (survives restarts),
+  with an optional system of **virtual folders** (created in-app only, never on
+  disk) to organise files: nest folders to any depth, drag files/folders to
+  re-parent them, sort each folder independently, and open or inspect a whole
+  folder at once.
 - A **Data** list of the results extracted so far, named after their source
   `.sim`. **Ticking** Data entries chooses which results feed the views; ticking
   two or more switches the Reports/Plots views into **comparison** mode.
+- **Portable data import/export**: a loaded data set can be written to a
+  self-contained StarPost CSV and re-imported later (into any StarPost instance)
+  **without STAR-CCM+** — useful for sharing results or archiving them.
+- **Properties** on any file, data set, or folder (size plus report / monitor /
+  iteration counts).
 
 ### Viewing (in-app)
 - **Per-file mode** (one Data set ticked): that simulation's reports and plots.
@@ -128,16 +140,29 @@ rendering and complex visualization are out of scope (see
   optional **one-file-per-data-set** mode.
 - **Plots → PNG / JPG / TIFF / PDF**, via a live **preview window**, with custom
   title and axis labels, per-monitor colours, theme, and aspect ratio.
+- **Configurable defaults** (Settings → Export): the report format, plot image
+  format, and plot theme the Export dialog pre-fills.
 
 ### Configuration, appearance & resilience
 - **Configurable STAR-CCM+ executable path** and **extra CLI args**.
 - **Licensing**: defaults to **Power-on-Demand key + license server**
   (`-power -podkey <KEY> -licpath <port>@<server>`); also supports a **regular
   license file** (`-licpath <file>`).
-- **Dark/light theme** with a custom **accent colour** and **checkmark colour**,
-  previewed live across the whole UI.
+- **Dark/light theme** with a custom **accent colour**, **checkmark colour**, and
+  **folder-icon colour**, previewed live across the whole UI.
+- **Credential safety**: the POD key is masked in the UI (reveal on demand), the
+  settings file and log are written **owner-only** (`0600`), and license
+  credentials are **redacted** from the log and on-screen command output.
+- **In-app update check** against GitHub releases (on startup and on demand):
+  a "New update available" note appears in the toolbar, and on the packaged
+  Windows build the update can be downloaded and installed in place.
+- **"Clear all temp files"** (Settings → Misc) removes cached logs, the
+  crash-recovery cache, generated icons, and downloaded updates after a
+  confirmation that lists what will go.
+- **Hover tooltips** on every toolbar/button control describing what it does.
 - **First-run setup wizard** for the essentials, re-openable any time.
-- **Cross-platform**: per-OS config/cache/log locations via `platformdirs`.
+- **Cross-platform**: per-OS config/cache/log locations via `platformdirs`;
+  packaged as a Linux **AppImage** and a Windows **Inno Setup installer**.
 
 ---
 
@@ -181,34 +206,61 @@ A single toolbar at the top with three actions:
 | **Export…** | Opens the [Export dialog](#39-export-dialog). |
 | **Settings…** | Opens the [Settings dialog](#310-settings-dialog). |
 
+At the **far right** of the toolbar a greyed **`StarPost v<version>`** label
+shows the running version. If the startup update check finds a newer release, a
+**"New update available"** note (tinted with the accent colour) appears directly
+beneath it.
+
+Every toolbar action and button in the app has a **hover tooltip** describing
+what it does (shown after a short delay; moving to another control restarts the
+delay rather than showing the next tooltip instantly).
+
 > The default Qt toolbar/dock right-click menu is intentionally **suppressed**
 > (its only entry would hide the toolbar with no way to restore it).
 
 ### 3.3 Files panel
 
-The **Files** tab: the batch list of `.sim` files to process. The list is
-**persisted to disk** and restored on the next launch.
+The **Files** tab: the batch list of `.sim` files to process, optionally
+organised into **virtual folders**. The full layout (files, folders, nesting,
+expansion, and per-folder sort) is **persisted to disk** and restored on the
+next launch. Folders live **only inside StarPost** — they are never created on
+the filesystem.
 
 **Buttons (bottom of the panel):**
 - **Add files…** — file picker filtered to `*.sim`; adds the chosen files.
 - **Add folder…** — folder picker; adds every `*.sim` directly inside it.
-- **Remove** — removes the selected rows (after a confirmation).
-- **Clear** — removes all files (after a confirmation). Styled as a danger button.
+- **Remove** — removes the selected rows (after a confirmation). A selected
+  folder is removed with its contents.
+- **Clear** — removes all files and folders (after a confirmation). Styled as a
+  danger button.
 
 **Interactions:**
 - **Multi-select** with Ctrl/Shift (extended selection).
-- **Double-click a row** → *Open* just that file (extract + view it).
-- **Right-click a row** → context menu with **Open** (extracts and views every
-  selected file, in top-to-bottom list order). Right-clicking a row outside the
-  current selection first selects just that row.
+- **Double-click a file** → *Open* just that file (extract + view it).
+- **Drag and drop** files/folders to **re-parent** them (move into a folder, out
+  to the top level, or between folders); a folder can't be dropped into its own
+  subtree.
+- **Right-click a file** → **Open** (or **Open All** when two or more files are
+  selected — extracts and views every selected file, in top-to-bottom order) and
+  **Properties**. Right-clicking a row outside the current selection first
+  selects just that row.
+- **Right-click a folder** → **Open All** (extract + view every `.sim` in it,
+  recursively), **New Nested Folder**, a **Sort** submenu (A–Z, Z–A, File Size
+  Largest, File Size Smallest — orders just this folder's contents), **Rename**,
+  **Delete folder** (keeps the contents, moving them up to the parent), and
+  **Properties** (combined size + file count).
+- **Right-click empty space** → **New Folder** (at the top level).
 - **Right-click the "Files" tab** → **sort menu** (the active mode is
   checkmarked): **Name (A–Z)**, **Name (Z–A)**, **File size (largest)**,
-  **File size (smallest)**.
+  **File size (smallest)** — applied to every folder.
 
 **Notes:**
 - Only `.sim` files are added; duplicates (by resolved path) are ignored.
-- Each row shows the file name by default, or the full path if *Show full file
-  names* is enabled in Settings → Files; the full path is always in the tooltip.
+- Folders sort their contents **folders first, then files**; nested files are
+  marked with a small dash for legibility, and folder icons can be **tinted** to
+  a chosen colour (Settings → Appearance → Folders).
+- Each row shows the file name by default, or the full path if *Show file path*
+  is enabled in Settings → Files; the full path is always in the tooltip.
 - *Opening* a file that is already loaded prompts to load only the new files,
   force-reload, or cancel.
 
@@ -221,19 +273,23 @@ The **Data** tab: one entry per result extracted so far, named after its source
 - Each entry has a **checkbox**; **clicking anywhere on a row toggles it**.
 - **No** entry checked or **one** checked → **per-file** view; **two or more**
   checked → **comparison** view.
+- **Right-click a data set** → **Properties** (its portable-CSV size plus report,
+  monitor, and iteration counts).
 - **Right-click the "Data" tab** → **sort menu**: **Name (A–Z)** / **Name (Z–A)**.
 
 **Buttons (bottom of the panel):**
-- **Export** *(see note below)*.
+- **Import** — load one or more **portable StarPost CSVs** (as written by Export
+  Data) straight into the workspace, with no `.sim` or STAR-CCM+ needed. Files
+  that don't match the format are reported and skipped; name collisions prompt
+  to overwrite or keep.
+- **Export Data** — opens a dialog listing the loaded data sets (pre-ticked to
+  the current selection) where you choose which to dump to portable StarPost CSV
+  (one re-importable file per data set).
 - **Delete** — deletes the **checked** data sets from the store (after a
   confirmation). Blocked while a batch is running. The underlying `.sim` files
   stay in the Files list.
 - **Clear data** — wipes **all** loaded results (after a confirmation), leaving
   the Files list intact so they can be re-run. Blocked while a batch is running.
-
-> **Known limitation:** the Data panel's **Export** button is not currently
-> wired to an action. Use the toolbar **Export…** instead (it is the working
-> export entry point). See [Limitations](#4-limitations).
 
 ### 3.5 Reports view
 
@@ -342,7 +398,8 @@ monitor selections to the dialog.
   tab's Data column).
 - **Reports** — checklist of available reports.
 - **Options**:
-  - **File format** — **CSV / TSV / XLSX / ODS**.
+  - **File format** — **CSV / TSV / XLSX / ODS** (defaults to the *Default report
+    format* set in Settings → Export).
   - **Include units** — embed units in column headers (e.g. `Drag Force [N]`).
   - **Separate files** — one file per data set instead of one combined file
     (enabled only with two or more data sets selected).
@@ -363,8 +420,10 @@ monitor selections to the dialog.
     Drives the preview window's shape.
   - **Plot title**, **X axis label**, **Y axis label** — live-override the
     preview's labels; empty reverts to the auto value.
-  - **Theme** — Light / Dark for the exported image (defaults to the app theme).
-  - **Format** — **PNG / JPG / TIFF / PDF**.
+  - **Theme** — Light / Dark for the exported image (defaults to the *Default
+    plot theme* set in Settings → Export).
+  - **Format** — **PNG / JPG / TIFF / PDF** (defaults to the *Default plot
+    format* set in Settings → Export).
 - A separate **Plot preview** window opens to the right while the Plots tab is in
   front, and live-updates as you change the selection/options.
 - **Export** captures the preview to a high-resolution image and saves it (named
@@ -373,21 +432,26 @@ monitor selections to the dialog.
 ### 3.10 Settings dialog
 
 Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
-**eight pages**, shown in a scrollable stack on the right. **Save** writes
+**ten pages**, shown in a scrollable stack on the right. **Save** writes
 everything back to `settings.yaml`; **Cancel** discards (and reverts any live
-theme preview). Two actions take effect **immediately**, independent of
-Save/Cancel: **deleting a profile** and **Reset settings**.
+theme preview). A few actions take effect **immediately**, independent of
+Save/Cancel: **deleting a profile**, **Reset settings**, **Clear all temp
+files**, and the manual **Check for updates**.
+
+The pages, in nav order:
 
 | Page | Contents |
 |---|---|
 | **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated). |
-| **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked behind a "click to show" cover that re-hides on focus loss) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
-| **Files** | **Show full file names** — list full paths in the Files panel instead of just names. |
+| **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked as `••••` with a **Show/Hide** toggle) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
+| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons). All changes **preview live** across the whole UI. |
+| **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
+| **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
 | **Profiles** | One row per profile (Default first). **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**. **Delete** (not shown for Default) removes the profile after confirmation, immediately. |
-| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle; **Checkmark colour** (hex + Pick… + chip, used when not matching the theme). All changes **preview live** across the whole UI. |
-| **Misc** | **Show setup menu on startup** (the welcome wizard); **Reset settings** — restores Files/Reports/Plots/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately. |
+| **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
+| **About** | The StarPost logo, a short description, the author, a link to the GitHub repository, and the current **version**. |
 
 ### 3.11 Welcome / setup wizard
 
@@ -398,9 +462,10 @@ hunting through Settings:
 - **Header** — a short description of StarPost.
 - **STAR-CCM+** — **Executable Location** (+ Browse…) and **Output folder**
   (+ Browse…).
-- **Licensing** — **Mode**, **POD key**, **License server** (prefilled with the
-  stock Siemens cloud server `1999@flex.cd-adapco.com`), **License file**
-  (+ Browse…). Fields enable/disable per mode.
+- **Licensing** — **Mode**, **POD key** (masked, with a Show/Hide toggle),
+  **License server** (prefilled with the stock Siemens cloud server
+  `1999@flex.cd-adapco.com`), **License file** (+ Browse…). Fields enable/disable
+  per mode.
 - **Appearance** — **Theme**, accent preset swatches, and **Pick…** for a custom
   accent. Previews live.
 - **Show this setup on startup** checkbox (mirrors the Misc setting).
@@ -408,6 +473,24 @@ hunting through Settings:
 
 Closing without finishing (rejecting) discards the setup entries and reverts the
 theme preview, but still honours the *show on startup* choice.
+
+### 3.12 Updates
+
+StarPost can check **GitHub releases** for a newer version, comparing the
+running `__version__` against the latest release tag.
+
+- **On startup** (when *Check for updates on application startup* is enabled) the
+  check runs quietly in the background. If a newer release exists, the toolbar
+  shows the **"New update available"** note and a prompt offers to update.
+- **On demand** via Settings → Misc → **Check for updates**, which also reports
+  "you're up to date" / connection errors (the startup check stays silent on
+  those).
+- **Applying the update** depends on the build:
+  - the packaged **Windows installer build** can download the new `Setup.exe` (a
+    cancellable progress dialog) and launch it, then close to update in place;
+  - a **source checkout or other platform** instead opens the release page in the
+    browser to download manually.
+- The network work runs on background threads, so the UI never blocks.
 
 ---
 
@@ -433,13 +516,11 @@ theme preview, but still honours the *show on startup* choice.
   create, or re-define reports/plots inside the `.sim`.
 - The tool **reads** simulations; it never writes changes back into `.sim` files.
 
-### Features not exposed in the v1 UI
+### Features not exposed in the UI
 - **"Stop after current file"** is implemented in the batch worker
   (`BatchWorker.request_stop`) but is **not wired to any UI control**. Once a
   batch starts, it runs to completion (results are still checkpointed after each
   file, and closing the app stops further files).
-- The **Data panel's "Export" button** emits a signal that nothing is connected
-  to, so it currently does nothing — use the toolbar **Export…**.
 - **Per-plot axis (log/linear) override** has no UI. Classification is by the
   Settings keyword lists only. (A `Profile.axis_overrides` field is persisted in
   the profile YAML but is not applied when a profile loads.)
@@ -456,9 +537,10 @@ theme preview, but still honours the *show on startup* choice.
   layout and is flagged for tightening once tested on real exports.
 
 ### Packaging
-- A PyInstaller spec is provided and builds a folder bundle, but **PyInstaller
-  does not cross-compile** — each OS's artifact must be built on that OS, and the
-  Windows build has not yet been produced/validated end-to-end.
+- **PyInstaller does not cross-compile** — each OS's artifact must be built on
+  that OS. A Linux **AppImage** build script and a Windows **Inno Setup**
+  installer script are provided (see [`docs/packaging.md`](packaging.md)); the
+  in-place self-update is only available on the packaged **Windows** build.
 
 ---
 
@@ -583,6 +665,13 @@ honours `XDG_CONFIG_HOME` / `XDG_CACHE_HOME`.
 | Results crash cache | `~/.cache/starpost/results_cache.json` | `%LOCALAPPDATA%\starpost\results_cache.json` |
 | Files-list cache | `~/.cache/starpost/file_list.json` | `%LOCALAPPDATA%\starpost\file_list.json` |
 | Log (rotating) | `~/.cache/starpost/starpost.log` | `%LOCALAPPDATA%\starpost\starpost.log` |
+| Generated theme icons | `~/.cache/starpost/checkmark_*.png` | `%LOCALAPPDATA%\starpost\checkmark_*.png` |
+| Downloaded updates | `~/.cache/starpost/updates/` | `%LOCALAPPDATA%\starpost\updates\` |
+
+The config and cache directories are created **owner-only** (`0700`), and the
+settings file and log are written **owner-only** (`0600`), since the settings
+file holds the license credentials in plaintext. Everything under the cache dir
+is "temporary" and can be wiped via Settings → Misc → **Clear all temp files**.
 
 `settings.yaml` is seeded from the packaged `config/default_settings.yaml` on
 first run, then edited via the Settings dialog (or by hand). Key fields:
@@ -595,8 +684,12 @@ first run, then edited via the Settings dialog (or by hand). Key fields:
 - Report/plot display options (`report_decimals`, `hide_empty_reports`,
   `zero_threshold`, `hide_empty_monitors`, `monitor_zero_threshold`,
   `hover_show_monitor_name`, `hover_x_decimals`, `hover_y_decimals`,
-  `region_stats`, `plot_classification`), `show_full_file_names`, `appearance`
-  (mode, accent, checkmark colour + match toggle), and `show_setup_on_startup`.
+  `region_stats`, `plot_classification`), `show_full_file_names`.
+- `appearance` — `mode`, `accent`, `checkmark_color` + `checkmark_match_theme`,
+  and `folder_color` + `folder_use_default`.
+- Export defaults — `export_report_format`, `export_plot_format`,
+  `export_plot_theme`.
+- `show_setup_on_startup` and `check_updates_on_startup`.
 
 ---
 
@@ -613,10 +706,16 @@ starpost/                           (repo; app/package = "starpost")
 │   └── default_settings.yaml       Shipped defaults; copied to user config on first run
 │
 ├── docs/
-│   └── StarPost_Documentation.md    This document
+│   ├── StarPost_Documentation.md   This document
+│   ├── dev_install.md              Running from a source checkout
+│   └── packaging.md                Building the AppImage / Windows installer
 │
 ├── packaging/
-│   └── starpost.spec               Cross-platform PyInstaller spec (per-OS icon)
+│   ├── starpost.spec               Cross-platform PyInstaller spec (per-OS icon)
+│   ├── build_appimage.sh           Linux: PyInstaller bundle → portable AppImage
+│   ├── AppRun                      AppImage entry point
+│   ├── starpost.desktop            AppImage/menu desktop entry
+│   └── starpost.iss                Windows: Inno Setup installer script
 │
 ├── scripts/
 │   └── dev_run.py                  Launch the GUI from a source checkout (no install)
@@ -625,7 +724,13 @@ starpost/                           (repo; app/package = "starpost")
 │   ├── test_aggregator.py          Wide report-table layout + selection filtering
 │   ├── test_result_parser.py       CSV parsing + plot classification
 │   ├── test_plot_view.py           Empty-series detection for plot hiding
-│   └── test_settings.py            License flags + profile (monitors) round-trip
+│   ├── test_settings.py            License flags, profile round-trip, file perms
+│   ├── test_portable.py            Portable-CSV import/export round-trip
+│   ├── test_starccm_runner.py      License-credential redaction in logged commands
+│   ├── test_updater.py             Version comparison / update detection
+│   ├── test_update_flow.py         GUI update-available callback
+│   ├── test_widgets.py             Tooltip-delay proxy style
+│   └── test_temp_files.py          Temp-file enumeration + clearing
 │
 └── src/starpost/
     ├── __init__.py                 Version, APP_NAME
@@ -634,9 +739,10 @@ starpost/                           (repo; app/package = "starpost")
     ├── core/                       Engine interface & business logic (no GUI)
     │   ├── settings.py             Settings + LicenseConfig + Profile (YAML I/O)
     │   ├── macro_generator.py      Renders extract_all.java from the Jinja2 template
-    │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log;
-    │   │                           exe placeholder/dialog-filter helpers
+    │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log
+    │   │                           (license args redacted from logs)
     │   ├── result_parser.py        Parses exported CSVs; classifies plots (log/linear)
+    │   ├── updater.py              GitHub release check + installer download (UI-free)
     │   └── plot_export.py          Renders a MonitorPlot to JPG/PDF (matplotlib helper)
     │
     ├── macros/
@@ -649,31 +755,38 @@ starpost/                           (repo; app/package = "starpost")
     │
     ├── data/                       Data model & storage
     │   ├── models.py               Report, PlotSeries, MonitorPlot, SimResult, PlotKind
+    │   ├── portable.py             Round-trippable StarPost-CSV (Import / Export Data)
     │   └── store.py                ResultStore: in-memory + JSON crash cache; homogeneity
     │
     ├── gui/                        PySide6 user interface
-    │   ├── main_window.py          Toolbar, panels, batch worker wiring, view refresh
+    │   ├── main_window.py          Toolbar (+ version/update note), panels, view refresh
     │   ├── theme.py                Dark/light + accent QSS generator (build/apply)
-    │   ├── icons.py                Loads the bundled app icon (QIcon)
-    │   ├── widgets.py              Shared small widgets (e.g. UniformTabBar)
+    │   ├── icons.py                Loads the bundled app icon + logo (QIcon/QPixmap)
+    │   ├── update.py               Qt glue for the updater (threads, prompts, download)
+    │   ├── widgets.py              Shared widgets: UniformTabBar, SecretLineEdit (masked
+    │   │                           key field), ToolTipResetStyle (tooltip timing)
     │   ├── resources/
     │   │   ├── StarPost-logo.png   Application / window icon
     │   │   └── StarPost-logo.ico   Windows executable icon (used by the PyInstaller build)
     │   └── views/
-    │       ├── file_list.py        Files tab: add files/folder, remove, clear, open, sort
-    │       ├── data_list.py        Data tab: tick data sets, delete/clear, sort
+    │       ├── file_list.py        Files tab: virtual folders, drag-drop, sort, open,
+    │       │                       Properties, folder-colour tinting
+    │       ├── data_list.py        Data tab: tick data sets, import/export, delete/clear
     │       ├── selection_panel.py  Report/plot checklists, Select all, profile load/save
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort
     │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-group
     │       │                       dropdowns, hover readout, Shift+drag region stats
-    │       ├── settings_dialog.py  In-app settings (8 paged groups) + profile mgmt
+    │       ├── settings_dialog.py  In-app settings (10 paged groups) + profile mgmt
+    │       ├── properties_dialog.py  File / data-set / folder Properties dialogs
+    │       ├── data_export_dialog.py  Export Data: pick data sets → portable CSVs
     │       ├── log_console.py      Live log + progress counter/bar
     │       ├── export_dialog.py    Tabbed export (Reports/Plots) + live plot preview
     │       └── welcome_dialog.py   First-run setup wizard
     │
     └── utils/
-        ├── paths.py                platformdirs config/cache/profile locations
-        └── logging.py              Stderr + rotating file logging
+        ├── paths.py                platformdirs locations; owner-only perms; temp-file
+        │                           enumeration/clearing
+        └── logging.py              Stderr + owner-only rotating file logging
 ```
 
 ---
@@ -720,7 +833,10 @@ pip install -e ".[dev]"
 pyinstaller packaging/starpost.spec      # run on the target OS
 ```
 Output lands in `dist/starpost/` (`starpost.exe` on Windows; the spec picks the
-`.ico` automatically).
+`.ico` automatically). For distributable artifacts — a Linux **AppImage**
+(`packaging/build_appimage.sh`) or a Windows **Inno Setup installer**
+(`packaging/starpost.iss`) — see [`docs/packaging.md`](packaging.md). Running
+from a source checkout is covered in [`docs/dev_install.md`](dev_install.md).
 
 ### Run the tests
 ```bash
@@ -739,28 +855,37 @@ PYTHONPATH=src python -m pytest tests/ -q
   persisted Files list.
 - Batch worker: sequential execution, progress/log signals, cooperative
   stop-after-current (worker-level).
-- The full GUI: toolbar, Files/Data tabs, Reports table (per-file + comparison,
-  sortable), interactive plot viewer (multi-group overlay, per-group monitor
-  dropdowns, hover readout, Shift+drag region statistics, theme-following), the
-  Selection panel with profiles, and the log console.
+- The full GUI: toolbar (with the version label + update note), Files/Data tabs,
+  Reports table (per-file + comparison, sortable), interactive plot viewer
+  (multi-group overlay, per-group monitor dropdowns, hover readout, Shift+drag
+  region statistics, theme-following), the Selection panel with profiles, and the
+  log console. Hover tooltips on every button.
+- **Files virtual folders** — in-app nested folders with drag-drop re-parenting,
+  per-folder sorting, Rename/Delete, Properties, and colour-tinted folder icons.
+- **Portable data import/export** — round-trippable StarPost-CSV per data set
+  (Import / Export Data), plus Properties on files/data sets/folders.
 - **Export** — reports to CSV/TSV/XLSX/ODS (combined or per-file, optional
   units) and plots to PNG/JPG/TIFF/PDF via a live preview with custom title/axis
-  labels, per-monitor colours, theme, and aspect ratio.
-- **Settings dialog** — eight paged groups covering every `settings.yaml` field,
-  plus profile management (Show Details / Delete) and Reset.
-- **Appearance theming** — dark/light + accent + checkmark colour generated into
-  QSS at runtime, previewed live (the plot follows the mode too).
+  labels, per-monitor colours, theme, and aspect ratio; configurable defaults.
+- **Settings dialog** — ten paged groups covering every `settings.yaml` field,
+  plus profile management (Show Details / Delete), Reset, and Clear all temp files.
+- **Appearance theming** — dark/light + accent + checkmark + folder colour
+  generated into QSS at runtime, previewed live (the plot follows the mode too).
 - **Profiles** — YAML persistence including per-group monitor selection and
   region statistics; built-in Default; in-dialog management.
+- **Credential safety** — masked POD key, owner-only (`0600`) settings/log files,
+  and license-arg redaction in the log and on-screen command output.
+- **In-app update check** — GitHub release comparison with a toolbar note, and
+  download-and-install of the new installer on the packaged Windows build.
 - **First-run setup wizard.**
-- **Cross-platform** config/cache/log locations via platformdirs; Windows
-  packaging support (icon, spec).
+- **Cross-platform** config/cache/log locations via platformdirs; packaged Linux
+  AppImage and Windows Inno Setup installer.
 - Unit tests for parser, classifier, aggregator, license flags, profile
-  round-trip, and empty-series detection.
+  round-trip, empty-series detection, portable CSV, credential redaction, file
+  permissions, the updater, tooltip timing, and temp-file clearing.
 
 **Not yet exposed / pending:** see [Limitations](#4-limitations) — stop-after-
-current UI, the Data-panel Export button, per-plot axis-override UI, and an
-enforced batch-size warning.
+current UI, per-plot axis-override UI, and an enforced batch-size warning.
 
 **Not validated:** the Java macro has not been run against a live, licensed
 STAR-CCM+ install, and the `StarPlot.export()` CSV layout is assumed.
@@ -800,13 +925,12 @@ These were locked during requirements gathering and shaped the v1 design.
 
 - **Validate the Java macro** on a real STAR-CCM+ install and confirm the
   `StarPlot.export()` CSV layout across plot types; tighten the parser.
-- **Surface stop-after-current** in the UI (a Stop button) and **wire the
-  Data-panel Export button** (or remove it in favour of the toolbar action).
+- **Surface stop-after-current** in the UI (a Stop button).
 - **Per-plot axis-override UI** (and apply `Profile.axis_overrides` on load).
 - **Enforce/warn on the batch-size ceiling** if it remains a real constraint.
-- **Produce and validate the packaged builds** (AppImage on Linux; MSI/NSIS or a
-  signed `.exe` on Windows) for team distribution.
-- **Possible later features** (out of v1 scope): 3D scene/image export, XY plots
-  and other plot types, richer report templating (e.g. full PDF reports), and
-  optional multi-sim-per-session macro runs to reduce license churn further.
+- **Validate the packaged builds** end to end on clean machines, and consider
+  **code-signing** the Windows installer to avoid SmartScreen warnings.
+- **Possible later features** (out of scope today): 3D scene/image export, XY
+  plots and other plot types, richer report templating (e.g. full PDF reports),
+  and optional multi-sim-per-session macro runs to reduce license churn further.
 ```
