@@ -39,6 +39,12 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Per-machine install (writes to Program Files); requires elevation.
 PrivilegesRequired=admin
+; In-app updater support: if StarPost is still running when its installer starts
+; (e.g. an update launched from within the app), close it automatically so its
+; files can be replaced. The [Run] entry below relaunches it afterwards, so we
+; don't also restart via Restart Manager (which would launch a second copy).
+CloseApplications=yes
+RestartApplications=no
 LicenseFile=..\LICENSE
 SetupIconFile=..\src\starpost\gui\resources\StarPost-logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}

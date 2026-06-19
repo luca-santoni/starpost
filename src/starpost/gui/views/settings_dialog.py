@@ -631,6 +631,29 @@ class SettingsDialog(QDialog):
         hint.setWordWrap(True)
         form.addRow("", hint)
 
+        self._check_updates_startup = QCheckBox(
+            "Check for updates on application startup"
+        )
+        form.addRow("", self._check_updates_startup)
+        upd_hint = QLabel(
+            "When selected, StarPost checks for a newer release each time it "
+            "starts and offers to update if one is available."
+        )
+        upd_hint.setObjectName("hint")
+        upd_hint.setWordWrap(True)
+        form.addRow("", upd_hint)
+
+        check_now = QPushButton("Check for updates")
+        check_now.clicked.connect(self._check_for_updates_now)
+        form.addRow("", check_now)
+        check_hint = QLabel(
+            "Check now for a newer version. If one is available, you'll be "
+            "asked whether you want to update."
+        )
+        check_hint.setObjectName("hint")
+        check_hint.setWordWrap(True)
+        form.addRow("", check_hint)
+
         reset = QPushButton("Reset settings")
         reset.clicked.connect(self._reset_settings)
         form.addRow("", reset)
@@ -643,6 +666,13 @@ class SettingsDialog(QDialog):
         reset_hint.setWordWrap(True)
         form.addRow("", reset_hint)
         return self._wrap(form)
+
+    def _check_for_updates_now(self) -> None:
+        """Manual update check from the Misc page. Always reports the outcome
+        (including 'up to date'), unlike the quieter automatic startup check."""
+        from starpost.gui.update import check_for_updates
+
+        check_for_updates(self, silent_if_current=False)
 
     def _build_about_page(self) -> QWidget:
         logo = QLabel()
@@ -718,6 +748,7 @@ class SettingsDialog(QDialog):
         s.appearance.folder_color = d.appearance.folder_color
         s.appearance.folder_use_default = d.appearance.folder_use_default
         s.show_setup_on_startup = d.show_setup_on_startup
+        s.check_updates_on_startup = d.check_updates_on_startup
         s.export_report_format = d.export_report_format
         s.export_plot_format = d.export_plot_format
         s.export_plot_theme = d.export_plot_theme
@@ -751,6 +782,7 @@ class SettingsDialog(QDialog):
         self._folder_default_cb.setChecked(d.appearance.folder_use_default)
         self._on_folder_default_toggled(d.appearance.folder_use_default)
         self._show_setup.setChecked(d.show_setup_on_startup)
+        self._check_updates_startup.setChecked(d.check_updates_on_startup)
         ri = self._export_report_format.findText(
             d.export_report_format, Qt.MatchFlag.MatchFixedString
         )
@@ -975,6 +1007,7 @@ class SettingsDialog(QDialog):
 
         self._show_full_paths.setChecked(s.show_full_file_names)
         self._show_setup.setChecked(s.show_setup_on_startup)
+        self._check_updates_startup.setChecked(s.check_updates_on_startup)
 
         self._decimals.setValue(s.report_decimals)
         self._hide_empty.setChecked(s.hide_empty_reports)
@@ -1035,6 +1068,7 @@ class SettingsDialog(QDialog):
         s.appearance.folder_use_default = self._folder_default
         s.show_full_file_names = self._show_full_paths.isChecked()
         s.show_setup_on_startup = self._show_setup.isChecked()
+        s.check_updates_on_startup = self._check_updates_startup.isChecked()
         s.report_decimals = self._decimals.value()
         s.hide_empty_reports = self._hide_empty.isChecked()
         try:
