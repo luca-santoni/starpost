@@ -205,8 +205,18 @@ not ship a WiX project.
 
 ## Release checklist
 
-1. Bump `version` in [`pyproject.toml`](../pyproject.toml) (the AppImage name and
-   any installer metadata derive from it).
+1. Bump the version in **both** places, keeping them identical:
+   - `version` in [`pyproject.toml`](../pyproject.toml) (the AppImage name and
+     installer metadata derive from it), and
+   - `__version__` in [`src/starpost/__init__.py`](../src/starpost/__init__.py)
+     (what the running app reports and what the in-app updater compares against
+     the latest GitHub release tag).
+
+   If these drift, the in-app update check misbehaves — e.g. an installer built
+   as `1.2.0` while the app still reports `1.1.0` would keep offering an "update"
+   to a version that's already installed. (A future cleanup could make
+   `pyproject.toml` read the version from `__init__.py` so there's a single
+   source of truth.)
 2. On **Linux**: run `packaging/build_appimage.sh` → `StarPost-<version>-<arch>.AppImage`.
 3. On **Windows**: run `pyinstaller packaging\starpost.spec`, then build the
    installer with
