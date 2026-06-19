@@ -171,12 +171,12 @@ default, so call it by full path (or add it to `PATH` yourself).
 After the PyInstaller bundle exists (`dist\starpost\`), from the repo root:
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.1.0 packaging\starpost.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.2.0 packaging\starpost.iss
 ```
 
 The result is `dist\StarPost-<version>-Setup.exe` (LZMA-compressed; the ~215 MB
 bundle compresses to ~68 MB). **The installer must be named
-`StarPost-<version>-Setup.exe`** (e.g. `StarPost-1.1.0-Setup.exe`); this is
+`StarPost-<version>-Setup.exe`** (e.g. `StarPost-1.2.0-Setup.exe`); this is
 produced automatically by the `OutputBaseFilename` in
 [`starpost.iss`](../packaging/starpost.iss), so keep that setting in the format
 `StarPost-{#MyAppVersion}-Setup`. Running it installs per-machine into
@@ -184,7 +184,7 @@ produced automatically by the `OutputBaseFilename` in
 creates a Start-menu shortcut (plus an optional, unchecked desktop shortcut),
 registers an uninstaller in *Add/Remove Programs*, and offers to launch the app.
 
-The version defaults to `1.1.0` inside the script but **should be passed on the
+The version defaults to `1.2.0` inside the script but **should be passed on the
 command line** (`/DMyAppVersion=<version>`) to match `__version__` in
 [`src/starpost/__init__.py`](../src/starpost/__init__.py). The script's `AppId`
 GUID is fixed — do
