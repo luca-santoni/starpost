@@ -7,12 +7,27 @@ honoring XDG_CONFIG_HOME/XDG_CACHE_HOME); on Windows it maps to %APPDATA% and
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import platformdirs
 
 from starpost import APP_NAME
+
+
+def harden_file(path: Path) -> None:
+    """Restrict ``path`` to owner read/write only (0600).
+
+    Used for files that can hold sensitive data (the settings file's license
+    credentials, the log). Best-effort: silently ignores filesystems that don't
+    support POSIX permissions (e.g. some Windows setups), where the OS already
+    scopes the per-user config/cache locations to the account.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def config_dir() -> Path:
@@ -54,4 +69,11 @@ def packaged_default_settings() -> Path:
 
 def _ensure(p: Path) -> Path:
     p.mkdir(parents=True, exist_ok=True)
+    # These are per-user app dirs holding the settings (license credentials),
+    # profiles and logs; keep them private to the owner. Best-effort, as with
+    # harden_file().
+    try:
+        os.chmod(p, 0o700)
+    except OSError:
+        pass
     return p

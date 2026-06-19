@@ -13,6 +13,7 @@ from typing import Optional
 import yaml
 
 from starpost.utils.paths import (
+    harden_file,
     packaged_default_settings,
     profiles_dir,
     settings_path,
@@ -110,6 +111,9 @@ class Settings:
             default = packaged_default_settings()
             if default.exists():
                 shutil.copy(default, path)
+                # shutil.copy carries the source's mode bits; lock the user's
+                # copy down before any credentials are written into it.
+                harden_file(path)
         data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
         return cls.from_dict(data or {})
 
@@ -198,9 +202,13 @@ class Settings:
         }
 
     def save(self) -> None:
-        settings_path().write_text(
+        path = settings_path()
+        path.write_text(
             yaml.safe_dump(self.to_dict(), sort_keys=False), encoding="utf-8"
         )
+        # The file holds the POD key / license server in plaintext; keep it
+        # readable only by the owner (also fixes any pre-existing loose perms).
+        harden_file(path)
 
 
 # --------------------------------------------------------------------------- #

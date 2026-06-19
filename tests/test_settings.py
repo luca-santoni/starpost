@@ -1,3 +1,7 @@
+import os
+import stat
+import sys
+
 import pytest
 import yaml
 
@@ -18,6 +22,32 @@ def isolated_profiles(monkeypatch, tmp_path):
     profiles.mkdir()
     monkeypatch.setattr("starpost.core.settings.profiles_dir", lambda: profiles)
     return profiles
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX mode bits not meaningful on Windows"
+)
+def test_save_writes_owner_only_settings_file(monkeypatch, tmp_path):
+    """The settings file holds the POD key / license server in plaintext, so
+    save() must leave it readable only by the owner (0600)."""
+    path = tmp_path / "settings.yaml"
+    monkeypatch.setattr("starpost.core.settings.settings_path", lambda: path)
+    Settings().save()
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX mode bits not meaningful on Windows"
+)
+def test_save_tightens_preexisting_loose_permissions(monkeypatch, tmp_path):
+    """A settings file left world-readable by an older version is locked down on
+    the next save."""
+    path = tmp_path / "settings.yaml"
+    path.write_text("starccm_path: ''\n")
+    os.chmod(path, 0o664)
+    monkeypatch.setattr("starpost.core.settings.settings_path", lambda: path)
+    Settings().save()
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
 
 def test_podkey_server_args():
