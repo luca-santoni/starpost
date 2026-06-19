@@ -45,6 +45,34 @@ def exe_dialog_filter() -> str:
     return ""
 
 
+# Flags whose immediately-following argument is a license secret (the POD key,
+# the license server, or the license-file path). Their values must never reach
+# the log file, the on-screen console, or any captured output.
+_SECRET_FLAGS = ("-podkey", "-licpath")
+_REDACTED = "***"
+
+
+def redact_command(cmd: list[str]) -> str:
+    """Render ``cmd`` for display/logging with license secrets masked.
+
+    The argument following any flag in :data:`_SECRET_FLAGS` (the POD key and the
+    license server/-file) is replaced with a placeholder, so credentials are
+    never written to the log file or shown in the GUI console. The real command
+    passed to the subprocess is left untouched.
+    """
+    out: list[str] = []
+    redact_next = False
+    for token in cmd:
+        if redact_next:
+            out.append(_REDACTED)
+            redact_next = False
+        else:
+            out.append(token)
+            if token in _SECRET_FLAGS:
+                redact_next = True
+    return " ".join(out)
+
+
 class StarRunError(Exception):
     pass
 
@@ -76,8 +104,11 @@ class StarRunner:
         with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
             macro = render_macro(output_dir, Path(tmp))
             cmd = self.build_command(macro, sim_file)
-            sink(f"$ {' '.join(cmd)}")
-            log.info("running: %s", " ".join(cmd))
+            # Mask the POD key / license server before this command reaches the
+            # GUI console or the log file; the subprocess still gets the real cmd.
+            shown = redact_command(cmd)
+            sink(f"$ {shown}")
+            log.info("running: %s", shown)
 
             code = self._stream(cmd, sink)
             if code != 0:
