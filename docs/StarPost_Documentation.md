@@ -344,6 +344,13 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 - Which statistics appear is set in Settings → Plots → Statistics (catalog:
   Avg, Median, Std Dev, Var, Min, Max, Range).
 
+**Smooth data:**
+- A **Smooth data** checkbox at the bottom-left of the plot. When ticked, every
+  shown monitor is drawn through a **moving average**, so the lines (and the
+  hover/region readouts) reflect the smoothed data.
+- The window size is **Moving average width** in Settings → Plots (a width of 1
+  leaves the data unchanged).
+
 **Other:**
 - Without Shift, the usual pyqtgraph **pan (drag)** and **zoom (scroll)** apply,
   and right-clicking the plot exposes pyqtgraph's built-in view-box menu.
@@ -480,7 +487,7 @@ The pages, in nav order:
 | **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons). All changes **preview live** across the whole UI. |
 | **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
-| **Plots** | **Hide empty monitors** + **Zero threshold**; **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
+| **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
 | **Profiles** | One row per profile (Default first). **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**. **Delete** (not shown for Default) removes the profile after confirmation, immediately. |
 | **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
@@ -716,8 +723,9 @@ first run, then edited via the Settings dialog (or by hand). Key fields:
 - `extra_args` — appended verbatim to every `starccm+` call.
 - Report/plot display options (`report_decimals`, `hide_empty_reports`,
   `zero_threshold`, `hide_empty_monitors`, `monitor_zero_threshold`,
-  `hover_show_monitor_name`, `hover_x_decimals`, `hover_y_decimals`,
-  `region_stats`, `plot_classification`), `show_full_file_names`.
+  `moving_average_width`, `hover_show_monitor_name`, `hover_x_decimals`,
+  `hover_y_decimals`, `region_stats`, `plot_classification`),
+  `show_full_file_names`.
 - `appearance` — `mode`, `accent`, `checkmark_color` + `checkmark_match_theme`,
   and `folder_color` + `folder_use_default`.
 - Export defaults — `export_report_format`, `export_plot_format`,

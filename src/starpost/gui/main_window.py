@@ -98,6 +98,7 @@ class MainWindow(QMainWindow):
             settings.hover_y_decimals,
         )
         self.plot_view.set_region_stats(settings.region_stats)
+        self.plot_view.set_smooth_width(settings.moving_average_width)
         self.plot_view.apply_theme(settings.appearance.mode)
         # The per-monitor selection now lives in the selection panel's plot tree,
         # so the plot view's own under-plot category dropdowns are hidden; the
@@ -868,6 +869,7 @@ class MainWindow(QMainWindow):
             self.settings.hover_y_decimals,
         )
         self.plot_view.set_region_stats(self.settings.region_stats)
+        self.plot_view.set_smooth_width(self.settings.moving_average_width)
         self.plot_view.apply_theme(self.settings.appearance.mode)
         # The hide-empty/threshold settings change which reports and monitors
         # qualify as empty: refresh both lists (preserving the current selection).

@@ -76,6 +76,9 @@ class Settings:
     zero_threshold: float = 1e-5  # |value| below this is treated as 0
     hide_empty_monitors: bool = True  # hide monitor plots whose values are all ~0
     monitor_zero_threshold: float = 1e-5  # |value| below this is treated as 0
+    # Window size (in points) of the moving average applied when "Smooth data"
+    # is enabled under the plot. 1 leaves the data unchanged.
+    moving_average_width: int = 10
     hover_show_monitor_name: bool = False  # include monitor name in the hover label
     hover_x_decimals: int = 0  # decimal places shown for the hover X coordinate
     hover_y_decimals: int = 4  # decimal places shown for the hover Y coordinate
@@ -147,6 +150,7 @@ class Settings:
             zero_threshold=float(d.get("zero_threshold", 1e-5)),
             hide_empty_monitors=bool(d.get("hide_empty_monitors", True)),
             monitor_zero_threshold=float(d.get("monitor_zero_threshold", 1e-5)),
+            moving_average_width=max(1, int(d.get("moving_average_width", 10))),
             hover_show_monitor_name=bool(d.get("hover_show_monitor_name", False)),
             hover_x_decimals=int(d.get("hover_x_decimals", 0)),
             hover_y_decimals=int(d.get("hover_y_decimals", 4)),
@@ -189,6 +193,7 @@ class Settings:
             "zero_threshold": self.zero_threshold,
             "hide_empty_monitors": self.hide_empty_monitors,
             "monitor_zero_threshold": self.monitor_zero_threshold,
+            "moving_average_width": self.moving_average_width,
             "hover_show_monitor_name": self.hover_show_monitor_name,
             "hover_x_decimals": self.hover_x_decimals,
             "hover_y_decimals": self.hover_y_decimals,

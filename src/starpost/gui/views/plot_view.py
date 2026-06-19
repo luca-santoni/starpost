@@ -20,6 +20,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGraphicsRectItem,
     QHBoxLayout,
     QLabel,
@@ -135,6 +136,26 @@ def _series_is_empty(series, zero_threshold: float) -> bool:
     negative still count as non-empty.
     """
     return not series.y or max(abs(v) for v in series.y) < zero_threshold
+
+
+def _moving_average(y, width: int):
+    """A centred moving average of ``y`` with a window of ``width`` points.
+
+    The window shrinks at the ends (averaging only the points that exist), so the
+    output keeps the same length and isn't pulled toward zero at the edges. A
+    width of 1 or less returns the data unchanged.
+    """
+    arr = np.asarray(y, dtype=float)
+    n = arr.size
+    if width <= 1 or n == 0:
+        return arr
+    left = (width - 1) // 2
+    right = width // 2
+    csum = np.concatenate(([0.0], np.cumsum(arr)))
+    idx = np.arange(n)
+    lo = np.maximum(0, idx - left)
+    hi = np.minimum(n, idx + right + 1)  # window is [lo, hi)
+    return (csum[hi] - csum[lo]) / (hi - lo)
 
 
 def _save_via_pillow(image, path) -> None:
@@ -458,6 +479,14 @@ class PlotView(QWidget):
         # Likewise remember each category's chosen monitor sort order.
         self._sort_memory: dict[str, str | None] = {}
 
+        # "Smooth data" sits at the bottom-left: when ticked, shown monitors are
+        # drawn through a moving average (width from settings).
+        self._smooth_check = QCheckBox("Smooth data")
+        self._smooth_check.setToolTip(
+            "Smooth the shown monitors with a moving average"
+        )
+        self._smooth_check.toggled.connect(self._on_smooth_toggled)
+
         # "Clear selection" sits at the bottom-right, past the category
         # dropdowns; enabled only while a Shift+drag region is active.
         self._clear_sel_btn = QPushButton("Clear selection")
@@ -466,6 +495,7 @@ class PlotView(QWidget):
         self._clear_sel_btn.clicked.connect(self._clear_region)
 
         bottom = QHBoxLayout()
+        bottom.addWidget(self._smooth_check)
         bottom.addLayout(self._ctrl, 1)
         bottom.addWidget(self._clear_sel_btn)
 
@@ -478,6 +508,10 @@ class PlotView(QWidget):
         self._current = None                    # list[MonitorPlot] | categories
         self._y_log = False                     # current Y-axis log state
         self._line_width = 1.5                  # pen width for every plotted line
+        # Moving-average smoothing of shown monitors (toggled by the checkbox;
+        # window width set from the plot settings).
+        self._smooth = False
+        self._smooth_width = 10
 
         # Empty-monitor filtering (mirrors the Reports settings).
         self._hide_empty = True
@@ -554,6 +588,25 @@ class PlotView(QWidget):
         self._line_width = width
         if self._mode is not None:
             self._render()
+
+    def set_smooth_width(self, width: int) -> None:
+        """Set the moving-average window (points) used when smoothing is on, and
+        redraw if it's currently affecting the plot."""
+        self._smooth_width = max(1, int(width))
+        if self._smooth and self._mode is not None:
+            self._render()
+
+    def _on_smooth_toggled(self, checked: bool) -> None:
+        """The "Smooth data" checkbox: redraw with/without the moving average."""
+        self._smooth = checked
+        if self._mode is not None:
+            self._render()
+
+    def _smoothed(self, y):
+        """``y`` run through the moving average when smoothing is on, else as-is."""
+        if not self._smooth:
+            return y
+        return _moving_average(y, self._smooth_width)
 
     def set_title_size(self, pt: float) -> None:
         """Set the plot title's font size (points) and refresh the labels."""
@@ -903,7 +956,7 @@ class PlotView(QWidget):
                 color = self._series_colors.get(s.name, default)
                 self._drawn_colors[s.name] = color
                 drawn.append(s.name)
-                specs.append((s.x, s.y, s.name, color))
+                specs.append((s.x, self._smoothed(s.y), s.name, color))
         title = ", ".join(p.name for p in plots)
         self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
         for x, y, name, color in specs:
@@ -951,7 +1004,7 @@ class PlotView(QWidget):
                     drawn.append(s.name)
                     disp = _display_name(s.name)
                     label = f"{sim_name}: {disp}" if multi else sim_name
-                    specs.append((s.x, s.y, label, color))
+                    specs.append((s.x, self._smoothed(s.y), label, color))
         title = ", ".join(name for name, _ in categories) + " (comparison)"
         self._reset(title, y_log, _y_label_for(drawn))
         for x, y, label, color in specs:

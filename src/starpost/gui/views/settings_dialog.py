@@ -8,8 +8,9 @@ Covers everything in settings.yaml:
   - STAR-CCM+:  starccm_path, default_output_dir, extra_args
   - License:    mode, podkey, licpath, license_file
   - Reports:    report_decimals, hide_empty_reports, zero_threshold
-  - Plots:      hide_empty_monitors, monitor_zero_threshold, hover_show_monitor_name,
-                hover_x_decimals, hover_y_decimals, classification keywords
+  - Plots:      hide_empty_monitors, monitor_zero_threshold, moving_average_width,
+                hover_show_monitor_name, hover_x_decimals, hover_y_decimals,
+                classification keywords
 
 Plus a Profiles page that lists saved selection profiles and lets the user
 delete them (these live as separate YAML files, not in settings.yaml).
@@ -375,6 +376,10 @@ class SettingsDialog(QDialog):
         self._monitor_zero_threshold.setValidator(validator)
         self._monitor_zero_threshold.setPlaceholderText("1e-05")
 
+        self._moving_average_width = QSpinBox()
+        self._moving_average_width.setRange(1, 999)
+        self._moving_average_width.setValue(10)
+
         self._hover_show_name = QCheckBox("Show name when hovering")
 
         self._hover_x_decimals = QSpinBox()
@@ -413,6 +418,14 @@ class SettingsDialog(QDialog):
         zt_hint.setObjectName("hint")
         zt_hint.setWordWrap(True)
         form.addRow("", zt_hint)
+        form.addRow("Moving average width", self._moving_average_width)
+        ma_hint = QLabel(
+            "Window size (in points) of the moving average applied when "
+            "“Smooth data” is enabled under the plot. 1 leaves the data unchanged."
+        )
+        ma_hint.setObjectName("hint")
+        ma_hint.setWordWrap(True)
+        form.addRow("", ma_hint)
         form.addRow("", self._hover_show_name)
         hover_hint = QLabel(
             "When selected, monitor names are shown when hovering over a monitor."
@@ -806,6 +819,7 @@ class SettingsDialog(QDialog):
         s.zero_threshold = d.zero_threshold
         s.hide_empty_monitors = d.hide_empty_monitors
         s.monitor_zero_threshold = d.monitor_zero_threshold
+        s.moving_average_width = d.moving_average_width
         s.hover_show_monitor_name = d.hover_show_monitor_name
         s.hover_x_decimals = d.hover_x_decimals
         s.hover_y_decimals = d.hover_y_decimals
@@ -833,6 +847,7 @@ class SettingsDialog(QDialog):
         self._zero_threshold.setText(f"{d.zero_threshold:g}")
         self._hide_empty_monitors.setChecked(d.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{d.monitor_zero_threshold:g}")
+        self._moving_average_width.setValue(d.moving_average_width)
         self._hover_show_name.setChecked(d.hover_show_monitor_name)
         self._hover_x_decimals.setValue(d.hover_x_decimals)
         self._hover_y_decimals.setValue(d.hover_y_decimals)
@@ -1087,6 +1102,7 @@ class SettingsDialog(QDialog):
 
         self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
+        self._moving_average_width.setValue(s.moving_average_width)
         self._hover_show_name.setChecked(s.hover_show_monitor_name)
         self._hover_x_decimals.setValue(s.hover_x_decimals)
         self._hover_y_decimals.setValue(s.hover_y_decimals)
@@ -1152,6 +1168,7 @@ class SettingsDialog(QDialog):
             s.monitor_zero_threshold = abs(float(self._monitor_zero_threshold.text()))
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
+        s.moving_average_width = self._moving_average_width.value()
         s.hover_show_monitor_name = self._hover_show_name.isChecked()
         s.hover_x_decimals = self._hover_x_decimals.value()
         s.hover_y_decimals = self._hover_y_decimals.value()
