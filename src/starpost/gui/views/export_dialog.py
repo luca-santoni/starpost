@@ -649,6 +649,12 @@ class ExportDialog(QDialog):
         )
         self._axis_label_size.valueChanged.connect(self._on_axis_label_size_changed)
 
+        # Grid: a simple toggle for the plot's background grid, on by default.
+        self._show_grid = QCheckBox()
+        self._show_grid.setChecked(True)
+        self._show_grid.setToolTip("Show or hide the plot's background grid")
+        self._show_grid.toggled.connect(self._on_show_grid_changed)
+
         form = QFormLayout(box)
         form.addRow("Aspect ratio", self._plot_aspect)
         form.addRow("Plot title", self._plot_title)
@@ -659,6 +665,7 @@ class ExportDialog(QDialog):
         form.addRow("Theme", self._plot_theme)
         form.addRow("Legend scale", self._legend_scale)
         form.addRow("Line thickness", self._line_width)
+        form.addRow("Show grid", self._show_grid)
         form.addRow("Format", self._plot_format)
 
     @staticmethod
@@ -708,6 +715,9 @@ class ExportDialog(QDialog):
         self._preview.set_axis_label_size(
             self._text_size_for(value, _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX)
         )
+
+    def _on_show_grid_changed(self, checked: bool) -> None:
+        self._preview.set_grid_visible(checked)
 
     def _on_aspect_changed(self, text: str) -> None:
         """Apply the chosen aspect ratio to the preview window. "Custom" (or any

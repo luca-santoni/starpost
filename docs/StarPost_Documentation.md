@@ -436,6 +436,8 @@ monitor selections to the dialog.
   - **Line thickness** — a slider that sets the pen width of **every line on the
     plot** at once, from thin (left) to thick (right). The chosen width carries
     through to the exported image.
+  - **Show grid** — a checkbox (on by default) toggling the plot's background
+    grid.
   - **Format** — **PNG / JPG / TIFF / PDF** (defaults to the *Default plot
     format* set in Settings → Export).
 - A separate **Plot preview** window opens to the right while the Plots tab is in

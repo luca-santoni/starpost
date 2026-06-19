@@ -565,6 +565,10 @@ class PlotView(QWidget):
         self._axis_label_size = pt
         self._refresh_labels()
 
+    def set_grid_visible(self, visible: bool) -> None:
+        """Show or hide the plot's background grid."""
+        self._plot.showGrid(x=visible, y=visible, alpha=0.3)
+
     def _refresh_labels(self) -> None:
         """Push the effective title and axis labels (override if set, else the
         auto-derived value) onto the plot in the current foreground colour."""
