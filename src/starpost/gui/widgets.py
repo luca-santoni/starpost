@@ -4,10 +4,31 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
+    QProxyStyle,
+    QStyle,
     QTabBar,
     QToolButton,
     QWidget,
 )
+
+
+class ToolTipResetStyle(QProxyStyle):
+    """Proxy style that makes each hover wait the full tooltip delay.
+
+    Qt normally keeps tooltips "awake" for a short window after one is hidden, so
+    moving the cursor straight to another widget shows its tooltip instantly.
+    Returning 0 for the fall-asleep delay removes that window: Qt sleeps as soon
+    as a tooltip hides, so hovering a new button restarts the wake-up timer.
+    Every other style decision is delegated unchanged to the base style, so the
+    app's appearance (driven by the QSS theme) is untouched.
+    """
+
+    def styleHint(  # noqa: N802 (Qt override)
+        self, hint, option=None, widget=None, returnData=None
+    ) -> int:
+        if hint == QStyle.StyleHint.SH_ToolTip_FallAsleepDelay:
+            return 0
+        return super().styleHint(hint, option, widget, returnData)
 
 
 class SecretLineEdit(QWidget):

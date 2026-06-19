@@ -9,6 +9,7 @@ from starpost.core.settings import Settings
 from starpost.gui.icons import app_icon
 from starpost.gui.main_window import MainWindow
 from starpost.gui.theme import apply_theme
+from starpost.gui.widgets import ToolTipResetStyle
 from starpost.utils.logging import configure
 
 
@@ -17,6 +18,9 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("starpost")
     app.setWindowIcon(app_icon())
+    # Make moving between buttons restart the tooltip timer instead of showing
+    # the next tooltip instantly (see ToolTipResetStyle).
+    app.setStyle(ToolTipResetStyle())
 
     settings = Settings.load()
     apply_theme(
