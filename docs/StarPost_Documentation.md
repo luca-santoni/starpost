@@ -109,7 +109,8 @@ rendering and complex visualization are out of scope (see
 ### Viewing (in-app)
 - **Per-file mode** (one Data set ticked): that simulation's reports and plots.
 - **Comparison mode** (two or more ticked): a wide table of report values across
-  the selected sims, and monitor-plot overlays coloured per sim.
+  the selected sims, and monitor-plot overlays where every line (each data
+  set / monitor pair) gets its own colour.
 - **Report table**: numeric values with units, configurable decimal places, and
   optional hiding of ~0 reports; sortable by name/value/units.
 - **Monitor plot viewer** (interactive, pyqtgraph):
@@ -314,8 +315,9 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 - Overlays the selected monitor plots; grid, legend, title, and axis labels
   shown. **Residuals** render on a **log Y axis**, **forces/other** on a
   **linear Y axis**.
-- In per-file mode each series gets a distinct colour; in comparison mode lines
-  are coloured **by sim**.
+- In per-file mode each series gets a distinct colour; in comparison mode every
+  line — each **(data set, monitor)** pair — gets its own colour, so monitors
+  stay distinguishable even within one data set.
 - A centred hint **"Select a monitor to begin"** shows while nothing is plotted.
 - The view auto-fits (auto-ranges) to the data on each redraw.
 

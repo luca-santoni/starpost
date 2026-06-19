@@ -877,13 +877,6 @@ class PlotView(QWidget):
     def _render_comparison(
         self, categories: list[tuple[str, list[tuple[str, MonitorPlot]]]]
     ) -> None:
-        # Colour by sim, consistent across every category that has the sim.
-        sim_order: list[str] = []
-        for _, pairs in categories:
-            for sim_name, _ in pairs:
-                if sim_name not in sim_order:
-                    sim_order.append(sim_name)
-        sim_color = {s: _COLORS[i % len(_COLORS)] for i, s in enumerate(sim_order)}
         # Disambiguate the legend by series whenever more than one could appear.
         multi = len(categories) > 1 or any(
             len(p.series) > 1 for _, pairs in categories for _, p in pairs
@@ -894,20 +887,27 @@ class PlotView(QWidget):
         self._drawn_colors = {}
         self._drawn_pair_colors = {}
         y_log = False
+        # Give every line — each (data set, monitor) pair — its own colour, so
+        # monitors stay distinguishable even within a single data set. A running
+        # index over all pairs (incremented even for hidden ones) keeps each
+        # line's colour stable as the selection changes.
+        color_i = 0
         for plot_name, pairs in categories:
             selected = self._selected_series(plot_name)
             for sim_name, plot in pairs:
                 y_log = y_log or plot.y_log
                 for s in plot.series:
+                    default = _COLORS[color_i % len(_COLORS)]
+                    color_i += 1
                     if s.name not in selected or not self._visible(s):
                         continue
                     # A per-(data set, monitor) override colours just that line; a
                     # series-wide override forces the monitor's colour across every
-                    # data set; otherwise comparison colours by data set.
+                    # data set; otherwise each line gets its own cycle colour.
                     color = (
                         self._pair_colors.get((sim_name, s.name))
                         or self._series_colors.get(s.name)
-                        or sim_color[sim_name]
+                        or default
                     )
                     self._drawn_colors[s.name] = color
                     self._drawn_pair_colors[(sim_name, s.name)] = color
