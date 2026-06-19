@@ -284,6 +284,9 @@ QListWidget#settingsNav::item:selected {
     font-weight: bold;
 }
 QLabel#hint { color: $hint; }
+/* Toolbar "New update available" note: tinted with the user's accent so it
+   stands out, and follows accent changes live (the QSS is re-applied). */
+QLabel#updateAvailable { color: $accent; }
 
 /* Monitor selector dropdown beneath the plot */
 QToolButton#monitorSelect {

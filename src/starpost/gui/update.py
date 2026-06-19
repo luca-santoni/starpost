@@ -83,10 +83,17 @@ class _UpdateFlow(QObject):
     the flow and its threads are not garbage-collected mid-run.
     """
 
-    def __init__(self, parent: QWidget, *, silent_if_current: bool) -> None:
+    def __init__(
+        self,
+        parent: QWidget,
+        *,
+        silent_if_current: bool,
+        on_update_available: Optional[Callable[[UpdateInfo], None]] = None,
+    ) -> None:
         super().__init__(parent)
         self._parent = parent
         self._silent = silent_if_current
+        self._on_update_available = on_update_available
         self._check: Optional[_Worker] = None
         self._download: Optional[_DownloadWorker] = None
         self._progress: Optional[QProgressDialog] = None
@@ -113,6 +120,10 @@ class _UpdateFlow(QObject):
                     "is the latest version.",
                 )
             return
+        # Let the caller react to an available update (e.g. show a persistent
+        # note), then offer to install it. Runs on the GUI thread.
+        if self._on_update_available is not None:
+            self._on_update_available(info)
         self._prompt_and_apply(info)
 
     # --- step 2: prompt --------------------------------------------------
@@ -212,14 +223,27 @@ def _detach(parent: QWidget, flow: _UpdateFlow) -> None:
         flows.remove(flow)
 
 
-def check_for_updates(parent: QWidget, *, silent_if_current: bool) -> None:
+def check_for_updates(
+    parent: QWidget,
+    *,
+    silent_if_current: bool,
+    on_update_available: Optional[Callable[[UpdateInfo], None]] = None,
+) -> None:
     """Check for updates and, if one is available, offer to install it.
 
     ``silent_if_current=True`` (used for the automatic startup check) suppresses
     the "you're up to date" and unreachable-server messages, so it only ever
     speaks up when an update is actually available. Set it to ``False`` for the
     manual "Check for updates" button.
+
+    ``on_update_available`` is called (on the GUI thread, with the UpdateInfo)
+    when a newer release is found, before the install prompt — e.g. to reveal a
+    persistent "New update available" note.
     """
-    flow = _UpdateFlow(parent, silent_if_current=silent_if_current)
+    flow = _UpdateFlow(
+        parent,
+        silent_if_current=silent_if_current,
+        on_update_available=on_update_available,
+    )
     _attach(parent, flow)
     flow.start()

@@ -39,11 +39,16 @@ def main() -> int:
 
         WelcomeDialog(settings, window).exec()
 
-    # Automatic update check. Stays silent unless a newer release is available.
+    # Automatic update check. Stays silent unless a newer release is available;
+    # when one is, also reveal the toolbar's "New update available" note.
     if settings.check_updates_on_startup:
         from starpost.gui.update import check_for_updates
 
-        check_for_updates(window, silent_if_current=True)
+        check_for_updates(
+            window,
+            silent_if_current=True,
+            on_update_available=lambda _info: window.show_update_available(),
+        )
 
     return app.exec()
 

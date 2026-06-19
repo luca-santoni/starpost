@@ -193,17 +193,37 @@ class MainWindow(QMainWindow):
         settings_action = tb.addAction("Settings…", self._open_settings)
         settings_action.setToolTip("Open the application settings")
 
-        # An expanding spacer pushes the version label to the toolbar's far right.
+        # An expanding spacer pushes the version corner to the toolbar's far right.
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
+
+        # Right-aligned vertical stack: the version on top, with a "New update
+        # available" note beneath it that stays hidden until the startup update
+        # check finds a newer release (see show_update_available).
+        corner = QWidget()
+        corner_layout = QVBoxLayout(corner)
+        corner_layout.setContentsMargins(0, 0, 8, 0)
+        corner_layout.setSpacing(0)
         # Grayed-out version, tied to the single version source used by the
         # About settings tab so both always agree. A faint, theme-neutral gray
         # (mid-gray with low alpha reads as muted on both light and dark).
         version_label = QLabel(f"StarPost v{__version__}")
-        version_label.setContentsMargins(0, 0, 8, 0)
         version_label.setStyleSheet("color: rgba(127, 127, 127, 0.55);")
-        tb.addWidget(version_label)
+        version_label.setAlignment(Qt.AlignRight)
+        corner_layout.addWidget(version_label)
+        # Tinted with the user's accent via the theme (objectName "updateAvailable").
+        self._update_label = QLabel("New update available")
+        self._update_label.setObjectName("updateAvailable")
+        self._update_label.setAlignment(Qt.AlignRight)
+        self._update_label.setVisible(False)
+        corner_layout.addWidget(self._update_label)
+        tb.addWidget(corner)
+
+    def show_update_available(self) -> None:
+        """Reveal the toolbar's "New update available" note, shown beneath the
+        version. Called when the startup update check finds a newer release."""
+        self._update_label.setVisible(True)
 
     # --- batch run -------------------------------------------------------
     def _busy(self) -> bool:
