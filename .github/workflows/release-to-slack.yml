@@ -1,0 +1,19 @@
+name: Release notes to Slack
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release notes to Slack workflow
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
+          payload: |
+            release_name: ${{ toJSON(github.event.release.name || github.event.release.tag_name) }}
+            tag: ${{ toJSON(github.event.release.tag_name) }}
+            release_url: ${{ toJSON(github.event.release.html_url) }}
+            release_notes: ${{ toJSON(github.event.release.body || 'No release notes were provided.') }}
