@@ -99,8 +99,10 @@ rendering and complex visualization are out of scope (see
   re-parent them, sort each folder independently, and open or inspect a whole
   folder at once.
 - A **Data** list of the results extracted so far, named after their source
-  `.sim`. **Ticking** Data entries chooses which results feed the views; ticking
-  two or more switches the Reports/Plots views into **comparison** mode.
+  `.sim`, organisable into the same kind of **virtual folders** as the Files tab
+  (nest, drag-drop, per-folder sort). **Ticking** Data entries chooses which
+  results feed the views; ticking two or more switches the Reports/Plots views
+  into **comparison** mode.
 - **Portable data import/export**: a loaded data set can be written to a
   self-contained StarPost CSV and re-imported later (into any StarPost instance)
   **without STAR-CCM+** — useful for sharing results or archiving them.
@@ -279,15 +281,25 @@ the filesystem.
 ### 3.4 Data panel
 
 The **Data** tab: one entry per result extracted so far, named after its source
-`.sim`. This is the set of results the Reports/Plots views draw from.
+`.sim`. This is the set of results the Reports/Plots views draw from. Like the
+Files tab, data sets can be organised into **virtual folders** (created in-app
+only): right-click empty space for **New Folder**, drag data sets/folders to
+re-parent them, and nest folders to any depth. The folder layout persists across
+sessions; the data sets themselves come and go with what's loaded.
 
 **Interactions:**
-- Each entry has a **checkbox**; **clicking anywhere on a row toggles it**.
+- Each data set has a **checkbox**; **clicking anywhere on a row toggles it**
+  (drag a row instead to move it between folders).
 - **No** entry checked or **one** checked → **per-file** view; **two or more**
   checked → **comparison** view.
 - **Right-click a data set** → **Properties** (its portable-CSV size plus report,
   monitor, and iteration counts).
-- **Right-click the "Data" tab** → **sort menu**: **Name (A–Z)** / **Name (Z–A)**.
+- **Right-click a folder** → **Check all** / **Uncheck all** its data sets,
+  **New Nested Folder**, **Sort** (A–Z / Z–A), **Rename**, **Delete folder**
+  (contents move up to the parent), and **Properties** (data-set count + combined
+  portable-CSV size).
+- **Right-click the "Data" tab** → **sort menu**: **Name (A–Z)** / **Name (Z–A)**
+  (orders each folder's contents, folders before data sets).
 
 **Buttons (bottom of the panel):**
 - **Import** — load one or more **portable StarPost CSVs** (as written by Export
@@ -826,7 +838,8 @@ starpost/                           (repo; app/package = "starpost")
     │   └── views/
     │       ├── file_list.py        Files tab: virtual folders, drag-drop, sort, open,
     │       │                       Properties, folder-colour tinting
-    │       ├── data_list.py        Data tab: tick data sets, import/export, delete/clear
+    │       ├── data_list.py        Data tab: virtual folders, drag-drop, sort, tick
+    │       │                       data sets, import/export, delete/clear
     │       ├── selection_panel.py  Report checklist + monitor-plot tree (per-monitor
     │       │                       picking & colour swatches), Select all, profile load/save
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort

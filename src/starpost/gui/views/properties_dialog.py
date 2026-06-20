@@ -100,3 +100,27 @@ class FolderPropertiesDialog(QDialog):
         )
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+
+class DataFolderPropertiesDialog(QDialog):
+    """Properties for a Data-tab folder: how many data sets it holds
+    (recursively) and their combined size as portable CSVs."""
+
+    def __init__(
+        self, name: str, total_bytes: int, data_count: int, parent=None
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Properties — {name}")
+
+        form = QFormLayout()
+        form.addRow("Total size", QLabel(_human_size(total_bytes)))
+        form.addRow("Data sets", QLabel(str(data_count)))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)

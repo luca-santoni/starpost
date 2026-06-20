@@ -83,7 +83,9 @@ class MainWindow(QMainWindow):
             show_full_names=settings.show_full_file_names,
             folder_color=settings.appearance.resolved_folder_color(),
         )
-        self.data_list = DataListPanel()
+        self.data_list = DataListPanel(
+            folder_color=settings.appearance.resolved_folder_color()
+        )
         self.selection = SelectionPanel()
         self.report_table = ReportTable(
             decimals=settings.report_decimals,
@@ -125,6 +127,9 @@ class MainWindow(QMainWindow):
         self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
         self.data_list.properties_requested.connect(self._show_data_properties)
+        self.data_list.folder_properties_requested.connect(
+            self._show_data_folder_properties
+        )
         self.data_list.import_requested.connect(self._import_data)
         self.data_list.export_requested.connect(self._export_data)
         self.data_list.delete_requested.connect(self._delete_selected_data)
@@ -679,6 +684,19 @@ class MainWindow(QMainWindow):
             Path(result.sim_path), result, self, size_bytes=sim_csv_size(result)
         ).exec()
 
+    def _show_data_folder_properties(self, name, data_names) -> None:
+        """Data tab → folder right-click → Properties: the data sets it holds and
+        their combined size as portable CSVs."""
+        from starpost.data.portable import sim_csv_size
+        from starpost.gui.views.properties_dialog import DataFolderPropertiesDialog
+
+        wanted = set(data_names)
+        results = [
+            r for r in self.store.all() if r.error is None and r.sim_name in wanted
+        ]
+        total = sum(sim_csv_size(r) for r in results)
+        DataFolderPropertiesDialog(name, total, len(data_names), self).exec()
+
     def _import_data(self) -> None:
         """'Import' (Data tab): load one or more portable StarPost data CSVs
         (as written by Export Data) straight into the workspace — no .sim or
@@ -850,8 +868,9 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.settings, self)
         # Live-preview the light/dark switch on the plot too (Cancel reverts it).
         dlg.preview_changed.connect(self.plot_view.apply_theme)
-        # Live-preview the folder colour on the Files tab (Cancel reverts it).
+        # Live-preview the folder colour on the Files and Data tabs (Cancel reverts it).
         dlg.folder_color_changed.connect(self.file_list.set_folder_color)
+        dlg.folder_color_changed.connect(self.data_list.set_folder_color)
         # Resetting settings is applied + saved immediately (independent of
         # Save/Cancel): push it to the views and reload the Default profile.
         dlg.defaults_reset.connect(self._on_settings_reset)
@@ -867,7 +886,9 @@ class MainWindow(QMainWindow):
         """Push the current settings onto every view that mirrors them. Used when
         the Settings dialog is saved and when settings are reset to defaults."""
         self.file_list.set_show_full_names(self.settings.show_full_file_names)
-        self.file_list.set_folder_color(self.settings.appearance.resolved_folder_color())
+        folder_color = self.settings.appearance.resolved_folder_color()
+        self.file_list.set_folder_color(folder_color)
+        self.data_list.set_folder_color(folder_color)
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
         self.plot_view.set_filter(

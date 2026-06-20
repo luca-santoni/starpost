@@ -58,11 +58,11 @@ A licensed STAR-CCM+ installation must be present on the machine.
   `.sim` files, run sequentially (one license checkout at a time) with a live
   log and progress bar, and a crash-recovery cache.
 - **Files / Data panels** — build a reusable list of `.sim` files (the *Files*
-  tab), optionally organised into **virtual folders** (nest, drag-drop, sort
-  per folder), then pick which extracted **Data** sets feed the views by ticking
-  them. Checking two or more switches the views into **comparison** mode
-  automatically. Data sets can be **exported to / imported from portable CSVs**
-  (shareable, re-loadable without STAR-CCM+).
+  tab), then pick which extracted **Data** sets feed the views by ticking them.
+  **Both** tabs support **virtual folders** (nest, drag-drop, sort per folder)
+  for organising files and data sets. Checking two or more data sets switches the
+  views into **comparison** mode automatically. Data sets can be **exported to /
+  imported from portable CSVs** (shareable, re-loadable without STAR-CCM+).
 - **Per-file and comparison views** — a numeric report table (sortable, with
   configurable decimals and empty-value hiding) and an interactive plot viewer.
 - **Interactive plots** (pyqtgraph):

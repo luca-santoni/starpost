@@ -58,6 +58,12 @@ def file_list_cache_path() -> Path:
     return cache_dir() / "file_list.json"
 
 
+def data_list_cache_path() -> Path:
+    """Persisted virtual-folder layout of the Data tab (folders + which data set
+    lives in each). The data sets themselves live in the results cache."""
+    return cache_dir() / "data_list.json"
+
+
 def packaged_default_settings() -> Path:
     """The default_settings.yaml shipped with the repo/package."""
     if getattr(sys, "frozen", False):
