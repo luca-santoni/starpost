@@ -177,6 +177,7 @@ class ExportDialog(QDialog):
         settings=None,
         series_colors: dict[str, str] | None = None,
         pair_colors: dict[tuple[str, str], str] | None = None,
+        residual_groups: list[str] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -187,6 +188,8 @@ class ExportDialog(QDialog):
         # opens with the same line colours the user chose there.
         self._seed_series_colors = dict(series_colors or {})
         self._seed_pair_colors = dict(pair_colors or {})
+        # Groups that plot all their monitors at once when checked (residuals).
+        self._residual_groups = set(residual_groups or [])
 
         # Kept for the export wiring that will live inside the tabs.
         self._default_dir = default_dir
@@ -807,16 +810,21 @@ class ExportDialog(QDialog):
 
     def _on_monitor_item_changed(self, item, _column) -> None:
         """Toggling a group reveals (expands) or hides (collapses) its monitors.
-        Selecting a group does not select any of its monitors — they are revealed
-        unticked so the user picks them deliberately. Either kind of change
-        refreshes the preview."""
+        Selecting a group reveals its monitors unticked so the user picks them
+        deliberately — except residual groups, which tick every monitor so they
+        all plot at once. Either kind of change refreshes the preview."""
         if item.parent() is None:  # a group, not one of its monitors
             checked = item.checkState(0) == Qt.CheckState.Checked
             item.setExpanded(checked)
             if checked:
+                state = (
+                    Qt.CheckState.Checked
+                    if item.text(0) in self._residual_groups
+                    else Qt.CheckState.Unchecked
+                )
                 self._monitor_tree.blockSignals(True)
                 for j in range(item.childCount()):
-                    item.child(j).setCheckState(0, Qt.CheckState.Unchecked)
+                    item.child(j).setCheckState(0, state)
                 self._monitor_tree.blockSignals(False)
         self._refresh_preview_if_visible()
 

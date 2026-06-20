@@ -34,6 +34,7 @@ from starpost.batch.job import Job
 from starpost.batch.queue import BatchWorker
 from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
+from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon
 from starpost.gui.widgets import UniformTabBar
@@ -514,6 +515,13 @@ class MainWindow(QMainWindow):
                         names.append(s.name)
         return groups
 
+    def _residual_group_names(self, results) -> set[str]:
+        """Plot groups classified as residuals (any result marks them
+        ``PlotKind.RESIDUAL``). These plot all their monitors at once when ticked."""
+        return {
+            p.name for r in results for p in r.plots if p.kind == PlotKind.RESIDUAL
+        }
+
     def _refresh_report_choices(self) -> None:
         """Update the report checkbox list for the current mode/file, keeping
         the user's selection."""
@@ -529,6 +537,8 @@ class MainWindow(QMainWindow):
         report_union = self._available_report_names(results)
         plot_groups = self._monitor_groups_union(results)
         self.selection.populate(report_union, plot_groups)
+        # Residual groups plot all their monitors at once when ticked.
+        self.selection.set_residual_groups(self._residual_group_names(results))
 
         self._refresh_views()
 
@@ -819,6 +829,7 @@ class MainWindow(QMainWindow):
             self.settings,
             series_colors=series_colors,
             pair_colors=pair_colors,
+            residual_groups=sorted(self._residual_group_names(results)),
             parent=self,
         )
         dlg.exec()

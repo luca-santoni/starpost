@@ -326,7 +326,8 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 - This lives in the selection panel's **Monitor plots** tree (right), not under
   the plot: check a group to reveal its monitors, then tick the ones to draw.
 - A newly checked monitor group starts with **no** monitors shown until you pick
-  some.
+  some — **except residual plots**, which tick all their monitors at once so the
+  whole residual set plots together.
 
 **Hover readout:**
 - Moving the cursor near a line pins a **marker** and a **coordinate label** to
@@ -387,7 +388,8 @@ together.
   drawn** — so the per-monitor choice lives here rather than under the plot.
 - Groups default to **unchecked** (the plot view starts blank, since drawing
   every plot at once is slow), and a freshly checked group reveals its monitors
-  **unticked** so you pick deliberately.
+  **unticked** so you pick deliberately — **except residual plots**, whose
+  monitors are all ticked automatically so the whole residual set plots at once.
 - **Select all** ticks every group and monitor; **Clear** unticks all.
   **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
 - A checked monitor shows a **colour swatch** to the left of its name; **clicking
@@ -435,7 +437,8 @@ monitor selections to the dialog.
 #### Plots tab — three columns (+ preview window)
 - **Data** — checklist of loaded data sets (mirrors the Reports tab).
 - **Monitors** — a **tree** of monitor groups, each with a checkbox. Checking a
-  group **reveals its monitors** (unticked, so you pick deliberately); unchecking
+  group **reveals its monitors** (unticked, so you pick deliberately — residual
+  plots are the exception and tick all their monitors at once); unchecking
   hides them. A checked monitor shows a **colour swatch**; **clicking the swatch**
   opens a colour menu (palette colours + **Custom…**) that recolours that
   monitor in the preview. When **two or more data sets** are plotted, each

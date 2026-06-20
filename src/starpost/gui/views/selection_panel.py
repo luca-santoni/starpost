@@ -197,7 +197,15 @@ class _MonitorPlotTree(QTreeWidget):
         # Active sort, A–Z by default (matches the report list).
         self.sort_mode = "az"
         self._groups: dict[str, list[str]] = {}
+        # Groups that should plot all their monitors at once when checked (i.e.
+        # residual plots), rather than revealing them unticked.
+        self._auto_select_groups: set[str] = set()
         self.itemChanged.connect(self._on_item_changed)
+
+    def set_auto_select_groups(self, names) -> None:
+        """Name the groups whose monitors are all checked automatically when the
+        group is ticked (residual plots), so they plot together by default."""
+        self._auto_select_groups = set(names)
 
     # --- colour swatches -------------------------------------------------
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
@@ -291,16 +299,23 @@ class _MonitorPlotTree(QTreeWidget):
         self.blockSignals(False)
 
     def _on_item_changed(self, item, _column) -> None:
-        """Toggling a group reveals (expands) or hides (collapses) its monitors; a
-        freshly checked group reveals them unticked so the user picks
-        deliberately. Either change re-emits ``changed`` to drive a redraw."""
+        """Toggling a group reveals (expands) or hides (collapses) its monitors.
+        A freshly checked group reveals them unticked so the user picks
+        deliberately — except residual groups (see set_auto_select_groups), which
+        tick every monitor so they all plot at once. Either change re-emits
+        ``changed`` to drive a redraw."""
         if item.parent() is None:  # a group, not one of its monitors
             checked = item.checkState(0) == Qt.Checked
             item.setExpanded(checked)
             if checked:
+                state = (
+                    Qt.Checked
+                    if item.text(0) in self._auto_select_groups
+                    else Qt.Unchecked
+                )
                 self.blockSignals(True)
                 for j in range(item.childCount()):
-                    item.child(j).setCheckState(0, Qt.Unchecked)
+                    item.child(j).setCheckState(0, state)
                 self.blockSignals(False)
         self.changed.emit()
 
@@ -585,6 +600,11 @@ class SelectionPanel(QWidget):
         selection — used when a setting (e.g. hide-empty-monitors) changes the
         visible set without reloading data."""
         self.plots.set_items(plot_groups, preserve=True)
+
+    def set_residual_groups(self, names) -> None:
+        """Name the plot groups that should plot all their monitors at once when
+        checked (residual plots)."""
+        self.plots.set_auto_select_groups(names)
 
     def selected_reports(self) -> set[str]:
         return set(self.reports.checked())
