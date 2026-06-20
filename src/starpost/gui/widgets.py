@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QProxyStyle,
     QStyle,
+    QStyleFactory,
     QTabBar,
     QToolButton,
     QWidget,
@@ -21,7 +22,17 @@ class ToolTipResetStyle(QProxyStyle):
     as a tooltip hides, so hovering a new button restarts the wake-up timer.
     Every other style decision is delegated unchanged to the base style, so the
     app's appearance (driven by the QSS theme) is untouched.
+
+    The base style defaults to **Fusion** rather than the platform default, so the
+    app uses one consistent style on every OS. Without this, Qt proxies the native
+    style (Fusion on Linux, windows11/vista on Windows), whose differing item/tab
+    metrics make lists and tabs space wider on Windows than on Linux. Fusion is a
+    lightweight, fully cross-platform style, so this gives identical spacing with
+    no meaningful rendering cost (the dark QSS theme already drives the look).
     """
+
+    def __init__(self, base=None) -> None:
+        super().__init__(base or QStyleFactory.create("Fusion"))
 
     def styleHint(  # noqa: N802 (Qt override)
         self, hint, option=None, widget=None, returnData=None
