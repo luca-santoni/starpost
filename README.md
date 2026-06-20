@@ -123,7 +123,11 @@ Per-OS locations (via `platformdirs`):
 
 Key fields:
 
-- `starccm_path` — path to the `starccm+` executable (manual; default TBD).
+- `starccm_path` — path to the `starccm+` executable (set manually or via the
+  setup wizard). Typical install locations (replace `<version>` with your
+  installed STAR-CCM+ version):
+  - Linux: `/opt/Siemens/<version>/STAR-CCM+<version>/star/bin/starccm+`
+  - Windows: `C:/Program Files/Siemens/<version>/STAR-CCM+<version>/star/bin/starccm+.bat`
 - `license` — default mode is POD key + license server
   (`-power -podkey <KEY> -licpath <port>@<server>`); a regular license-file mode
   is also supported.

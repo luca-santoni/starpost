@@ -741,7 +741,10 @@ is "temporary" and can be wiped via Settings → Misc → **Clear all temp files
 `settings.yaml` is seeded from the packaged `config/default_settings.yaml` on
 first run, then edited via the Settings dialog (or by hand). Key fields:
 
-- `starccm_path` — path to the `starccm+` executable.
+- `starccm_path` — path to the `starccm+` executable. Typical install locations
+  (replace `<version>` with your installed STAR-CCM+ version):
+  - Linux: `/opt/Siemens/<version>/STAR-CCM+<version>/star/bin/starccm+`
+  - Windows: `C:/Program Files/Siemens/<version>/STAR-CCM+<version>/star/bin/starccm+.bat`
 - `license` — `mode` (`podkey_server` | `license_file`), `podkey`, `licpath`
   (`<port>@<server>`), `license_file`.
 - `default_output_dir` — starting folder for export/extraction pickers.
