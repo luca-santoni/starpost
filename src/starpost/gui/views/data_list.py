@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QInputDialog,
+    QListWidget,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -59,6 +60,29 @@ _FOLDER_FLAGS = (
     | Qt.ItemFlag.ItemIsDragEnabled
     | Qt.ItemFlag.ItemIsDropEnabled
 )
+
+
+class _CheckList(QListWidget):
+    """A flat list whose rows toggle their checkbox when clicked anywhere, not
+    just on the small indicator.
+
+    Kept here as a lightweight, reusable checklist: the export dialogs
+    (``export_dialog`` and ``data_export_dialog``) build their Data/Reports
+    columns from it. The Data tab itself now uses the folder tree below.
+    """
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # Only the left button toggles; right-click falls through so a context
+        # menu can open instead.
+        item = self.itemAt(event.position().toPoint())
+        if item is not None and event.button() == Qt.MouseButton.LeftButton:
+            checked = item.checkState() == Qt.CheckState.Checked
+            item.setCheckState(
+                Qt.CheckState.Unchecked if checked else Qt.CheckState.Checked
+            )
+            event.accept()  # we handled the toggle; skip the default indicator hit
+            return
+        super().mousePressEvent(event)
 
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
