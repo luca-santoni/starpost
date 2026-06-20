@@ -3,6 +3,15 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [1.4.1] — 2026-06-20
+
+A patch release fixing a crash that made the export menu unusable in 1.4.0.
+
+### Fixes
+- **Export menu no longer crashes on open** — both **Export…** (Reports/Plots)
+  and **Export Data** raised an error because a shared checklist widget was
+  removed during the 1.4.0 Data-tab rework. It has been restored.
+
 ## [1.4.0] — 2026-06-20
 
 This release brings the Files tab's virtual-folder organisation to the Data tab,
