@@ -66,8 +66,14 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **Per-file and comparison views** — a numeric report table (sortable, with
   configurable decimals and empty-value hiding) and an interactive plot viewer.
 - **Interactive plots** (pyqtgraph):
-  - Overlay **several monitor groups at once**, each with its own dropdown for
-    choosing which monitors (series) are shown.
+  - Overlay **several monitor groups at once**; pick which monitors to draw from
+    the **Monitor plots** tree (check a group to reveal its monitors). Checking a
+    **residual** group plots all its monitors at once.
+  - **Per-monitor line colours** — a colour swatch beside each shown monitor (one
+    per data set in comparison mode), where each line also gets a distinct colour
+    by default; the colours carry over to the export preview.
+  - **Smooth data** — an optional moving average over the shown monitors, with a
+    configurable window width (Settings → Plots).
   - **Hover readout** that snaps a marker + coordinate label to the nearest data
     point (optional monitor name, configurable X/Y decimals).
   - **Shift+drag a region** to get a per-series statistics table (Avg, Median,
@@ -81,7 +87,9 @@ A licensed STAR-CCM+ installation must be present on the machine.
   - **Reports → CSV / TSV / XLSX / ODS**, with optional units and an optional
     one-file-per-data-set mode.
   - **Plots → PNG / JPG / TIFF / PDF** with a live preview window, custom title
-    and axis labels, per-monitor colours, theme, and aspect ratio.
+    and axis labels, per-monitor colours (mirrored from the main view), legend
+    scale, line thickness, title/axis-label text sizes, a grid toggle, theme, and
+    aspect ratio.
 - **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
   key), file/report/plot display options, export defaults, profile management
   (view details / delete), a **dark/light theme with custom accent, checkmark and
@@ -120,8 +128,9 @@ Key fields:
   (`-power -podkey <KEY> -licpath <port>@<server>`); a regular license-file mode
   is also supported.
 - `default_output_dir` — where exports are written (user-defined per run).
-- Report/plot display options (decimals, empty-value hiding + thresholds, hover
-  label options, axis-classification keywords), export defaults
+- Report/plot display options (decimals, empty-value hiding + thresholds,
+  moving-average smoothing width, hover label options, axis-classification
+  keywords), export defaults
   (`export_report_format`, `export_plot_format`, `export_plot_theme`),
   `appearance` (theme, accent, checkmark + folder colours), and
   `check_updates_on_startup`.
@@ -152,6 +161,7 @@ happens once and is cached.
 - [`docs/StarPost_Documentation.md`](docs/StarPost_Documentation.md) — the full reference:
   every menu, panel, and dialog; the data flow and architecture; and the
   program's limitations.
+- [`CHANGELOG.md`](CHANGELOG.md) — per-version release notes (newest first).
 - [`docs/dev_install.md`](docs/dev_install.md) — running StarPost from a source
   checkout as a Python script.
 - [`docs/packaging.md`](docs/packaging.md) — building release artifacts (the

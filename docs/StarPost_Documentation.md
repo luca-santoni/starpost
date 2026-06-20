@@ -5,11 +5,12 @@
 > Version: **1.3.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
-> interactive plot viewer, the full in-app settings dialog, report/plot export,
-> an in-app update check, and packaged builds (Linux AppImage + Windows Inno
-> Setup installer). The Java extraction macro has not yet been validated against
-> a live STAR-CCM+ install (see [Limitations](#4-limitations)).
-> Document last updated: 2026-06-18
+> interactive plot viewer (per-monitor colours, optional moving-average
+> smoothing), the full in-app settings dialog, a heavily customizable report/plot
+> export, an in-app update check, and packaged builds (Linux AppImage + Windows
+> Inno Setup installer). The Java extraction macro has not yet been validated
+> against a live STAR-CCM+ install (see [Limitations](#4-limitations)).
+> Document last updated: 2026-06-20
 
 ---
 
@@ -120,7 +121,13 @@ rendering and complex visualization are out of scope (see
     Settings).
   - **Multiple monitor groups at once**; which of each group's series (monitors)
     are drawn is chosen in the selection panel's **Monitor plots** tree (check a
-    group to reveal its monitors).
+    group to reveal its monitors). Checking a **residual** group plots all its
+    monitors at once.
+  - **Per-monitor line colours**: a colour swatch beside each shown monitor (one
+    per data set in comparison mode) recolours its line; in comparison mode each
+    line gets a distinct colour by default.
+  - **Smooth data**: an optional moving average over the shown monitors, with a
+    configurable window width.
   - **Hover readout**: a marker + coordinate label snapped to the nearest data
     point (log-axis aware; optional monitor name; configurable X/Y decimals).
   - **Region statistics**: **Shift+drag** a rectangle to get a per-series table
@@ -141,7 +148,9 @@ rendering and complex visualization are out of scope (see
 - **Reports → CSV / TSV / XLSX / ODS**, with optional embedded units and an
   optional **one-file-per-data-set** mode.
 - **Plots → PNG / JPG / TIFF / PDF**, via a live **preview window**, with custom
-  title and axis labels, per-monitor colours, theme, and aspect ratio.
+  title and axis labels, **per-monitor colours** (mirrored from the main view),
+  **legend scale**, **line thickness**, **title / axis-label text sizes**, a
+  **grid toggle**, theme, and aspect ratio.
 - **Configurable defaults** (Settings → Export): the report format, plot image
   format, and plot theme the Export dialog pre-fills.
 
@@ -192,8 +201,9 @@ panels.
 
 - **Left** — a tab widget with **Files** and **Data** tabs.
 - **Centre** — a tab widget with **Reports** and **Plots** tabs.
-- **Right** — the **Selection panel** (profile controls + report/plot
-  checklists).
+- **Right** — the **Selection panel** (profile controls + the report/monitor
+  list for the active centre tab — Reports list on Reports, Monitor plots on
+  Plots).
 - **Bottom** — the **Log console** (progress + streaming log).
 - The three top regions and the bottom are separated by draggable splitters.
 - Window title: **StarPost**; default size 1280×800.
@@ -742,6 +752,7 @@ first run, then edited via the Settings dialog (or by hand). Key fields:
 ```
 starpost/                           (repo; app/package = "starpost")
 ├── README.md                       Quick orientation, install (Linux/Windows), usage
+├── CHANGELOG.md                    Per-version release notes (newest first)
 ├── pyproject.toml                  Package metadata, deps, entry point, ruff config
 ├── requirements.txt                Runtime dependency pins
 ├── .gitignore                      Ignores .sim files, build artifacts, caches
@@ -816,10 +827,11 @@ starpost/                           (repo; app/package = "starpost")
     │       ├── file_list.py        Files tab: virtual folders, drag-drop, sort, open,
     │       │                       Properties, folder-colour tinting
     │       ├── data_list.py        Data tab: tick data sets, import/export, delete/clear
-    │       ├── selection_panel.py  Report/plot checklists, Select all, profile load/save
+    │       ├── selection_panel.py  Report checklist + monitor-plot tree (per-monitor
+    │       │                       picking & colour swatches), Select all, profile load/save
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort
-    │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-group
-    │       │                       dropdowns, hover readout, Shift+drag region stats
+    │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-monitor
+    │       │                       colours, smoothing, hover readout, Shift+drag region stats
     │       ├── settings_dialog.py  In-app settings (10 paged groups) + profile mgmt
     │       ├── properties_dialog.py  File / data-set / folder Properties dialogs
     │       ├── data_export_dialog.py  Export Data: pick data sets → portable CSVs
@@ -901,16 +913,25 @@ PYTHONPATH=src python -m pytest tests/ -q
   stop-after-current (worker-level).
 - The full GUI: toolbar (with the version label + update note), Files/Data tabs,
   Reports table (per-file + comparison, sortable), interactive plot viewer
-  (multi-group overlay, per-group monitor dropdowns, hover readout, Shift+drag
-  region statistics, theme-following), the Selection panel with profiles, and the
-  log console. Hover tooltips on every button.
+  (multi-group overlay, per-monitor colours, optional moving-average smoothing,
+  hover readout, Shift+drag region statistics, theme-following), the Selection
+  panel (per-tab report/monitor lists with per-monitor picking) and profiles, and
+  the log console. Hover tooltips on every button.
 - **Files virtual folders** — in-app nested folders with drag-drop re-parenting,
   per-folder sorting, Rename/Delete, Properties, and colour-tinted folder icons.
 - **Portable data import/export** — round-trippable StarPost-CSV per data set
   (Import / Export Data), plus Properties on files/data sets/folders.
 - **Export** — reports to CSV/TSV/XLSX/ODS (combined or per-file, optional
   units) and plots to PNG/JPG/TIFF/PDF via a live preview with custom title/axis
-  labels, per-monitor colours, theme, and aspect ratio; configurable defaults.
+  labels, per-monitor colours (mirrored from the main view), legend scale, line
+  thickness, title/axis-label text sizes, a grid toggle, theme, and aspect ratio;
+  configurable defaults.
+- **Plot customization & smoothing** — per-monitor colour swatches in the main
+  view (one per data set; distinct per line in comparison mode), an optional
+  moving-average **Smooth data** toggle with a configurable width, and residual
+  groups that plot all their monitors at once when selected.
+- **Selection panel** — shows the report or monitor-plot list for the active
+  centre tab; monitors are picked from a tree (check a group to reveal them).
 - **Settings dialog** — ten paged groups covering every `settings.yaml` field,
   plus profile management (Show Details / Delete), Reset, and Clear all temp files.
 - **Appearance theming** — dark/light + accent + checkmark + folder colour
