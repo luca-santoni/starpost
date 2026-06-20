@@ -7,6 +7,74 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Convert release notes (GitHub Markdown -> Slack mrkdwn)
+        id: notes
+        shell: python {0}
+        env:
+          BODY: ${{ github.event.release.body }}
+        run: |
+          import os, re, secrets
+
+          body = os.environ.get("BODY", "") or "No release notes were provided."
+
+          # 1. Protect code so markdown inside it is left untouched
+          stash = []
+          def keep(m):
+              stash.append(m.group(0)); return f"\uE000{len(stash)-1}\uE001"
+          def keep_fence(m):
+              stash.append("```\n" + m.group(2).strip("\n") + "\n```")  # drop lang hint
+              return f"\uE000{len(stash)-1}\uE001"
+          text = re.sub(r"```([^\n`]*)\n(.*?)```", keep_fence, body, flags=re.DOTALL)
+          text = re.sub(r"`[^`\n]+`", keep, text)
+
+          # 2. Bold+italic ***x*** / ___x___ -> sentinel so later steps skip it
+          text = re.sub(r"\*\*\*(.+?)\*\*\*", lambda m: f"\uE002{m.group(1)}\uE003", text)
+          text = re.sub(r"___(.+?)___",       lambda m: f"\uE002{m.group(1)}\uE003", text)
+
+          # 3. Links: [text](url) -> <url|text>
+          text = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"<\2|\1>", text)
+
+          # 4. Italic (single * or _) before bold; guards skip ** and __
+          text = re.sub(r"(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)", r"_\1_", text)
+
+          # 5. Bold: **x** / __x__ -> *x*
+          text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+          text = re.sub(r"__(.+?)__",     r"*\1*", text)
+
+          # 6. Headings -> bold line (use [ \t], never \s, so newlines survive)
+          text = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", r"*\1*", text)
+
+          # 7. Strikethrough: ~~x~~ -> ~x~
+          text = re.sub(r"~~(.+?)~~", r"~\1~", text)
+
+          # 8. Task list items (before generic bullets)
+          text = re.sub(r"(?m)^([ \t]*)[-*+][ \t]+\[[xX]\][ \t]+", r"\1• :white_check_mark: ", text)
+          text = re.sub(r"(?m)^([ \t]*)[-*+][ \t]+\[ \][ \t]+",    r"\1• :white_large_square: ", text)
+
+          # 9. Bullets: -, *, + -> •
+          text = re.sub(r"(?m)^([ \t]*)[-*+][ \t]+", r"\1• ", text)
+
+          # 10. Horizontal rules (---, ***, ___) -> divider
+          text = re.sub(r"(?m)^[ \t]*([-*_])\1{2,}[ \t]*$", "──────────", text)
+
+          # 11. Drop table separator rows like | --- | --- |
+          text = re.sub(r"(?m)^[ \t]*\|([ \t]*:?-+:?[ \t]*\|)+[ \t]*$", "", text)
+
+          # restore sentinels & code, then tidy whitespace
+          text = text.replace("\uE002", "*_").replace("\uE003", "_*")
+          for i, original in enumerate(stash):
+              text = text.replace(f"\uE000{i}\uE001", original)
+          text = re.sub(r"[\uE000-\uF8FF]", "", text)   # strip any stray sentinels
+          text = re.sub(r"\n{3,}", "\n\n", text)        # collapse blank-line gaps
+
+          # truncate to stay under Slack's text limits
+          if len(text) > 2800:
+              text = text[:2800].rstrip() + "\n…"
+
+          delim = "ghdelim_" + secrets.token_hex(8)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"release_notes<<{delim}\n{text}\n{delim}\n")
+
       - name: Send release notes to Slack workflow
         uses: slackapi/slack-github-action@v2.0.0
         with:
@@ -16,4 +84,4 @@ jobs:
             release_name: ${{ toJSON(github.event.release.name || github.event.release.tag_name) }}
             tag: ${{ toJSON(github.event.release.tag_name) }}
             release_url: ${{ toJSON(github.event.release.html_url) }}
-            release_notes: ${{ toJSON(github.event.release.body || 'No release notes were provided.') }}
+            release_notes: ${{ toJSON(steps.notes.outputs.release_notes) }}
