@@ -3,6 +3,29 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [1.4.0] — 2026-06-20
+
+This release brings the Files tab's virtual-folder organisation to the Data tab,
+makes residual plots one-click, and gives the UI consistent spacing across
+Windows and Linux.
+
+### New Features
+- **Virtual folders in the Data tab** — organise data sets into in-app nested
+  folders, mirroring the Files tab: right-click for **New Folder**, drag data
+  sets/folders to re-parent them, sort per folder, and **Check all / Uncheck
+  all**, **Rename**, **Delete folder**, and **Properties** on a folder. The
+  folder layout persists across sessions.
+
+### Changes
+- **Residual plots draw all monitors at once** — checking a residual monitor
+  group (in the main view or the export menu) now plots every monitor in it,
+  instead of revealing them unticked. Other groups are unchanged.
+
+### Fixes
+- **Consistent UI spacing across platforms** — the app now uses the Fusion style
+  everywhere, so list rows and tabs no longer space wider on Windows than on
+  Linux.
+
 ## [1.3.0] — 2026-06-19
 
 This release focuses on **plot customization** — both in the live view and the

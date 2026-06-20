@@ -10,10 +10,10 @@
 ;
 ; The version defaults to the value below but can be overridden on the command
 ; line to match pyproject.toml without editing this file, e.g.:
-;     ISCC.exe /DMyAppVersion=1.3.0 packaging\starpost.iss
+;     ISCC.exe /DMyAppVersion=1.4.0 packaging\starpost.iss
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.0"
+  #define MyAppVersion "1.4.0"
 #endif
 
 #define MyAppName "StarPost"
