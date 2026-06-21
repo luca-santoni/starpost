@@ -1,12 +1,16 @@
 """Small shared Qt widgets reused across the GUI."""
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLineEdit,
     QProxyStyle,
     QStyle,
     QStyleFactory,
+    QStyledItemDelegate,
     QTabBar,
     QToolButton,
     QWidget,
@@ -123,3 +127,83 @@ class UniformTabBar(QTabBar):
         )
         size.setWidth(width)
         return size
+
+
+# Accent colour used to outline the hovered dropdown item. Updated by the theme
+# (apply_theme -> set_combo_accent_color) so the outline tracks the user's accent.
+_combo_accent_color = "#ffc829"
+
+
+def set_combo_accent_color(color: str) -> None:
+    """Set the colour used to outline the hovered item in dropdown popups."""
+    global _combo_accent_color
+    if color:
+        _combo_accent_color = color
+
+
+# States that mark a dropdown item as the hovered / current / selected one.
+_COMBO_HILITE = (
+    QStyle.StateFlag.State_Selected
+    | QStyle.StateFlag.State_MouseOver
+    | QStyle.StateFlag.State_HasFocus
+)
+
+# Extra vertical space (px, total) added to each dropdown row so the options
+# aren't cramped together.
+_COMBO_ITEM_VPAD = 10
+
+
+class _ComboItemDelegate(QStyledItemDelegate):
+    """Draws a dropdown popup's hovered item with an accent outline instead of
+    the style's default black focus rectangle (and without a background fill),
+    and adds a little vertical breathing room between rows.
+
+    The combo popup's items are painted by QStyleSheetStyle, which ignores QSS
+    ``:hover``/``outline`` rules and the palette for this indicator — so the item
+    is rendered plain (highlight states stripped) and the accent border is drawn
+    on top here, the one place that reliably controls it."""
+
+    def sizeHint(self, option, index):  # noqa: N802 (Qt override)
+        size = super().sizeHint(option, index)
+        size.setHeight(size.height() + _COMBO_ITEM_VPAD)
+        return size
+
+    def paint(self, painter, option, index) -> None:  # noqa: N802 (Qt override)
+        highlighted = bool(option.state & _COMBO_HILITE)
+        # Render the item as a normal row: no fill, no black focus rectangle.
+        option.state = option.state & ~_COMBO_HILITE
+        super().paint(painter, option, index)
+        if highlighted:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            painter.setPen(QPen(QColor(_combo_accent_color), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
+            painter.restore()
+
+
+class _ComboAccentInstaller(QObject):
+    """Application event filter that gives every QComboBox popup the accent-outline
+    item delegate the first time the combo is shown."""
+
+    _FLAG = "_starpostComboAccent"
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
+        if event.type() == QEvent.Type.Show and isinstance(obj, QComboBox):
+            view = obj.view()
+            if view is not None and not view.property(self._FLAG):
+                view.setItemDelegate(_ComboItemDelegate(view))
+                view.setProperty(self._FLAG, True)
+        return False  # never consume the event
+
+
+_combo_installer: _ComboAccentInstaller | None = None
+
+
+def install_combo_accent(app) -> None:
+    """Install (once) the app-wide filter that applies the accent-outline delegate
+    to every dropdown popup."""
+    global _combo_installer
+    if _combo_installer is None:
+        _combo_installer = _ComboAccentInstaller()
+        app.installEventFilter(_combo_installer)

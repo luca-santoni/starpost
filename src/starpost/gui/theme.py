@@ -375,5 +375,9 @@ def apply_theme(
     checkmark_color: str | None = None,
     text_scale: float = 1.0,
 ) -> None:
-    """Apply the generated stylesheet to a running QApplication."""
+    """Apply the generated stylesheet to a running QApplication, and keep the
+    dropdown hover-outline colour in sync with the accent."""
+    from starpost.gui.widgets import set_combo_accent_color
+
     app.setStyleSheet(build_stylesheet(mode, accent, checkmark_color, text_scale))
+    set_combo_accent_color(normalize_accent(accent))

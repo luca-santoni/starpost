@@ -9,7 +9,7 @@ from starpost.core.settings import Settings
 from starpost.gui.icons import app_icon
 from starpost.gui.main_window import MainWindow
 from starpost.gui.theme import apply_theme
-from starpost.gui.widgets import ToolTipResetStyle
+from starpost.gui.widgets import ToolTipResetStyle, install_combo_accent
 from starpost.utils.logging import configure
 
 
@@ -21,6 +21,9 @@ def main() -> int:
     # Make moving between buttons restart the tooltip timer instead of showing
     # the next tooltip instantly (see ToolTipResetStyle).
     app.setStyle(ToolTipResetStyle())
+    # Outline the hovered item in every dropdown popup with the accent colour
+    # (instead of the style's default black focus rectangle).
+    install_combo_accent(app)
 
     settings = Settings.load()
     apply_theme(
