@@ -23,7 +23,7 @@ from starpost.utils.paths import (
 # UI text-size multiplier bounds. 1.0 keeps the original size (the default); the
 # upper bound caps how large the program-wide text can grow.
 MIN_TEXT_SCALE = 1.0
-MAX_TEXT_SCALE = 2.5
+MAX_TEXT_SCALE = 1.5
 
 
 def clamp_text_scale(value: float) -> float:

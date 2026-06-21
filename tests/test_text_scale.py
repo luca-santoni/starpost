@@ -131,11 +131,11 @@ def test_dialog_change_and_save_persists_text_scale(app):
     settings = Settings.from_dict({})
     dlg = SettingsDialog(settings)
     try:
-        dlg._text_scale_spin.setValue(1.8)
+        dlg._text_scale_spin.setValue(1.4)
         dlg._on_accept()  # Save
-        assert settings.appearance.text_scale == 1.8
+        assert settings.appearance.text_scale == 1.4
         # Persisted to disk: a fresh load sees the saved multiplier.
-        assert Settings.load().appearance.text_scale == 1.8
+        assert Settings.load().appearance.text_scale == 1.4
     finally:
         dlg.deleteLater()
 
@@ -147,8 +147,8 @@ def test_dialog_cancel_reverts_live_preview(app):
     settings = Settings.from_dict({})  # starts at 1.0
     dlg = SettingsDialog(settings)
     try:
-        dlg._text_scale_spin.setValue(2.0)  # live-previews the bigger text
-        assert _qss_font_px(app.styleSheet()) == round(BASE_FONT_PX * 2.0)
+        dlg._text_scale_spin.setValue(MAX_TEXT_SCALE)  # live-previews bigger text
+        assert _qss_font_px(app.styleSheet()) == round(BASE_FONT_PX * MAX_TEXT_SCALE)
         dlg.reject()  # Cancel
         assert _qss_font_px(app.styleSheet()) == BASE_FONT_PX
         assert settings.appearance.text_scale == 1.0  # nothing saved
@@ -163,7 +163,7 @@ def test_main_window_builds_at_enlarged_text_scale(app):
     and its panels build, and the enlarged font is in effect."""
     from starpost.gui.main_window import MainWindow
 
-    settings = Settings.from_dict({"appearance": {"text_scale": 2.0}})
+    settings = Settings.from_dict({"appearance": {"text_scale": MAX_TEXT_SCALE}})
     apply_theme(
         app, settings.appearance.mode, settings.appearance.accent, None,
         settings.appearance.text_scale,
@@ -173,7 +173,7 @@ def test_main_window_builds_at_enlarged_text_scale(app):
         assert win.file_list is not None
         assert win.data_list is not None
         assert win.plot_view is not None
-        assert _qss_font_px(app.styleSheet()) == round(BASE_FONT_PX * 2.0)
+        assert _qss_font_px(app.styleSheet()) == round(BASE_FONT_PX * MAX_TEXT_SCALE)
     finally:
         win.close()
         win.deleteLater()
