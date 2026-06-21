@@ -28,6 +28,7 @@ def main() -> int:
         settings.appearance.mode,
         settings.appearance.accent,
         settings.appearance.resolved_checkmark(),
+        settings.appearance.text_scale,
     )
 
     window = MainWindow(settings)

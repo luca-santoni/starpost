@@ -34,6 +34,11 @@ ACCENT_PRESETS: list[tuple[str, str]] = [
 DEFAULT_ACCENT = "#ffc829"
 DEFAULT_MODE = "dark"
 
+# Base UI font size (px) at a text scale of 1.0 — the original program-wide size.
+# The Appearance "Text size" multiplier scales this; everything that inherits the
+# QWidget font (buttons, labels, checkboxes, combos, tabs, menus, …) grows with it.
+BASE_FONT_PX = 13
+
 
 _DARK = {
     "window_bg": "#1e1e1e",
@@ -117,7 +122,7 @@ def contrast_color(accent: str) -> str:
 _QSS = Template(
     """
 QWidget {
-    font-size: 13px;
+    font-size: ${font_px}px;
     background: $window_bg;
     color: $text;
 }
@@ -349,14 +354,17 @@ def build_stylesheet(
     mode: str = DEFAULT_MODE,
     accent: str = DEFAULT_ACCENT,
     checkmark_color: str | None = None,
+    text_scale: float = 1.0,
 ) -> str:
     """Generate the full QSS for the given palette mode and colours. When
-    ``checkmark_color`` is None the accent colour is used for checkmarks."""
+    ``checkmark_color`` is None the accent colour is used for checkmarks.
+    ``text_scale`` multiplies the base UI font size (1.0 = the original size)."""
     palette = dict(_LIGHT if mode == "light" else _DARK)
     accent = normalize_accent(accent)
     palette["accent"] = accent
     palette["on_accent"] = contrast_color(accent)
     palette["check_icon"] = _checkmark_icon(checkmark_color or accent)
+    palette["font_px"] = max(1, round(BASE_FONT_PX * float(text_scale)))
     return _QSS.substitute(palette)
 
 
@@ -365,6 +373,7 @@ def apply_theme(
     mode: str = DEFAULT_MODE,
     accent: str = DEFAULT_ACCENT,
     checkmark_color: str | None = None,
+    text_scale: float = 1.0,
 ) -> None:
     """Apply the generated stylesheet to a running QApplication."""
-    app.setStyleSheet(build_stylesheet(mode, accent, checkmark_color))
+    app.setStyleSheet(build_stylesheet(mode, accent, checkmark_color, text_scale))

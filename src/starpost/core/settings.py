@@ -20,6 +20,22 @@ from starpost.utils.paths import (
 )
 
 
+# UI text-size multiplier bounds. 1.0 keeps the original size (the default); the
+# upper bound caps how large the program-wide text can grow.
+MIN_TEXT_SCALE = 1.0
+MAX_TEXT_SCALE = 2.5
+
+
+def clamp_text_scale(value: float) -> float:
+    """Coerce ``value`` to a valid text-size multiplier, falling back to 1.0 for
+    anything non-numeric, and clamping into [MIN_TEXT_SCALE, MAX_TEXT_SCALE]."""
+    try:
+        scale = float(value)
+    except (TypeError, ValueError):
+        return MIN_TEXT_SCALE
+    return max(MIN_TEXT_SCALE, min(MAX_TEXT_SCALE, scale))
+
+
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
@@ -31,6 +47,9 @@ class AppearanceConfig:
     checkmark_match_theme: bool = True   # force checkmark colour to the accent
     folder_color: str = "#ffc829"        # hex tint for Files-tab folder icons
     folder_use_default: bool = True      # keep the standard (untinted) folder icon
+    # UI text-size multiplier applied to every button/label. 1.0 is the original
+    # size (the default); larger values enlarge the text program-wide.
+    text_scale: float = 1.0
 
     def resolved_checkmark(self) -> str:
         """The checkmark colour actually used: the accent when matching the
@@ -141,6 +160,7 @@ class Settings:
                 ),
                 folder_color=appe.get("folder_color", "#ffc829"),
                 folder_use_default=bool(appe.get("folder_use_default", True)),
+                text_scale=clamp_text_scale(appe.get("text_scale", 1.0)),
             ),
             default_output_dir=d.get("default_output_dir", ""),
             extra_args=list(d.get("extra_args", []) or []),
@@ -184,6 +204,7 @@ class Settings:
                 "checkmark_match_theme": self.appearance.checkmark_match_theme,
                 "folder_color": self.appearance.folder_color,
                 "folder_use_default": self.appearance.folder_use_default,
+                "text_scale": self.appearance.text_scale,
             },
             "default_output_dir": self.default_output_dir,
             "extra_args": self.extra_args,

@@ -293,6 +293,7 @@ class WelcomeDialog(QDialog):
             self._theme.currentData(),
             self._accent,
             self._resolved_checkmark(),
+            self._settings.appearance.text_scale,
         )
 
     # --- load / save -----------------------------------------------------
@@ -341,5 +342,6 @@ class WelcomeDialog(QDialog):
             self._orig_mode,
             self._orig_accent,
             self._settings.appearance.resolved_checkmark(),
+            self._settings.appearance.text_scale,
         )
         super().reject()

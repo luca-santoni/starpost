@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -49,6 +50,8 @@ from PySide6.QtWidgets import (
 from starpost import __version__
 from starpost.core.settings import (
     DEFAULT_PROFILE_NAME,
+    MAX_TEXT_SCALE,
+    MIN_TEXT_SCALE,
     LicenseConfig,
     Profile,
     Settings,
@@ -191,6 +194,9 @@ class SettingsDialog(QDialog):
         self._folder_color = normalize_accent(settings.appearance.folder_color)
         self._folder_default = settings.appearance.folder_use_default
         self._orig_folder_color = settings.appearance.resolved_folder_color()
+        # Text-size multiplier (live + revert state).
+        self._text_scale = settings.appearance.text_scale
+        self._orig_text_scale = settings.appearance.text_scale
 
         # Left nav (groups) drives the right stack (individual settings).
         self._nav = QListWidget()
@@ -635,6 +641,17 @@ class SettingsDialog(QDialog):
         folder_box = QWidget()
         folder_box.setLayout(folder_row)
 
+        # Text size: a multiplier applied to every button/label program-wide.
+        # 1.0 is the original size (the default); larger values enlarge the text.
+        self._text_scale_spin = QDoubleSpinBox()
+        self._text_scale_spin.setDecimals(2)
+        self._text_scale_spin.setSingleStep(0.1)
+        self._text_scale_spin.setRange(MIN_TEXT_SCALE, MAX_TEXT_SCALE)
+        self._text_scale_spin.setValue(1.0)
+        self._text_scale_spin.setSuffix("×")
+        self._text_scale_spin.setFixedWidth(80)
+        self._text_scale_spin.valueChanged.connect(self._on_text_scale_changed)
+
         form = QFormLayout()
         form.addRow("Theme", self._theme)
         form.addRow("Accent presets", swatch_box)
@@ -643,6 +660,14 @@ class SettingsDialog(QDialog):
         form.addRow("Checkmark colour", cm_box)
         form.addRow("Folders", self._folder_default_cb)
         form.addRow("Folder colour", folder_box)
+        form.addRow("Text size", self._text_scale_spin)
+        ts_hint = QLabel(
+            "Scales the size of all buttons and labels in the app. 1.0× is the "
+            "default size; increase it to make the text bigger."
+        )
+        ts_hint.setObjectName("hint")
+        ts_hint.setWordWrap(True)
+        form.addRow("", ts_hint)
         hint = QLabel("Changes preview instantly; click Save to keep them.")
         hint.setObjectName("hint")
         hint.setWordWrap(True)
@@ -833,6 +858,7 @@ class SettingsDialog(QDialog):
         s.appearance.checkmark_match_theme = d.appearance.checkmark_match_theme
         s.appearance.folder_color = d.appearance.folder_color
         s.appearance.folder_use_default = d.appearance.folder_use_default
+        s.appearance.text_scale = d.appearance.text_scale
         s.show_setup_on_startup = d.show_setup_on_startup
         s.check_updates_on_startup = d.check_updates_on_startup
         s.export_report_format = d.export_report_format
@@ -868,6 +894,8 @@ class SettingsDialog(QDialog):
         self._set_folder_color(d.appearance.folder_color)
         self._folder_default_cb.setChecked(d.appearance.folder_use_default)
         self._on_folder_default_toggled(d.appearance.folder_use_default)
+        self._text_scale = d.appearance.text_scale
+        self._text_scale_spin.setValue(d.appearance.text_scale)
         self._show_setup.setChecked(d.show_setup_on_startup)
         self._check_updates_startup.setChecked(d.check_updates_on_startup)
         ri = self._export_report_format.findText(
@@ -886,12 +914,18 @@ class SettingsDialog(QDialog):
         self._orig_accent = normalize_accent(s.appearance.accent)
         self._orig_checkmark = s.appearance.resolved_checkmark()
         self._orig_folder_color = s.appearance.resolved_folder_color()
+        self._orig_text_scale = s.appearance.text_scale
 
         self.defaults_reset.emit()
 
     # --- appearance helpers ---------------------------------------------
     def _current_mode(self) -> str:
         return self._theme.currentData()
+
+    def _on_text_scale_changed(self, value: float) -> None:
+        """Remember the new text-size multiplier and live-preview it app-wide."""
+        self._text_scale = value
+        self._apply_preview()
 
     def _set_accent(self, accent: str, *, update_field: bool = True) -> None:
         """Set the active accent, refresh swatch/preview/field, live-preview it."""
@@ -1043,7 +1077,11 @@ class SettingsDialog(QDialog):
             return
         mode = self._current_mode()
         apply_theme(
-            QApplication.instance(), mode, self._accent, self._effective_checkmark()
+            QApplication.instance(),
+            mode,
+            self._accent,
+            self._effective_checkmark(),
+            self._text_scale,
         )
         # Only the mode (not accent) affects non-QSS widgets; notify on change.
         if mode != self._last_preview_mode:
@@ -1146,6 +1184,10 @@ class SettingsDialog(QDialog):
         self._folder_default_cb.setChecked(s.appearance.folder_use_default)
         self._on_folder_default_toggled(s.appearance.folder_use_default)
 
+        # Text size multiplier.
+        self._text_scale = s.appearance.text_scale
+        self._text_scale_spin.setValue(s.appearance.text_scale)
+
     def _on_accept(self) -> None:
         s = self._settings
         s.appearance.mode = self._current_mode()
@@ -1154,6 +1196,7 @@ class SettingsDialog(QDialog):
         s.appearance.checkmark_match_theme = self._checkmark_match
         s.appearance.folder_color = self._folder_color
         s.appearance.folder_use_default = self._folder_default
+        s.appearance.text_scale = self._text_scale
         s.show_full_file_names = self._show_full_paths.isChecked()
         s.show_setup_on_startup = self._show_setup.isChecked()
         s.check_updates_on_startup = self._check_updates_startup.isChecked()
@@ -1203,6 +1246,7 @@ class SettingsDialog(QDialog):
             self._orig_mode,
             self._orig_accent,
             self._orig_checkmark,
+            self._orig_text_scale,
         )
         if self._orig_mode != self._last_preview_mode:
             self._last_preview_mode = self._orig_mode
