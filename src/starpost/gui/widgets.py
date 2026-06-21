@@ -87,20 +87,39 @@ class SecretLineEdit(QWidget):
 
 
 class UniformTabBar(QTabBar):
-    """A tab bar whose tabs all render at one shared width (set externally), so
-    sibling tab bars (e.g. Files/Data and Reports/Plots) can match each other
-    exactly."""
+    """A tab bar whose tabs all render at one shared width — the widest tab's
+    natural size — so e.g. "Reports" and "Plots" are equal.
+
+    The width is recomputed from the live tab size hints on every layout pass, so
+    it tracks the current font (it grows with the Appearance text-size setting
+    instead of clipping). Bars linked with :meth:`link` share a single width
+    across the group, letting sibling tab bars (Files/Data and Reports/Plots)
+    match each other exactly."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._tab_width = 0  # 0 = use each tab's natural width
+        self._peers: list[UniformTabBar] = []
 
-    def set_tab_width(self, width: int) -> None:
-        self._tab_width = width
-        self.updateGeometry()
+    def link(self, *bars: "UniformTabBar") -> None:
+        """Size this bar and ``bars`` to one shared width: the widest tab across
+        the whole group, recomputed live so it follows font changes."""
+        group = [self, *bars]
+        for bar in group:
+            bar._peers = [other for other in group if other is not bar]
+            bar.updateGeometry()
+
+    def _natural_max_width(self) -> int:
+        """The widest natural tab width in this bar (bypassing the override below
+        so linked bars can query each other without recursing)."""
+        return max(
+            (QTabBar.tabSizeHint(self, i).width() for i in range(self.count())),
+            default=0,
+        )
 
     def tabSizeHint(self, index):  # noqa: N802 (Qt override)
         size = super().tabSizeHint(index)
-        if self._tab_width:
-            size.setWidth(self._tab_width)
+        width = max(
+            [self._natural_max_width(), *(p._natural_max_width() for p in self._peers)]
+        )
+        size.setWidth(width)
         return size

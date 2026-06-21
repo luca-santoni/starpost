@@ -228,10 +228,8 @@ class ExportDialog(QDialog):
         tabs.currentChanged.connect(self._on_tab_changed)
         self.finished.connect(lambda _r: self._preview_window.close())
 
-        # Match the main interface: give both tabs the width of the wider one.
-        bar = tabs.tabBar()
-        width = max(bar.tabSizeHint(i).width() for i in range(tabs.count()))
-        bar.set_tab_width(width)
+        # UniformTabBar already sizes both tabs to the wider one (Reports),
+        # tracking the font so larger text doesn't clip.
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         export_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)

@@ -159,14 +159,11 @@ class MainWindow(QMainWindow):
             lambda pos: self._left_tab_menu(left_tabs, pos)
         )
 
-        # Give every tab the width of the widest center tab (Reports) so the
-        # Files/Data/Plots tabs all match it.
+        # Give every tab the width of the widest tab (Reports) so the
+        # Files/Data/Plots tabs all match it. Linked so the shared width tracks
+        # the font (it grows with the Appearance text-size setting, not clips).
         center_bar = tabs.tabBar()
-        reports_width = max(
-            center_bar.tabSizeHint(i).width() for i in range(tabs.count())
-        )
-        center_bar.set_tab_width(reports_width)
-        left_bar.set_tab_width(reports_width)
+        center_bar.link(left_bar)
 
         center = QSplitter(Qt.Horizontal)
         center.addWidget(left_tabs)
