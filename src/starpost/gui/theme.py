@@ -230,6 +230,9 @@ QTreeView::indicator:checked {
    without a box. */
 QMenu::indicator { width: 14px; height: 14px; }
 QMenu::indicator:checked { image: url("$check_icon"); }
+/* On the highlighted item (accent background) use the contrast-colour glyph so
+   the checkmark stays visible instead of blending into the accent. */
+QMenu::indicator:checked:selected { image: url("$check_icon_selected"); }
 
 QTabWidget::pane { border: 1px solid $border; }
 QTabBar::tab {
@@ -367,6 +370,10 @@ def build_stylesheet(
     palette["accent"] = accent
     palette["on_accent"] = contrast_color(accent)
     palette["check_icon"] = _checkmark_icon(checkmark_color or accent)
+    # A second glyph in the accent's contrast colour for the highlighted menu
+    # item, whose background is the accent — the normal (accent-tinted) checkmark
+    # would otherwise be invisible against it.
+    palette["check_icon_selected"] = _checkmark_icon(palette["on_accent"])
     palette["font_px"] = max(1, round(BASE_FONT_PX * float(text_scale)))
     return _QSS.substitute(palette)
 

@@ -38,3 +38,14 @@ def test_item_views_disable_focus_outline(app):
         "QListWidget, QTableView, QTableWidget, QTreeView",
     )
     assert re.search(r"outline:\s*0", body)
+
+
+def test_highlighted_menu_checkmark_uses_a_distinct_glyph(app):
+    """A highlighted (accent-background) menu item gets a contrast-colour
+    checkmark so it stays visible instead of blending into the accent."""
+    qss = build_stylesheet("dark", "#ffc829")
+    normal = _rule_body(qss, "QMenu::indicator:checked")
+    selected = _rule_body(qss, "QMenu::indicator:checked:selected")
+    # Both reference a checkmark image, but different ones (accent vs contrast).
+    assert "image: url(" in normal and "image: url(" in selected
+    assert normal != selected
