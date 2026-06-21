@@ -134,7 +134,33 @@ class _MonitorTree(QTreeWidget):
                     self.swatch_clicked.emit(item, i)
                     event.accept()
                     return
+        # Clicking anywhere on a checkable row (its name, not just the small
+        # checkbox) toggles it — except a direct hit on the indicator, which the
+        # base class already toggles, so we'd otherwise cancel it out.
+        if (
+            item is not None
+            and event.button() == Qt.MouseButton.LeftButton
+            and (item.flags() & Qt.ItemFlag.ItemIsUserCheckable)
+            and not self._on_check_indicator(item, pos)
+        ):
+            super().mousePressEvent(event)  # selection / expand first
+            checked = item.checkState(0) == Qt.CheckState.Checked
+            item.setCheckState(
+                0, Qt.CheckState.Unchecked if checked else Qt.CheckState.Checked
+            )
+            return
         super().mousePressEvent(event)
+
+    def _on_check_indicator(self, item, pos) -> bool:
+        """Whether ``pos`` (viewport coords) falls on the row's checkbox."""
+        opt = QStyleOptionViewItem()
+        opt.initFrom(self)
+        opt.rect = self.visualRect(self.indexFromItem(item, 0))
+        opt.features |= QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+        rect = self.style().subElementRect(
+            QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, self
+        )
+        return rect.contains(pos)
 
     def _swatch_rects(self, item) -> list[QRect]:
         """The clickable band of each colour swatch, laid out left-to-right just
