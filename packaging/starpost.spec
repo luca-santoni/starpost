@@ -28,7 +28,7 @@ a = Analysis(
         (str(root / "src" / "starpost" / "gui" / "resources"), "starpost/gui/resources"),
         (str(root / "config" / "default_settings.yaml"), "config"),
     ],
-    hiddenimports=["pyqtgraph", "matplotlib.backends.backend_agg"],
+    hiddenimports=["pyqtgraph"],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
