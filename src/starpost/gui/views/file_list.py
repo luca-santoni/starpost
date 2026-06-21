@@ -191,6 +191,11 @@ class FileListPanel(QWidget):
         self._tree.setDragEnabled(True)
         self._tree.setAcceptDrops(True)
         self._tree.dropped.connect(self._on_dropped)
+        # Persist a folder's open/closed state when the user expands or collapses
+        # it (programmatic changes during load/rebuild are guarded by blocking
+        # the tree's signals, so they don't trigger a save).
+        self._tree.itemExpanded.connect(self._on_expansion_changed)
+        self._tree.itemCollapsed.connect(self._on_expansion_changed)
 
         add_files = QPushButton("Add files…")
         add_folder = QPushButton("Add folder…")
@@ -378,8 +383,12 @@ class FileListPanel(QWidget):
         folder.takeChildren()
         for node in nodes:
             folder.addChild(self._build_item(node))
+        # Block signals so restoring each subfolder's expansion doesn't fire a
+        # save per subfolder; the single _changed() below persists the result.
+        self._tree.blockSignals(True)
         for node, i in zip(nodes, range(folder.childCount())):
             self._restore_expansion(node, folder.child(i))
+        self._tree.blockSignals(False)
         self._changed()
 
     # --- (de)serialisation of the tree -----------------------------------
@@ -412,12 +421,16 @@ class FileListPanel(QWidget):
     def _rebuild(self, nodes: list[dict]) -> None:
         """Replace the whole tree from a serialised structure, restoring folder
         expansion state."""
+        # Block signals so the programmatic setExpanded calls below don't fire
+        # itemExpanded/itemCollapsed and trigger a save (load restores silently).
+        self._tree.blockSignals(True)
         self._tree.clear()
         items = [self._build_item(n) for n in nodes]
         for item in items:
             self._tree.addTopLevelItem(item)
         for node, item in zip(nodes, items):
             self._restore_expansion(node, item)
+        self._tree.blockSignals(False)
 
     def _restore_expansion(self, node: dict, item: QTreeWidgetItem) -> None:
         if "folder" not in node:
@@ -557,6 +570,12 @@ class FileListPanel(QWidget):
         for item in self._iter_all():
             item.setFlags(_FOLDER_FLAGS if _is_folder(item) else _FILE_FLAGS)
         self._changed()
+
+    def _on_expansion_changed(self, _item: QTreeWidgetItem) -> None:
+        """A folder was expanded/collapsed by the user; persist the new layout so
+        the open/closed state survives a restart. Only the layout changed, so
+        save without re-emitting files_changed."""
+        self._save()
 
     def _iter_all(self, parent: QTreeWidgetItem | None = None):
         """Yield every item (files and folders), depth-first."""

@@ -244,6 +244,11 @@ class DataListPanel(QWidget):
         self._tree.dropped.connect(self._on_dropped)
         # A checkbox toggle (click or drag-in) changes which sets feed the views.
         self._tree.itemChanged.connect(self._on_item_changed)
+        # Persist a folder's open/closed state when the user expands or collapses
+        # it (programmatic changes during load/rebuild block the tree's signals,
+        # so they don't trigger a save).
+        self._tree.itemExpanded.connect(self._on_expansion_changed)
+        self._tree.itemCollapsed.connect(self._on_expansion_changed)
 
         import_btn = QPushButton("Import")
         import_btn.setToolTip("Import data from a portable StarPost CSV file")
@@ -421,8 +426,12 @@ class DataListPanel(QWidget):
         folder.takeChildren()
         for node in nodes:
             folder.addChild(self._build_item(node))
+        # Block signals so restoring each subfolder's expansion doesn't fire a
+        # save per subfolder; the single _save() below persists the result.
+        self._tree.blockSignals(True)
         for node, i in zip(nodes, range(folder.childCount())):
             self._restore_expansion(node, folder.child(i))
+        self._tree.blockSignals(False)
         self._tree._restore_checks(states)
         self._save()
 
@@ -591,6 +600,11 @@ class DataListPanel(QWidget):
     def _on_item_changed(self, _item, _column) -> None:
         # A checkbox toggled (check state isn't persisted, so no save needed).
         self.selection_changed.emit()
+
+    def _on_expansion_changed(self, _item) -> None:
+        """A folder was expanded/collapsed by the user; persist the layout so the
+        open/closed state survives a restart."""
+        self._save()
 
     def _on_dropped(self) -> None:
         """After a drag-drop re-parent: restore type-correct flags (a move can
