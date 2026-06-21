@@ -544,6 +544,11 @@ class PlotView(QWidget):
         # plot looks unchanged until a slider is moved.
         self._title_size = 11.0
         self._axis_label_size = 9.0
+        # Multiplier applied on top of the title/axis sizes above, mirroring the
+        # Appearance text-size setting. Only the main-UI plot view sets this (via
+        # set_text_scale); the export preview leaves it at 1.0 so exported images
+        # keep the exact point sizes chosen in the export menu.
+        self._text_scale = 1.0
         # Per-series colour overrides (raw series name -> hex), and the colours
         # actually drawn last render (raw series name -> hex) for read-back.
         self._series_colors: dict[str, str] = {}
@@ -618,6 +623,14 @@ class PlotView(QWidget):
         self._axis_label_size = pt
         self._refresh_labels()
 
+    def set_text_scale(self, scale: float) -> None:
+        """Scale the title and axis-label font sizes by ``scale`` (1.0 = the
+        unscaled point sizes). Used by the main UI to follow the Appearance
+        text-size setting; the export preview leaves this at 1.0 so exported
+        images keep their exact point sizes."""
+        self._text_scale = max(0.0, float(scale))
+        self._refresh_labels()
+
     def set_grid_visible(self, visible: bool) -> None:
         """Show or hide the plot's background grid."""
         self._plot.showGrid(x=visible, y=visible, alpha=0.3)
@@ -628,10 +641,10 @@ class PlotView(QWidget):
         self._title = self._title_override or self._auto_title
         self._x_axis_label = self._x_label_override or self._auto_x_label
         self._y_axis_label = self._y_label_override or self._auto_y_label
-        self._plot.setTitle(
-            self._title, color=self._fg, size=f"{self._title_size:g}pt"
-        )
-        axis_style = {"color": self._fg, "font-size": f"{self._axis_label_size:g}pt"}
+        title_pt = self._title_size * self._text_scale
+        axis_pt = self._axis_label_size * self._text_scale
+        self._plot.setTitle(self._title, color=self._fg, size=f"{title_pt:g}pt")
+        axis_style = {"color": self._fg, "font-size": f"{axis_pt:g}pt"}
         self._plot.setLabel("bottom", self._x_axis_label, **axis_style)
         self._plot.setLabel("left", self._y_axis_label, **axis_style)
 
