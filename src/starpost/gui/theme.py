@@ -189,6 +189,9 @@ QListWidget, QTableView, QTableWidget, QTreeView {
     alternate-background-color: $alt_bg;
     selection-background-color: $accent;
     selection-color: $on_accent;
+    /* No focus rectangle: otherwise the current row keeps a faint outline after
+       its selection is cleared (e.g. clicking empty space in the Files tab). */
+    outline: 0;
 }
 QHeaderView::section {
     background: $header_bg;
