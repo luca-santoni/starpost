@@ -46,16 +46,23 @@ def test_tooltip_fall_asleep_delay_is_zero(app):
     assert style.styleHint(QStyle.StyleHint.SH_ToolTip_FallAsleepDelay) == 0
 
 
+def test_combo_popup_hint_forces_list_dropdown(app):
+    """SH_ComboBox_Popup is forced off so dropdowns open as a downward list,
+    never Fusion's centred menu popup that rises over the box."""
+    style = ToolTipResetStyle()
+    assert style.styleHint(QStyle.StyleHint.SH_ComboBox_Popup) == 0
+
+
 def test_other_style_hints_delegate_unchanged(app):
-    """Only the fall-asleep delay is overridden; everything else (including the
-    wake-up delay and unrelated hints) is delegated to the base style so the
-    app's appearance is untouched."""
+    """Only the overridden hints differ; everything else (including the wake-up
+    delay and unrelated hints) is delegated to the base style so the app's
+    appearance is untouched."""
     style = ToolTipResetStyle()
     base = QProxyStyle()
     for hint in (
         QStyle.StyleHint.SH_ToolTip_WakeUpDelay,
-        QStyle.StyleHint.SH_ComboBox_Popup,
         QStyle.StyleHint.SH_Slider_SnapToValue,
+        QStyle.StyleHint.SH_ScrollBar_ContextMenu,
     ):
         assert style.styleHint(hint) == base.styleHint(hint)
 

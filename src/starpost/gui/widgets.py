@@ -43,6 +43,11 @@ class ToolTipResetStyle(QProxyStyle):
     ) -> int:
         if hint == QStyle.StyleHint.SH_ToolTip_FallAsleepDelay:
             return 0
+        # Fusion's combo popup is a centred menu that opens over the box (so it
+        # rises above the widget when a lower item is selected). Force the plain
+        # list popup instead, so dropdowns always open downward.
+        if hint == QStyle.StyleHint.SH_ComboBox_Popup:
+            return 0
         return super().styleHint(hint, option, widget, returnData)
 
 
