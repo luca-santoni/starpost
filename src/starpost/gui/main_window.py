@@ -270,11 +270,14 @@ class MainWindow(QMainWindow):
         if self._missing_exe():
             return
 
-        out_dir = Path(
-            QFileDialog.getExistingDirectory(self, "Folder for extracted data")
-            or (self.settings.default_output_dir or str(Path.home()))
+        # Open at the configured default folder (if any); an empty return means
+        # the user cancelled, so abort without opening or running anything.
+        out_dir = QFileDialog.getExistingDirectory(
+            self, "Folder for extracted data", self.settings.default_output_dir
         )
-        self._start_jobs([Job(sim_file=f) for f in files], out_dir)
+        if not out_dir:
+            return
+        self._start_jobs([Job(sim_file=f) for f in files], Path(out_dir))
 
     def _open_files(self, paths: list[Path]) -> None:
         """Extract one or more .sim files (right-click → Open) and show their
