@@ -42,11 +42,30 @@ class MonitorPlot:
 
 
 @dataclass
+class MediaArtifact:
+    """A rendered visual output (e.g. a scene still). The file lives on disk; this
+    just records where it is and what produced it."""
+    name: str                   # display name (the scene name, for stills)
+    path: str                   # absolute path to the rendered file on disk
+    source: str = ""            # the scene (or, later, screenplay) it came from
+    kind: str = "still"         # "still" | "video" (video reserved for later)
+    width: int = 0
+    height: int = 0
+    error: Optional[str] = None
+
+
+@dataclass
 class SimResult:
     """Everything extracted from one .sim file."""
     sim_path: str
     reports: list[Report] = field(default_factory=list)
     plots: list[MonitorPlot] = field(default_factory=list)
+    # Scene names discovered in the .sim during extraction (no rendering); these
+    # populate the Scenes selection list, mirroring reports/plots.
+    scenes: list[str] = field(default_factory=list)
+    # Visual outputs rendered from this .sim (scene stills, etc.). Produced by a
+    # separate render pass, not the numeric extraction.
+    media: list[MediaArtifact] = field(default_factory=list)
     extracted_at: str = ""        # ISO timestamp
     error: Optional[str] = None   # set if the whole batch run failed
 
@@ -61,6 +80,9 @@ class SimResult:
 
     def plot_names(self) -> set[str]:
         return {p.name for p in self.plots}
+
+    def scene_names(self) -> set[str]:
+        return set(self.scenes)
 
     def signature(self) -> tuple[frozenset[str], frozenset[str]]:
         """Used for the homogeneity check across a batch."""

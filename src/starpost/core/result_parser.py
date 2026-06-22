@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from starpost.data.models import (
+    MediaArtifact,
     MonitorPlot,
     PlotKind,
     PlotSeries,
@@ -45,7 +46,47 @@ def parse_sim_output(
     )
     result.reports = _parse_reports(output_dir / f"{sim_name}_reports.csv")
     result.plots = _parse_plots(sim_name, output_dir, classification)
+    result.scenes = _parse_scenes(output_dir / f"{sim_name}__scenes_index.csv")
     return result
+
+
+def _parse_scenes(path: Path) -> list[str]:
+    """Read the scene-name list the extraction macro wrote (one name per row)."""
+    if not path.exists():
+        # Older extractions (pre-scenes) simply have no scene list.
+        return []
+    scenes: list[str] = []
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            name = (row.get("scene") or "").strip()
+            if name:
+                scenes.append(name)
+    return scenes
+
+
+def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
+    """Read the media index a render pass wrote into ``output_dir`` and resolve
+    each entry's file to an absolute path. Missing index -> empty list."""
+    path = output_dir / f"{sim_name}__media_index.csv"
+    if not path.exists():
+        log.warning("media index missing: %s", path)
+        return []
+    media: list[MediaArtifact] = []
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            file_cell = (row.get("file") or "").strip()
+            err = (row.get("error") or "").strip()
+            full = str((output_dir / file_cell).resolve()) if file_cell else ""
+            media.append(
+                MediaArtifact(
+                    name=row.get("name", ""),
+                    path=full,
+                    source=row.get("source", ""),
+                    kind=row.get("kind", "still") or "still",
+                    error=err or None,
+                )
+            )
+    return media
 
 
 def _parse_reports(path: Path) -> list[Report]:

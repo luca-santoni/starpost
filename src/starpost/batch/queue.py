@@ -81,3 +81,42 @@ class BatchWorker(QObject):
             self.progress.emit(i + 1, total)
 
         self.finished.emit()
+
+
+class SceneRenderWorker(QObject):
+    """Renders scene stills for one or more .sim files, off the GUI thread.
+
+    Independent of the numeric BatchWorker: each job is a (sim_file, scene_names)
+    pair (empty scene_names == every scene). Runs sequentially (license-safe) and
+    emits the rendered artifacts per file so the UI can attach them to results.
+    """
+
+    log = Signal(str)                 # a line of render output
+    progress = Signal(int, int)       # (completed, total)
+    rendered = Signal(object, object)  # (sim_path: str, list[MediaArtifact])
+    finished = Signal()
+
+    def __init__(
+        self,
+        jobs: list[tuple[Path, list[str]]],
+        runner: StarRunner,
+        output_dir: Path,
+    ) -> None:
+        super().__init__()
+        self._jobs = jobs
+        self._runner = runner
+        self._output_dir = output_dir
+
+    def run(self) -> None:
+        total = len(self._jobs)
+        for i, (sim_file, scene_names) in enumerate(self._jobs):
+            self.log.emit(f"--- [{i + 1}/{total}] rendering {sim_file.name} ---")
+            try:
+                artifacts = self._runner.render_scenes(
+                    sim_file, self._output_dir, scene_names, log_sink=self.log.emit
+                )
+                self.rendered.emit(str(sim_file), artifacts)
+            except Exception as e:  # noqa: BLE001 - surface any failure to the UI
+                self.log.emit(f"Render failed for {sim_file.name}: {e}")
+            self.progress.emit(i + 1, total)
+        self.finished.emit()

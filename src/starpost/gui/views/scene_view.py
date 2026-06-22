@@ -1,0 +1,83 @@
+"""Scenes view (centre tab): a gallery of rendered scene stills.
+
+Mirrors the Reports/Plots centre tabs in spirit. It shows thumbnails of the
+stills rendered for the ticked data sets; double-clicking one opens it in the
+system image viewer. While nothing has been rendered it shows a centred hint.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QStackedLayout,
+    QWidget,
+)
+
+from starpost.data.models import MediaArtifact
+
+_THUMB = 220  # thumbnail edge in px
+
+
+class SceneView(QWidget):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+
+        self._hint = QLabel("Select scenes and press Run to render stills")
+        self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hint.setEnabled(False)  # muted, like a placeholder
+
+        self._gallery = QListWidget()
+        self._gallery.setViewMode(QListWidget.ViewMode.IconMode)
+        self._gallery.setIconSize(QSize(_THUMB, _THUMB))
+        self._gallery.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self._gallery.setMovement(QListWidget.Movement.Static)
+        self._gallery.setSpacing(8)
+        self._gallery.setWordWrap(True)
+        self._gallery.setUniformItemSizes(True)
+        self._gallery.itemDoubleClicked.connect(self._open_item)
+
+        self._stack = QStackedLayout(self)
+        self._stack.addWidget(self._hint)
+        self._stack.addWidget(self._gallery)
+        self._stack.setCurrentWidget(self._hint)
+
+    def clear(self) -> None:
+        self._gallery.clear()
+        self._stack.setCurrentWidget(self._hint)
+
+    def show_media(self, artifacts: list[MediaArtifact]) -> None:
+        """Show one thumbnail per still in ``artifacts`` (errored or missing
+        files are listed without an image). Falls back to the hint when empty."""
+        self._gallery.clear()
+        stills = [a for a in artifacts if a.kind == "still"]
+        if not stills:
+            self._stack.setCurrentWidget(self._hint)
+            return
+
+        for art in stills:
+            label = art.name or Path(art.path).stem
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, art.path)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
+            if art.error:
+                item.setText(f"{label}\n(render failed)")
+            elif art.path and Path(art.path).exists():
+                pix = QPixmap(art.path)
+                if not pix.isNull():
+                    item.setIcon(QIcon(pix))
+                item.setToolTip(art.path)
+            else:
+                item.setText(f"{label}\n(file missing)")
+            self._gallery.addItem(item)
+
+        self._stack.setCurrentWidget(self._gallery)
+
+    def _open_item(self, item: QListWidgetItem) -> None:
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path and Path(path).exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))

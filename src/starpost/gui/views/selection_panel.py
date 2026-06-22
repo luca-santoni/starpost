@@ -413,6 +413,7 @@ class _SortableGroupBox(QGroupBox):
 
 class SelectionPanel(QWidget):
     selection_changed = Signal()
+    run_scenes_requested = Signal()   # the Scenes section's Run button
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -420,9 +421,13 @@ class SelectionPanel(QWidget):
         # Monitor plots: a tree of groups whose checked monitors are the ones
         # drawn (the per-monitor selection lives here, not under the plot).
         self.plots = _MonitorPlotTree()
+        # Scenes: a flat checklist (like reports) of the scenes found in the
+        # loaded .sim files; its Run button renders the checked ones to stills.
+        self.scenes = _CheckList()
         self.reports.changed.connect(self.selection_changed)
         self.plots.changed.connect(self.selection_changed)
         self.plots.swatch_clicked.connect(self._pick_monitor_color)
+        self.scenes.changed.connect(self.selection_changed)
 
         # Region-statistics selection hooks (wired by MainWindow), so profiles can
         # persist it. The setter takes a list of stat labels, or None to reset to
@@ -454,6 +459,7 @@ class SelectionPanel(QWidget):
         # panel. set_active_section toggles between them.
         self._reports_group = self._group("Reports", self.reports)
         self._plots_group = self._group("Monitor plots", self.plots)
+        self._scenes_group = self._scenes_group_box("Scenes", self.scenes)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
@@ -462,16 +468,18 @@ class SelectionPanel(QWidget):
         # has — including whatever the hidden section would have used.
         layout.addWidget(self._reports_group, 1)
         layout.addWidget(self._plots_group, 1)
+        layout.addWidget(self._scenes_group, 1)
         # Default to the Reports section (the centre opens on the Reports tab).
         self.set_active_section("reports")
 
     def set_active_section(self, section: str) -> None:
         """Show only the checklist relevant to the active centre tab: ``"reports"``
-        shows the Reports list, any other value shows the Monitor plots list. The
-        hidden group's space is given to the visible one, which fills the panel."""
-        reports = section == "reports"
-        self._reports_group.setVisible(reports)
-        self._plots_group.setVisible(not reports)
+        shows the Reports list, ``"scenes"`` the Scenes list, anything else the
+        Monitor plots list. The hidden groups' space is given to the visible one,
+        which fills the panel."""
+        self._reports_group.setVisible(section == "reports")
+        self._scenes_group.setVisible(section == "scenes")
+        self._plots_group.setVisible(section not in ("reports", "scenes"))
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.
@@ -489,6 +497,35 @@ class SelectionPanel(QWidget):
         row.addWidget(all_on)
         row.addWidget(all_off)
         v = QVBoxLayout(box)
+        v.addLayout(row)
+        v.addWidget(lst)
+        return box
+
+    def _scenes_group_box(self, title: str, lst: _CheckList) -> QGroupBox:
+        """Like ``_group`` but with a prominent ``Run`` button at the top that
+        renders the checked scenes to stills (emitting ``run_scenes_requested``)."""
+        box = _SortableGroupBox(
+            title, on_sort=lambda gp, lst=lst: self._show_sort_menu(lst, gp)
+        )
+        box.setToolTip("Right-click the title to sort A–Z / Z–A")
+        run = QPushButton("Run")
+        run.setToolTip("Render the selected scenes to still images")
+        run.clicked.connect(lambda: self.run_scenes_requested.emit())
+        all_on = QPushButton("Select all")
+        all_on.setToolTip(f"Select every entry under {title}")
+        all_off = QPushButton("Clear")
+        all_off.setToolTip(f"Deselect every entry under {title}")
+        all_on.clicked.connect(
+            lambda: (lst.set_all(True), self.selection_changed.emit())
+        )
+        all_off.clicked.connect(
+            lambda: (lst.set_all(False), self.selection_changed.emit())
+        )
+        row = QHBoxLayout()
+        row.addWidget(all_on)
+        row.addWidget(all_off)
+        v = QVBoxLayout(box)
+        v.addWidget(run)
         v.addLayout(row)
         v.addWidget(lst)
         return box
@@ -600,6 +637,19 @@ class SelectionPanel(QWidget):
         selection — used when a setting (e.g. hide-empty-monitors) changes the
         visible set without reloading data."""
         self.plots.set_items(plot_groups, preserve=True)
+
+    def set_available_scenes(self, scene_names: list[str]) -> None:
+        """Refresh the Scenes checklist while preserving the current selection.
+        New scenes default to *unchecked* (rendering is heavy and run manually)."""
+        prev_all = set(self.scenes.texts())
+        prev_checked = set(self.scenes.checked())
+        names = sorted(scene_names)
+        keep = {n for n in names if n in prev_checked and n in prev_all}
+        self.scenes.set_items(names, checked=False)
+        self.scenes.set_checked(keep)
+
+    def selected_scenes(self) -> set[str]:
+        return set(self.scenes.checked())
 
     def set_residual_groups(self, names) -> None:
         """Name the plot groups that should plot all their monitors at once when

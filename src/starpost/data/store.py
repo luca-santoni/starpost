@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from starpost.data.models import (
+    MediaArtifact,
     MonitorPlot,
     PlotKind,
     PlotSeries,
@@ -78,10 +79,13 @@ def _result_from_dict(d: dict) -> SimResult:
                 error=p.get("error"),
             )
         )
+    media = [MediaArtifact(**m) for m in d.get("media", [])]
     return SimResult(
         sim_path=d["sim_path"],
         reports=reports,
         plots=plots,
+        scenes=list(d.get("scenes", [])),
+        media=media,
         extracted_at=d.get("extracted_at", ""),
         error=d.get("error"),
     )

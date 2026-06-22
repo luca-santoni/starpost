@@ -63,6 +63,15 @@ class AppearanceConfig:
 
 
 @dataclass
+class MediaConfig:
+    """How scene stills are rendered (resolution + magnification). Mirrors the
+    knobs in the render macro; defaults to 1080p at 1× magnification."""
+    still_width: int = 1920
+    still_height: int = 1080
+    magnification: int = 1
+
+
+@dataclass
 class LicenseConfig:
     mode: str = "podkey_server"   # "podkey_server" | "license_file"
     podkey: str = ""
@@ -86,6 +95,7 @@ class LicenseConfig:
 class Settings:
     starccm_path: str = ""
     license: LicenseConfig = field(default_factory=LicenseConfig)
+    media: MediaConfig = field(default_factory=MediaConfig)
     appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
     default_output_dir: str = ""
     extra_args: list[str] = field(default_factory=list)
@@ -143,6 +153,7 @@ class Settings:
     def from_dict(cls, d: dict) -> "Settings":
         lic = d.get("license", {}) or {}
         appe = d.get("appearance", {}) or {}
+        med = d.get("media", {}) or {}
         return cls(
             starccm_path=d.get("starccm_path", ""),
             license=LicenseConfig(
@@ -150,6 +161,11 @@ class Settings:
                 podkey=lic.get("podkey", ""),
                 licpath=lic.get("licpath", ""),
                 license_file=lic.get("license_file", ""),
+            ),
+            media=MediaConfig(
+                still_width=int(med.get("still_width", 1920)),
+                still_height=int(med.get("still_height", 1080)),
+                magnification=int(med.get("magnification", 1)),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -196,6 +212,11 @@ class Settings:
                 "podkey": self.license.podkey,
                 "licpath": self.license.licpath,
                 "license_file": self.license.license_file,
+            },
+            "media": {
+                "still_width": self.media.still_width,
+                "still_height": self.media.still_height,
+                "magnification": self.media.magnification,
             },
             "appearance": {
                 "mode": self.appearance.mode,

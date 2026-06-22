@@ -7,6 +7,7 @@
 //   <simname>__plot__<plot>.csv      one X column + one column per series
 //                                    (STAR-CCM+ StarPlot.export format)
 //   <simname>__plots_index.csv       plot,csv_file   (maps plot name -> file)
+//   <simname>__scenes_index.csv      scene           (one scene name per row)
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -15,6 +16,7 @@ package macro;
 import java.io.*;
 import star.common.*;
 import star.base.report.*;   // Report, ReportManager (not in star.common)
+import star.vis.*;           // Scene, SceneManager (not in star.common)
 
 public class extract_all extends StarMacro {
 
@@ -26,6 +28,23 @@ public class extract_all extends StarMacro {
 
         exportReports(sim, simName, dir);
         exportPlots(sim, simName, dir);
+        exportScenes(sim, simName, dir);
+    }
+
+    // Lists the scenes present in the .sim (names only — no rendering, so this
+    // stays cheap and headless-safe). The names populate StarPost's Scenes list;
+    // rendering happens in a separate render macro driven from the Scenes tab.
+    private void exportScenes(Simulation sim, String simName, String dir) {
+        String out = dir + File.separator + simName + "__scenes_index.csv";
+        try (PrintWriter w = new PrintWriter(new FileWriter(out))) {
+            w.println("scene");
+            // getObjects() is typed as SceneBase; the name is all we need here.
+            for (SceneBase s : sim.getSceneManager().getObjects()) {
+                w.println(esc(s.getPresentationName()));
+            }
+        } catch (IOException e) {
+            sim.println("starpost: failed to write scenes index: " + e.getMessage());
+        }
     }
 
     private void exportReports(Simulation sim, String simName, String dir) {

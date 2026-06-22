@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from starpost import __version__
 from starpost.batch.job import Job
-from starpost.batch.queue import BatchWorker
+from starpost.batch.queue import BatchWorker, SceneRenderWorker
 from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
@@ -43,6 +43,7 @@ from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
 from starpost.gui.views.plot_view import PlotView, _series_is_empty
 from starpost.gui.views.report_table import ReportTable
+from starpost.gui.views.scene_view import SceneView
 from starpost.gui.views.selection_panel import SelectionPanel
 from starpost.utils.logging import get_logger
 
@@ -77,6 +78,9 @@ class MainWindow(QMainWindow):
 
         self._thread: QThread | None = None
         self._worker: BatchWorker | None = None
+        # Separate thread/worker for on-demand scene rendering (Scenes tab → Run).
+        self._render_thread: QThread | None = None
+        self._render_worker: SceneRenderWorker | None = None
 
         # Panels
         self.file_list = FileListPanel(
@@ -91,6 +95,7 @@ class MainWindow(QMainWindow):
             decimals=settings.report_decimals,
             zero_threshold=settings.zero_threshold,
         )
+        self.scene_view = SceneView()
         self.plot_view = PlotView()
         self.plot_view.set_filter(
             settings.hide_empty_monitors, settings.monitor_zero_threshold
@@ -124,6 +129,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
 
         self.selection.selection_changed.connect(self._on_selection_changed)
+        self.selection.run_scenes_requested.connect(self._run_scenes)
         self.file_list.open_requested.connect(self._open_files)
         self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
@@ -143,8 +149,9 @@ class MainWindow(QMainWindow):
         tabs.setTabBar(UniformTabBar())
         tabs.addTab(self.report_table, "Reports")
         tabs.addTab(self.plot_view, "Plots")
+        tabs.addTab(self.scene_view, "Scenes")
         # The selection panel shows only the checklist for the active centre tab:
-        # Reports list on the Reports tab, Monitor plots list on the Plots tab.
+        # Reports list on Reports, Monitor plots on Plots, Scenes on Scenes.
         self._center_tabs = tabs
         tabs.currentChanged.connect(self._on_center_tab_changed)
 
@@ -186,12 +193,17 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
     def _on_center_tab_changed(self, index: int) -> None:
-        """Sync the selection panel to the active centre tab: show the Reports
-        checklist for the Reports table, the Monitor plots checklist for Plots."""
+        """Sync the selection panel to the active centre tab: the Reports
+        checklist for the Reports table, the Scenes checklist for the Scenes
+        gallery, the Monitor plots checklist otherwise."""
         widget = self._center_tabs.widget(index)
-        self.selection.set_active_section(
-            "reports" if widget is self.report_table else "plots"
-        )
+        if widget is self.report_table:
+            section = "reports"
+        elif widget is self.scene_view:
+            section = "scenes"
+        else:
+            section = "plots"
+        self.selection.set_active_section(section)
 
     def _left_tab_menu(self, tabs: QTabWidget, pos) -> None:
         """Right-clicking the Files or Data tab opens its sort menu."""
@@ -404,6 +416,113 @@ class MainWindow(QMainWindow):
                 "Comparison views may have gaps; selection lists show the union.",
             )
 
+    # --- scene rendering -------------------------------------------------
+    def _render_busy(self) -> bool:
+        return (
+            self._render_thread is not None and self._render_thread.isRunning()
+        )
+
+    def _run_scenes(self) -> None:
+        """Scenes tab → Run: render the ticked scenes of the ticked data sets to
+        stills. Independent of the numeric batch and of Run batch."""
+        if self._busy() or self._render_busy():
+            QMessageBox.information(self, "StarPost", "A run is already in progress.")
+            return
+        if self._missing_exe():
+            return
+        scenes = self.selection.selected_scenes()
+        if not scenes:
+            QMessageBox.information(
+                self, "Scenes", "Select at least one scene to render."
+            )
+            return
+        # Render renders one data set at a time: require exactly one ticked in the
+        # Data tab (rendering is heavy and the output is per-.sim).
+        results = self._active_results()
+        if not results:
+            QMessageBox.information(
+                self, "Scenes", "Tick a data set in the Data tab first."
+            )
+            return
+        if len(results) > 1:
+            QMessageBox.warning(
+                self, "Scenes",
+                "Select only one data set to render. Untick the others in the "
+                "Data tab, then press Run.",
+            )
+            return
+
+        result = results[0]
+        sim_file = Path(result.sim_path)
+        if not sim_file.exists():
+            QMessageBox.warning(
+                self, "Scenes",
+                f"The .sim file for “{result.sim_name}” could not be found:\n"
+                f"{result.sim_path}",
+            )
+            return
+        wanted = (
+            sorted(scenes & set(result.scenes)) if result.scenes else sorted(scenes)
+        )
+        if not wanted:
+            QMessageBox.information(
+                self, "Scenes",
+                "None of the selected scenes are available in the ticked data set.",
+            )
+            return
+        jobs: list[tuple[Path, list[str]]] = [(sim_file, wanted)]
+
+        # No folder prompt: render into the configured output folder, or
+        # alongside the .sim file when none is set.
+        out_dir = (
+            Path(self.settings.default_output_dir)
+            if self.settings.default_output_dir
+            else sim_file.parent
+        )
+        self._start_render(jobs, out_dir)
+
+    def _start_render(
+        self, jobs: list[tuple[Path, list[str]]], out_dir: Path
+    ) -> None:
+        runner = StarRunner(self.settings)
+        self._render_thread = QThread()
+        self._render_worker = SceneRenderWorker(jobs, runner, out_dir)
+        self._render_worker.moveToThread(self._render_thread)
+
+        self._render_thread.started.connect(self._render_worker.run)
+        self._render_worker.log.connect(self.log_console.append)
+        self._render_worker.progress.connect(self.log_console.set_progress)
+        self._render_worker.rendered.connect(self._on_scenes_rendered)
+        self._render_worker.finished.connect(self._on_render_finished)
+        self._render_worker.finished.connect(self._render_thread.quit)
+
+        self.log_console.clear()
+        self.log_console.start_progress(len(jobs))
+        # Switch to the Scenes tab so the gallery is in view when stills land.
+        self._center_tabs.setCurrentWidget(self.scene_view)
+        self._render_thread.start()
+
+    def _on_scenes_rendered(self, sim_path, artifacts) -> None:
+        """A file's stills finished: attach them to its result (replacing any
+        prior stills of the same scenes) and persist."""
+        target = Path(sim_path).resolve()
+        res = next(
+            (r for r in self.store.all() if Path(r.sim_path).resolve() == target),
+            None,
+        )
+        if res is None:
+            return
+        rendered_sources = {a.source for a in artifacts}
+        res.media = [
+            m for m in res.media if m.source not in rendered_sources
+        ] + list(artifacts)
+        self.store.put(res)
+        self.store.save_cache()
+
+    def _on_render_finished(self) -> None:
+        self.log_console.finish_progress()
+        self._refresh_from_store()
+
     def _delete_selected_data(self) -> None:
         """Delete just the checked data sets from the store, after confirmation."""
         if self._thread is not None and self._thread.isRunning():
@@ -545,6 +664,10 @@ class MainWindow(QMainWindow):
         self.selection.populate(report_union, plot_groups)
         # Residual groups plot all their monitors at once when ticked.
         self.selection.set_residual_groups(self._residual_group_names(results))
+        # Scenes: the union of scene names discovered across the loaded data sets.
+        self.selection.set_available_scenes(
+            sorted({s for r in results for s in r.scenes})
+        )
 
         self._refresh_views()
 
@@ -592,9 +715,18 @@ class MainWindow(QMainWindow):
     def _refresh_views(self) -> None:
         self._render_reports()
         self._render_plot()
+        self._render_scenes_view()
         # The plot just (re)drew, so sync the panel's monitor colour swatches to
         # the colours actually used (and to the current data-set count).
         self.selection.refresh_monitor_swatches()
+
+    def _render_scenes_view(self) -> None:
+        """Show the stills rendered for the ticked data sets (if any)."""
+        media = [m for r in self._active_results() for m in r.media]
+        if media:
+            self.scene_view.show_media(media)
+        else:
+            self.scene_view.clear()
 
     def _render_reports(self) -> None:
         from starpost.batch.aggregator import reports_wide_frame

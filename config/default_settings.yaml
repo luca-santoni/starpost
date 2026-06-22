@@ -11,6 +11,13 @@ license:
   licpath: ""                # license server       -> -licpath <port>@<server>
   license_file: ""           # used only when mode == license_file -> -licpath <file>
 
+# Scene-still rendering (Scenes tab → Run). Resolution + magnification passed to
+# the render macro's scene.printAndWait call.
+media:
+  still_width: 1920
+  still_height: 1080
+  magnification: 1
+
 # UI appearance. Changeable in-app via Settings -> Appearance.
 appearance:
   mode: dark                 # "dark" | "light"

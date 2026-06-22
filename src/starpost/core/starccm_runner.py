@@ -15,10 +15,10 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
-from starpost.core.macro_generator import render_macro
-from starpost.core.result_parser import parse_sim_output
+from starpost.core.macro_generator import render_macro, render_scenes_macro
+from starpost.core.result_parser import parse_media_index, parse_sim_output
 from starpost.core.settings import Settings
-from starpost.data.models import SimResult
+from starpost.data.models import MediaArtifact, SimResult
 from starpost.utils.logging import get_logger
 
 log = get_logger("runner")
@@ -122,6 +122,46 @@ class StarRunner:
         sink(f"Parsed {len(result.reports)} reports, {len(result.plots)} plots "
              f"from {sim_file.name}")
         return result
+
+    def render_scenes(
+        self,
+        sim_file: Path,
+        output_dir: Path,
+        scene_names: list[str],
+        log_sink: Optional[LogSink] = None,
+    ) -> list[MediaArtifact]:
+        """Render the given scenes (empty == all) of one .sim to PNG stills.
+
+        Runs the separate render macro (one license checkout) and returns the
+        media artifacts listed in the macro's media index.
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+        sink = log_sink or (lambda s: None)
+        media = self.settings.media
+
+        with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
+            macro = render_scenes_macro(
+                output_dir,
+                Path(tmp),
+                scene_names,
+                media.still_width,
+                media.still_height,
+                media.magnification,
+            )
+            cmd = self.build_command(macro, sim_file)
+            shown = redact_command(cmd)
+            sink(f"$ {shown}")
+            log.info("rendering scenes: %s", shown)
+
+            code = self._stream(cmd, sink)
+            if code != 0:
+                msg = f"starccm+ exited with code {code} for {sim_file.name}"
+                sink(msg)
+                raise StarRunError(msg)
+
+        artifacts = parse_media_index(sim_file.stem, output_dir)
+        sink(f"Rendered {len(artifacts)} scene still(s) from {sim_file.name}")
+        return artifacts
 
     def _stream(self, cmd: list[str], sink: LogSink) -> int:
         """Run cmd, forwarding combined stdout/stderr to the sink line by line."""
