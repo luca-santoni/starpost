@@ -9,6 +9,7 @@ most one license is checked out at a time.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -81,11 +82,18 @@ class StarRunner:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def build_command(self, macro: Path, sim_file: Path) -> list[str]:
+    def build_command(
+        self, macro: Path, sim_file: Path, np: Optional[int] = None
+    ) -> list[str]:
         exe = self.settings.starccm_path
         if not exe:
             raise StarRunError("STAR-CCM+ executable path is not configured.")
-        cmd = [exe, "-batch", str(macro)]
+        cmd = [exe]
+        # Parallel run: -np partitions the case across ranks (used for rendering;
+        # numeric extraction stays serial). Only meaningful for 2+ processes.
+        if np and np > 1:
+            cmd += ["-np", str(np)]
+        cmd += ["-batch", str(macro)]
         cmd += self.settings.license.cli_args()
         cmd += list(self.settings.extra_args)
         cmd += [str(sim_file)]
@@ -138,6 +146,7 @@ class StarRunner:
         output_dir.mkdir(parents=True, exist_ok=True)
         sink = log_sink or (lambda s: None)
         media = self.settings.media
+        np = self._render_np(media)
 
         with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
             macro = render_scenes_macro(
@@ -148,7 +157,7 @@ class StarRunner:
                 media.still_height,
                 media.magnification,
             )
-            cmd = self.build_command(macro, sim_file)
+            cmd = self.build_command(macro, sim_file, np=np)
             shown = redact_command(cmd)
             sink(f"$ {shown}")
             log.info("rendering scenes: %s", shown)
@@ -162,6 +171,18 @@ class StarRunner:
         artifacts = parse_media_index(sim_file.stem, output_dir)
         sink(f"Rendered {len(artifacts)} scene still(s) from {sim_file.name}")
         return artifacts
+
+    @staticmethod
+    def _render_np(media) -> Optional[int]:
+        """Resolve the parallel process count for rendering: None (serial) when
+        parallelism is off, otherwise the configured ``render_np`` or, when 0,
+        the local core count."""
+        if not media.render_parallel:
+            return None
+        np = media.render_np if media.render_np and media.render_np > 1 else (
+            os.cpu_count() or 1
+        )
+        return np if np > 1 else None
 
     def _stream(self, cmd: list[str], sink: LogSink) -> int:
         """Run cmd, forwarding combined stdout/stderr to the sink line by line."""

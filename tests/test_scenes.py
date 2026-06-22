@@ -2,9 +2,12 @@
 generation (the Scenes tab's backend)."""
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from starpost.core.macro_generator import _java_string_array, render_scenes_macro
 from starpost.core.result_parser import parse_media_index, parse_sim_output
+from starpost.core.settings import MediaConfig, Settings
+from starpost.core.starccm_runner import StarRunner
 
 CLASSIFICATION = {"residual_keywords": ["residual"], "force_keywords": ["force"]}
 
@@ -49,6 +52,30 @@ def test_java_string_array_quotes_and_escapes():
     assert _java_string_array(["A", "B"]) == '"A", "B"'
     # Embedded quotes and backslashes are escaped for a Java string literal.
     assert _java_string_array(['Quote"Name']) == '"Quote\\"Name"'
+
+
+def test_render_np_defaults_to_parallel_autodetect():
+    with patch("starpost.core.starccm_runner.os.cpu_count", return_value=8):
+        assert StarRunner._render_np(MediaConfig()) == 8          # auto
+        assert StarRunner._render_np(MediaConfig(render_np=4)) == 4  # explicit
+        assert StarRunner._render_np(MediaConfig(render_np=1)) == 8  # 1 -> auto
+        assert StarRunner._render_np(MediaConfig(render_parallel=False)) is None
+
+
+def test_build_command_parallel_only_when_requested():
+    s = Settings()
+    s.starccm_path = "/opt/star/starccm+"
+    r = StarRunner(s)
+    serial = r.build_command(Path("/m/extract_all.java"), Path("/c/a.sim"))
+    assert "-np" not in serial
+    parallel = r.build_command(Path("/m/render_scenes.java"), Path("/c/a.sim"), np=8)
+    assert parallel[:4] == ["/opt/star/starccm+", "-np", "8", "-batch"]
+
+
+def test_media_config_parallel_round_trip():
+    s = Settings.from_dict({"media": {"render_parallel": False, "render_np": 16}})
+    assert s.media.render_parallel is False and s.media.render_np == 16
+    assert s.to_dict()["media"]["render_np"] == 16
 
 
 def test_render_scenes_macro_embeds_selection_and_resolution():
