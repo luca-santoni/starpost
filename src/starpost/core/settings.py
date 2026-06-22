@@ -66,16 +66,15 @@ class AppearanceConfig:
 class MediaConfig:
     """How scene stills are rendered (resolution + magnification + parallelism).
 
-    Rendering runs in parallel by default (``render_np`` cores via starccm+'s
-    ``-np``), which partitions the case across ranks so a large mesh isn't loaded
-    into one process — both faster and far less memory per rank. ``render_np`` of
-    0 auto-detects the local core count; set ``render_parallel`` false to render
-    serially. Defaults to 1080p at 1× magnification."""
+    ``render_np`` is the number of cores used to render scenes, passed to
+    starccm+'s ``-np``: 1 renders serially (the default), and 2..N partitions the
+    case across that many ranks (faster and far less memory per rank). N is the
+    machine's core count, enforced by the Settings spinbox. Defaults to 1080p at
+    1× magnification."""
     still_width: int = 1920
     still_height: int = 1080
     magnification: int = 1
-    render_parallel: bool = True
-    render_np: int = 0   # 0 == auto (local core count)
+    render_np: int = 1   # cores for parallel rendering; 1 == serial
 
 
 @dataclass
@@ -173,8 +172,7 @@ class Settings:
                 still_width=int(med.get("still_width", 1920)),
                 still_height=int(med.get("still_height", 1080)),
                 magnification=int(med.get("magnification", 1)),
-                render_parallel=bool(med.get("render_parallel", True)),
-                render_np=int(med.get("render_np", 0)),
+                render_np=int(med.get("render_np", 1)),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -226,7 +224,6 @@ class Settings:
                 "still_width": self.media.still_width,
                 "still_height": self.media.still_height,
                 "magnification": self.media.magnification,
-                "render_parallel": self.media.render_parallel,
                 "render_np": self.media.render_np,
             },
             "appearance": {

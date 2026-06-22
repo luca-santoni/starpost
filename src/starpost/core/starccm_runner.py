@@ -9,7 +9,6 @@ most one license is checked out at a time.
 """
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import tempfile
@@ -174,15 +173,11 @@ class StarRunner:
 
     @staticmethod
     def _render_np(media) -> Optional[int]:
-        """Resolve the parallel process count for rendering: None (serial) when
-        parallelism is off, otherwise the configured ``render_np`` or, when 0,
-        the local core count."""
-        if not media.render_parallel:
-            return None
-        np = media.render_np if media.render_np and media.render_np > 1 else (
-            os.cpu_count() or 1
-        )
-        return np if np > 1 else None
+        """The parallel process count for rendering, or None for serial.
+
+        ``render_np`` is honoured directly: 1 (or less) renders serially, 2+ uses
+        that many ranks (``-np``)."""
+        return media.render_np if media.render_np > 1 else None
 
     def _stream(self, cmd: list[str], sink: LogSink) -> int:
         """Run cmd, forwarding combined stdout/stderr to the sink line by line."""

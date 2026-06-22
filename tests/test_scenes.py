@@ -2,7 +2,6 @@
 generation (the Scenes tab's backend)."""
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 from starpost.core.macro_generator import _java_string_array, render_scenes_macro
 from starpost.core.result_parser import parse_media_index, parse_sim_output
@@ -54,12 +53,11 @@ def test_java_string_array_quotes_and_escapes():
     assert _java_string_array(['Quote"Name']) == '"Quote\\"Name"'
 
 
-def test_render_np_defaults_to_parallel_autodetect():
-    with patch("starpost.core.starccm_runner.os.cpu_count", return_value=8):
-        assert StarRunner._render_np(MediaConfig()) == 8          # auto
-        assert StarRunner._render_np(MediaConfig(render_np=4)) == 4  # explicit
-        assert StarRunner._render_np(MediaConfig(render_np=1)) == 8  # 1 -> auto
-        assert StarRunner._render_np(MediaConfig(render_parallel=False)) is None
+def test_render_np_serial_by_default_else_passthrough():
+    assert StarRunner._render_np(MediaConfig()) is None           # default 1 -> serial
+    assert StarRunner._render_np(MediaConfig(render_np=1)) is None  # 1 -> serial
+    assert StarRunner._render_np(MediaConfig(render_np=4)) == 4   # explicit cores
+    assert StarRunner._render_np(MediaConfig(render_np=64)) == 64
 
 
 def test_build_command_parallel_only_when_requested():
@@ -72,10 +70,12 @@ def test_build_command_parallel_only_when_requested():
     assert parallel[:4] == ["/opt/star/starccm+", "-np", "8", "-batch"]
 
 
-def test_media_config_parallel_round_trip():
-    s = Settings.from_dict({"media": {"render_parallel": False, "render_np": 16}})
-    assert s.media.render_parallel is False and s.media.render_np == 16
+def test_media_config_render_np_round_trip():
+    assert MediaConfig().render_np == 1  # serial by default
+    s = Settings.from_dict({"media": {"render_np": 16}})
+    assert s.media.render_np == 16
     assert s.to_dict()["media"]["render_np"] == 16
+    assert "render_parallel" not in s.to_dict()["media"]
 
 
 def test_render_scenes_macro_embeds_selection_and_resolution():

@@ -17,6 +17,7 @@ delete them (these live as separate YAML files, not in settings.yaml).
 """
 from __future__ import annotations
 
+import os
 import shlex
 
 from PySide6.QtCore import Qt, Signal
@@ -270,6 +271,13 @@ class SettingsDialog(QDialog):
         self._extra = QLineEdit()
         self._extra.setPlaceholderText("e.g.  -np 4 -mpi openmpi")
 
+        # Cores used when rendering scenes (Scenes → Run): 1 = serial, up to the
+        # machine's core count. Range is capped at the local core count.
+        max_cores = os.cpu_count() or 1
+        self._render_cores = QSpinBox()
+        self._render_cores.setRange(1, max_cores)
+        self._render_cores.setFixedWidth(140)
+
         form = QFormLayout()
         form.addRow(
             "Executable path",
@@ -290,6 +298,15 @@ class SettingsDialog(QDialog):
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         form.addRow("", hint)
+        form.addRow("Parallel cores", self._render_cores)
+        cores_hint = QLabel(
+            "Cores used to render scenes (Scenes → Run), passed as starccm+ -np. "
+            "1 renders serially; higher values render in parallel, up to this "
+            "machine's core count. Numeric extraction always runs serially."
+        )
+        cores_hint.setObjectName("hint")
+        cores_hint.setWordWrap(True)
+        form.addRow("", cores_hint)
         return self._wrap(form)
 
     def _build_license_page(self) -> QWidget:
@@ -1123,6 +1140,7 @@ class SettingsDialog(QDialog):
         self._exe.setText(s.starccm_path)
         self._out.setText(s.default_output_dir)
         self._extra.setText(" ".join(s.extra_args))
+        self._render_cores.setValue(s.media.render_np)
 
         idx = self._mode.findData(s.license.mode)
         self._mode.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1223,6 +1241,9 @@ class SettingsDialog(QDialog):
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())
+        # Preserve the other media fields (resolution); only the core count is
+        # exposed in the dialog.
+        s.media.render_np = self._render_cores.value()
         s.license = LicenseConfig(
             mode=self._mode.currentData(),
             podkey=self._podkey.text().strip(),

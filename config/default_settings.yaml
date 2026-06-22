@@ -12,15 +12,14 @@ license:
   license_file: ""           # used only when mode == license_file -> -licpath <file>
 
 # Scene-still rendering (Scenes tab → Run). Resolution + magnification passed to
-# the render macro's scene.printAndWait call. Rendering runs in parallel by
-# default (starccm+ -np), which partitions a large mesh across ranks instead of
-# loading it into one process — faster and far less memory per rank.
+# the render macro's scene.printAndWait call. render_np is the number of cores
+# used to render (starccm+ -np): 1 = serial; 2..N partitions a large mesh across
+# ranks instead of loading it into one process — faster and less memory per rank.
 media:
   still_width: 1920
   still_height: 1080
   magnification: 1
-  render_parallel: true      # render with starccm+ -np (parallel) by default
-  render_np: 0               # cores for -np; 0 = auto-detect the local core count
+  render_np: 1               # cores for -np; 1 = serial, up to the machine's cores
 
 # UI appearance. Changeable in-app via Settings -> Appearance.
 appearance:
