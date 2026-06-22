@@ -413,7 +413,8 @@ class _SortableGroupBox(QGroupBox):
 
 class SelectionPanel(QWidget):
     selection_changed = Signal()
-    run_scenes_requested = Signal()   # the Scenes section's Run button
+    run_scenes_requested = Signal()     # the Scenes section's Run button
+    clear_scenes_requested = Signal()   # the Scenes section's "Clear scenes" button
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -521,9 +522,16 @@ class SelectionPanel(QWidget):
         all_off.clicked.connect(
             lambda: (lst.set_all(False), self.selection_changed.emit())
         )
+        # Destructive: deletes the rendered still images (not just the selection).
+        # Styled red via the shared dangerButton object name.
+        clear_rendered = QPushButton("Clear scenes")
+        clear_rendered.setObjectName("dangerButton")
+        clear_rendered.setToolTip("Delete all rendered scene stills")
+        clear_rendered.clicked.connect(lambda: self.clear_scenes_requested.emit())
         row = QHBoxLayout()
         row.addWidget(all_on)
         row.addWidget(all_off)
+        row.addWidget(clear_rendered)
         v = QVBoxLayout(box)
         v.addWidget(run)
         v.addLayout(row)

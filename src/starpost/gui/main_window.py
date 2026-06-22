@@ -130,6 +130,7 @@ class MainWindow(QMainWindow):
 
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.selection.run_scenes_requested.connect(self._run_scenes)
+        self.selection.clear_scenes_requested.connect(self._clear_scenes)
         self.file_list.open_requested.connect(self._open_files)
         self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
@@ -497,7 +498,9 @@ class MainWindow(QMainWindow):
         self._render_worker.finished.connect(self._render_thread.quit)
 
         self.log_console.clear()
-        self.log_console.start_progress(len(jobs))
+        # One render per scene, so the progress total is the scene count.
+        total_scenes = sum(len(scenes) for _, scenes in jobs)
+        self.log_console.start_progress(total_scenes)
         # Switch to the Scenes tab so the gallery is in view when stills land.
         self._center_tabs.setCurrentWidget(self.scene_view)
         self._render_thread.start()
@@ -521,6 +524,36 @@ class MainWindow(QMainWindow):
 
     def _on_render_finished(self) -> None:
         self.log_console.finish_progress()
+        self._refresh_from_store()
+
+    def _clear_scenes(self) -> None:
+        """Scenes tab → "Clear scenes": drop every rendered still from the
+        workspace after confirming. The image files on disk are left in place
+        (matching how "Clear data" keeps the .sim files)."""
+        if self._render_busy():
+            QMessageBox.information(
+                self, "Clear scenes",
+                "Scenes are still rendering. Wait for the run to finish first.",
+            )
+            return
+        if not any(r.media for r in self.store.all()):
+            QMessageBox.information(
+                self, "Clear scenes", "There are no rendered scenes to clear."
+            )
+            return
+        if QMessageBox.question(
+            self, "Clear scenes",
+            "Clear all rendered scenes? This removes every rendered still from "
+            "the workspace (the image files already saved on disk are kept).",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        for r in self.store.all():
+            if r.media:
+                r.media = []
+                self.store.put(r)
+        self.store.save_cache()  # persist so the cleared state survives restart
         self._refresh_from_store()
 
     def _delete_selected_data(self) -> None:

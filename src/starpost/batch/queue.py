@@ -84,11 +84,16 @@ class BatchWorker(QObject):
 
 
 class SceneRenderWorker(QObject):
-    """Renders scene stills for one or more .sim files, off the GUI thread.
+    """Renders scene stills off the GUI thread, ONE scene per STAR-CCM+ process.
 
-    Independent of the numeric BatchWorker: each job is a (sim_file, scene_names)
-    pair (empty scene_names == every scene). Runs sequentially (license-safe) and
-    emits the rendered artifacts per file so the UI can attach them to results.
+    Each job is a (sim_file, scene_names) pair. Every named scene is rendered in
+    its own starccm+ invocation: rendering accumulates graphics memory, and on a
+    large case a single process rendering many scenes gets OOM-killed (exit 137).
+    Isolating each scene caps the peak at "load + one render" and keeps one
+    scene's failure (or a server crash) from taking down the rest.
+
+    Runs sequentially (license-safe) and emits artifacts per scene as they land,
+    so the gallery fills incrementally and partial progress survives a crash.
     """
 
     log = Signal(str)                 # a line of render output
@@ -108,15 +113,23 @@ class SceneRenderWorker(QObject):
         self._output_dir = output_dir
 
     def run(self) -> None:
-        total = len(self._jobs)
-        for i, (sim_file, scene_names) in enumerate(self._jobs):
-            self.log.emit(f"--- [{i + 1}/{total}] rendering {sim_file.name} ---")
-            try:
-                artifacts = self._runner.render_scenes(
-                    sim_file, self._output_dir, scene_names, log_sink=self.log.emit
+        total = sum(len(scenes) for _, scenes in self._jobs)
+        done = 0
+        for sim_file, scene_names in self._jobs:
+            for scene in scene_names:
+                done += 1
+                self.log.emit(
+                    f"--- [{done}/{total}] {sim_file.name}: {scene} ---"
                 )
-                self.rendered.emit(str(sim_file), artifacts)
-            except Exception as e:  # noqa: BLE001 - surface any failure to the UI
-                self.log.emit(f"Render failed for {sim_file.name}: {e}")
-            self.progress.emit(i + 1, total)
+                try:
+                    artifacts = self._runner.render_scenes(
+                        sim_file, self._output_dir, [scene], log_sink=self.log.emit
+                    )
+                    self.rendered.emit(str(sim_file), artifacts)
+                except Exception as e:  # noqa: BLE001 - surface failure, keep going
+                    self.log.emit(
+                        f"Render failed for scene '{scene}' in "
+                        f"{sim_file.name}: {e}"
+                    )
+                self.progress.emit(done, total)
         self.finished.emit()
