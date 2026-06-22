@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication
 from starpost.core.settings import Settings
 from starpost.data.models import PlotSeries
 from starpost.gui.views.export_dialog import ExportDialog
-from starpost.gui.views.plot_view import PlotView, _series_is_empty
+from starpost.gui.views.plot_view import PlotView, _series_is_empty, _y_label_for
 
 
 @pytest.fixture(scope="module")
@@ -43,6 +43,28 @@ def test_negative_values_within_threshold_are_empty():
 
 def test_series_with_no_data_is_empty():
     assert _series_is_empty(PlotSeries(name="None", x=[], y=[]), 1e-5) is True
+
+
+# --- Y-axis label (physical quantity from unit + unit) ---------------------
+def test_y_label_maps_unit_to_physical_quantity():
+    # The unit drives the quantity, not the monitor's own name.
+    assert _y_label_for(["Drag ALL Monitor (lbf)"]) == "Force (lbf)"
+    assert _y_label_for(["Mass Flow Monitor (kg/s)"]) == "Mass Flow (kg/s)"
+    assert _y_label_for(["Static Pressure (Pa)"]) == "Pressure (Pa)"
+
+
+def test_y_label_same_unit_different_monitors():
+    # Distinct monitors sharing a unit still get the unit's quantity.
+    assert _y_label_for(["Drag (N)", "Lift (N)"]) == "Force (N)"
+
+
+def test_y_label_unknown_unit_falls_back_to_unit():
+    assert _y_label_for(["Widget Count (widgets)"]) == "widgets"
+
+
+def test_y_label_generic_when_no_unit_or_mixed_units():
+    assert _y_label_for(["Coefficient"]) == "Value"          # dimensionless
+    assert _y_label_for(["Force (lbf)", "Mass (kg)"]) == "Value"  # mixed units
 
 
 # --- title/axis text scaling (Appearance text-size, main UI only) ----------
