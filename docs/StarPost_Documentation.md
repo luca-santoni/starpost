@@ -2,7 +2,7 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **1.4.1**
+> Version: **1.5.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
@@ -162,7 +162,8 @@ rendering and complex visualization are out of scope (see
   (`-power -podkey <KEY> -licpath <port>@<server>`); also supports a **regular
   license file** (`-licpath <file>`).
 - **Dark/light theme** with a custom **accent colour**, **checkmark colour**, and
-  **folder-icon colour**, previewed live across the whole UI.
+  **folder-icon colour**, plus an **adjustable text size** (1.0×–1.5×),
+  previewed live across the whole UI.
 - **Credential safety**: the POD key is masked in the UI (reveal on demand), the
   settings file and log are written **owner-only** (`0600`), and license
   credentials are **redacted** from the log and on-screen command output.
@@ -284,8 +285,9 @@ The **Data** tab: one entry per result extracted so far, named after its source
 `.sim`. This is the set of results the Reports/Plots views draw from. Like the
 Files tab, data sets can be organised into **virtual folders** (created in-app
 only): right-click empty space for **New Folder**, drag data sets/folders to
-re-parent them, and nest folders to any depth. The folder layout persists across
-sessions; the data sets themselves come and go with what's loaded.
+re-parent them, and nest folders to any depth. The folder layout — including each
+folder's open/closed state — persists across sessions; the data sets themselves
+come and go with what's loaded.
 
 **Interactions:**
 - Each data set has a **checkbox**; **clicking anywhere on a row toggles it**
@@ -337,7 +339,10 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 **The plot area:**
 - Overlays the selected monitor plots; grid, legend, title, and axis labels
   shown. **Residuals** render on a **log Y axis**, **forces/other** on a
-  **linear Y axis**.
+  **linear Y axis**. The **Y axis label is the physical quantity and unit**
+  (e.g. *Force (lbf)*), inferred from the monitor's unit — Force, Pressure, Mass
+  Flow, Velocity, Temperature, etc.; an unrecognised unit shows the unit alone,
+  and mixed or unit-less series show *Value*.
 - In per-file mode each series gets a distinct colour; in comparison mode every
   line — each **(data set, monitor)** pair — gets its own colour, so monitors
   stay distinguishable even within one data set.
@@ -509,7 +514,7 @@ The pages, in nav order:
 |---|---|
 | **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated). |
 | **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked as `••••` with a **Show/Hide** toggle) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
-| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons). All changes **preview live** across the whole UI. |
+| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons); **Text size** (1.0×–1.5× multiplier scaling every button/label, and the main view's plot title/axis labels; 1.0× is the original size). All changes **preview live** across the whole UI. |
 | **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
@@ -812,8 +817,7 @@ starpost/                           (repo; app/package = "starpost")
     │   ├── starccm_runner.py       Builds CLI, runs starccm+ subprocess, streams log
     │   │                           (license args redacted from logs)
     │   ├── result_parser.py        Parses exported CSVs; classifies plots (log/linear)
-    │   ├── updater.py              GitHub release check + installer download (UI-free)
-    │   └── plot_export.py          Renders a MonitorPlot to JPG/PDF (matplotlib helper)
+    │   └── updater.py              GitHub release check + installer download (UI-free)
     │
     ├── macros/
     │   └── extract_all.java.j2     Canonical Java macro: ALL reports + ALL plots, one pass

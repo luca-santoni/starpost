@@ -80,7 +80,7 @@ pip install -e ".[dev]"
 pip install -r requirements.txt
 ```
 
-The same dependencies (PySide6, pyqtgraph, numpy, matplotlib, pandas, …) install
+The same dependencies (PySide6, pyqtgraph, numpy, pandas, …) install
 on both Linux and Windows.
 
 ---

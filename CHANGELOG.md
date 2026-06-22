@@ -3,6 +3,44 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [1.5.0] — 2026-06-21
+
+This release adds program-wide text scaling, a more informative plot Y axis,
+and a round of dropdown, list, and export-menu polish.
+
+### New Features
+- **Adjustable text size** — a new **Text size** control in
+  Settings → Appearance scales the font of every button and label across the
+  app (1.0× to 1.5×; 1.0× is the original size). The plot title and axis labels
+  in the main view scale with it too (the export preview keeps its own sizes).
+- **Plot Y axis shows the physical quantity** — the vertical axis now reads e.g.
+  **“Force (lbf)”** instead of just **“lbf”**, inferring the quantity (Force,
+  Pressure, Mass Flow, Velocity, Temperature, …) from the monitor’s unit.
+  Unknown units fall back to the unit alone; mixed/absent units show “Value”.
+
+### Changes
+- **Folder open/closed state persists** — expanding or collapsing a folder in
+  the Files or Data tab is now remembered across restarts.
+- **Dropdown menus** — the hovered item is outlined in the accent colour (was a
+  black outline), rows have more vertical spacing, and dropdowns always open
+  downward instead of opening upward over the control.
+- **Menu checkmarks stay visible** — a checked right-click menu item (e.g. the
+  Sort options) keeps its checkmark visible when highlighted.
+
+### Fixes
+- **Run batch respects Cancel** — cancelling the “Folder for extracted data”
+  dialog after **Run batch** no longer runs the batch into a default folder.
+- **Tab labels no longer clip** — the Files/Data/Reports/Plots tabs widen with
+  the text size instead of cutting off at larger sizes.
+- **No leftover row outline** — clicking empty space in a list/tree no longer
+  leaves a faint outline on the previously-clicked row.
+- **Clicking a monitor name selects it** — in the export menu’s Plots tab,
+  clicking a monitor or group name (not just its checkbox) now toggles it.
+
+### Maintenance
+- Removed the unused matplotlib dependency — plot image export already runs
+  through the in-app (pyqtgraph) renderer.
+
 ## [1.4.1] — 2026-06-20
 
 A patch release fixing a crash that made the export menu unusable in 1.4.0.

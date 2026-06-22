@@ -60,7 +60,8 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **Files / Data panels** — build a reusable list of `.sim` files (the *Files*
   tab), then pick which extracted **Data** sets feed the views by ticking them.
   **Both** tabs support **virtual folders** (nest, drag-drop, sort per folder)
-  for organising files and data sets. Checking two or more data sets switches the
+  for organising files and data sets; each folder's layout and open/closed state
+  persist across sessions. Checking two or more data sets switches the
   views into **comparison** mode automatically. Data sets can be **exported to /
   imported from portable CSVs** (shareable, re-loadable without STAR-CCM+).
 - **Per-file and comparison views** — a numeric report table (sortable, with
@@ -78,7 +79,9 @@ A licensed STAR-CCM+ installation must be present on the machine.
     point (optional monitor name, configurable X/Y decimals).
   - **Shift+drag a region** to get a per-series statistics table (Avg, Median,
     Std Dev, Var, Min, Max, Range — choose which appear in Settings).
-  - Residuals on a log axis, forces on a linear axis (auto-classified by name).
+  - Residuals on a log axis, forces on a linear axis (auto-classified by name);
+    the **Y axis is labelled with the physical quantity and unit** (e.g. *Force
+    (lbf)*), inferred from the monitor's unit.
   - Background, axes and legend **follow the light/dark theme**.
 - **Profiles** — save/reuse a named selection of reports and plots, *including
   which monitors are shown per group* and which region statistics are shown. A
@@ -93,7 +96,8 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
   key), file/report/plot display options, export defaults, profile management
   (view details / delete), a **dark/light theme with custom accent, checkmark and
-  folder colours** previewed live, a reset, and a *Clear all temp files* action.
+  folder colours** and an **adjustable text size** previewed live, a reset, and a
+  *Clear all temp files* action.
 - **In-app updates** — checks GitHub releases on startup (and on demand); shows a
   toolbar note when a newer version is available and, on the Windows build, can
   download and install it in place.
