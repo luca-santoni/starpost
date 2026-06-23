@@ -390,9 +390,9 @@ class _MonitorPlotTree(QTreeWidget):
 class _SceneTree(QTreeWidget):
     """Scene picker: a tree of scenes, each a checkable parent whose scalar/vector
     displayers appear as checkable children. Checking a scene reveals its
-    displayers and checks them all (a scene normally shows everything); unchecking
-    a displayer hides it in the render. Mirrors the monitor-plot tree, minus the
-    colour swatches.
+    displayers unchecked, so the user picks which to show deliberately; the
+    checked displayers are the ones drawn in the render. Mirrors the monitor-plot
+    tree, minus the colour swatches.
     """
 
     changed = Signal()
@@ -429,32 +429,32 @@ class _SceneTree(QTreeWidget):
             on = g in prev_scenes
             gi.setCheckState(0, Qt.Checked if on else Qt.Unchecked)
             # Restore the prior displayer selection for a previously-checked scene;
-            # otherwise a checked scene defaults to all displayers shown.
-            sel = set(prev_disp.get(g, [])) if g in prev_disp else None
+            # a scene that wasn't checked has all displayers unchecked.
+            sel = set(prev_disp.get(g, [])) if g in prev_disp else set()
             for m in self._sorted(self._groups[g]):
                 mi = QTreeWidgetItem([m])
                 mi.setFlags(
                     (mi.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable
                 )
-                checked = (m in sel) if sel is not None else on
-                mi.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
+                mi.setCheckState(0, Qt.Checked if m in sel else Qt.Unchecked)
                 gi.addChild(mi)
             self.addTopLevelItem(gi)
             gi.setExpanded(on)
         self.blockSignals(False)
 
     def _on_item_changed(self, item, _column) -> None:
-        """Checking a scene reveals its displayers and checks them all (a scene
-        normally shows everything); unchecking clears them. Either change emits
+        """Checking a scene reveals its displayers unchecked, so the user picks
+        which to show deliberately; unchecking collapses it. Either change emits
         ``changed`` to drive a redraw/selection update."""
         if item.parent() is None:  # a scene, not one of its displayers
             checked = item.checkState(0) == Qt.Checked
             item.setExpanded(checked)
-            self.blockSignals(True)
-            state = Qt.Checked if checked else Qt.Unchecked
-            for j in range(item.childCount()):
-                item.child(j).setCheckState(0, state)
-            self.blockSignals(False)
+            if checked:
+                # Reveal displayers unchecked (pick deliberately).
+                self.blockSignals(True)
+                for j in range(item.childCount()):
+                    item.child(j).setCheckState(0, Qt.Unchecked)
+                self.blockSignals(False)
         self.changed.emit()
 
     def checked_scenes(self) -> list[str]:
