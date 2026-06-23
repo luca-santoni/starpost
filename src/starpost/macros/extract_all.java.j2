@@ -8,6 +8,7 @@
 //                                    (STAR-CCM+ StarPlot.export format)
 //   <simname>__plots_index.csv       plot,csv_file   (maps plot name -> file)
 //   <simname>__scenes_index.csv      scene,displayer,kind  (scalar/vector only)
+//   <simname>__views_index.csv       view            (one saved-view name per row)
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -29,6 +30,36 @@ public class extract_all extends StarMacro {
         exportReports(sim, simName, dir);
         exportPlots(sim, simName, dir);
         exportScenes(sim, simName, dir);
+        exportViews(sim, simName, dir);
+    }
+
+    // Lists the saved camera views in the .sim (sim-global, from the view
+    // manager). The concrete view class name varies by release, so we read each
+    // entry's name reflectively rather than casting to a star.* type.
+    private void exportViews(Simulation sim, String simName, String dir) {
+        String out = dir + File.separator + simName + "__views_index.csv";
+        try (PrintWriter w = new PrintWriter(new FileWriter(out))) {
+            w.println("view");
+            for (Object o : sim.getViewManager().getObjects()) {
+                String name = presentationName(o);
+                if (name != null) {
+                    w.println(esc(name));
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: failed to write views index: " + e.getMessage());
+        }
+    }
+
+    // getPresentationName() via reflection — every STAR-CCM+ object has it, so
+    // this avoids depending on a concrete class name that differs across releases.
+    private String presentationName(Object o) {
+        try {
+            return String.valueOf(
+                o.getClass().getMethod("getPresentationName").invoke(o));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // Lists the scenes present in the .sim and their scalar/vector displayers

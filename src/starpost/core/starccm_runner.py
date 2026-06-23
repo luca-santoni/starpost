@@ -135,13 +135,15 @@ class StarRunner:
         sim_file: Path,
         output_dir: Path,
         scene_show: dict[str, list[str]],
+        view_names: Optional[list[str]] = None,
         log_sink: Optional[LogSink] = None,
     ) -> list[MediaArtifact]:
         """Render the given scenes of one .sim to PNG stills.
 
         ``scene_show`` maps each scene to render to the scalar/vector displayers
-        to keep visible. Runs the separate render macro (one license checkout)
-        and returns the media artifacts listed in the macro's media index.
+        to keep visible. ``view_names`` are the saved views to render each scene
+        from (empty/None == current view). Runs the separate render macro (one
+        license checkout) and returns the media artifacts in the media index.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         sink = log_sink or (lambda s: None)
@@ -153,6 +155,7 @@ class StarRunner:
                 output_dir,
                 Path(tmp),
                 scene_show,
+                list(view_names or []),
                 media.still_width,
                 media.still_height,
                 media.magnification,

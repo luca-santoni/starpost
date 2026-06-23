@@ -49,7 +49,21 @@ def parse_sim_output(
     result.reports = _parse_reports(output_dir / f"{sim_name}_reports.csv")
     result.plots = _parse_plots(sim_name, output_dir, classification)
     result.scenes = _parse_scenes(output_dir / f"{sim_name}__scenes_index.csv")
+    result.views = _parse_views(output_dir / f"{sim_name}__views_index.csv")
     return result
+
+
+def _parse_views(path: Path) -> list[str]:
+    """Read the saved-view name list the extraction macro wrote (one per row)."""
+    if not path.exists():
+        return []
+    views: list[str] = []
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            name = (row.get("view") or "").strip()
+            if name:
+                views.append(name)
+    return views
 
 
 def _parse_scenes(path: Path) -> list[Scene]:

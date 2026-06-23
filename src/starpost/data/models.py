@@ -78,6 +78,9 @@ class SimResult:
     # its scalar/vector displayers; these populate the Scenes selection tree,
     # mirroring the monitor-plot groups.
     scenes: list[Scene] = field(default_factory=list)
+    # Saved camera views discovered in the .sim (sim-global, via the view
+    # manager); a scene can be rendered from any of these.
+    views: list[str] = field(default_factory=list)
     # Visual outputs rendered from this .sim (scene stills, etc.). Produced by a
     # separate render pass, not the numeric extraction.
     media: list[MediaArtifact] = field(default_factory=list)

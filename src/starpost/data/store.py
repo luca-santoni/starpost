@@ -88,6 +88,7 @@ def _result_from_dict(d: dict) -> SimResult:
         reports=reports,
         plots=plots,
         scenes=scenes,
+        views=list(d.get("views", [])),
         media=media,
         extracted_at=d.get("extracted_at", ""),
         error=d.get("error"),

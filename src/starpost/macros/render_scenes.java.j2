@@ -7,16 +7,19 @@
 // the Scenes tab.
 //
 // Outputs (in {{ output_dir }}):
-//   <simname>__scene__<scene>.png    one PNG per rendered scene
-//   <simname>__media_index.csv       kind,source,name,file,error
+//   <simname>__scene__<scene>.png                  (when no saved view is chosen)
+//   <simname>__scene__<scene>__view__<view>.png    (one per saved view chosen)
+//   <simname>__media_index.csv                     kind,source,name,file,error
 //
 // SHOW maps each scene to render -> the scalar/vector displayers to keep visible
 // (the user's checked ones). Any OTHER scalar/vector displayer in that scene is
 // hidden before the hardcopy; non-scalar/vector displayers (geometry,
-// streamlines, ...) are left untouched. Uses scene.printAndWait(file,
-// magnification, width, height), the standard, stable image-export call.
+// streamlines, ...) are left untouched. VIEW_NAMES are the saved camera views to
+// render each scene from; empty renders from the scene's current view. Uses
+// scene.printAndWait(file, magnification, width, height), the standard, stable
+// image-export call.
 //
-// Each scene is closed (scene.close()) right after its hardcopy to release its
+// Each scene is closed (scene.close()) after its hardcopies to release its
 // graphics resources, so memory doesn't accumulate across scenes when several
 // are rendered in one session (one license checkout).
 package macro;
@@ -24,13 +27,15 @@ package macro;
 import java.io.*;
 import java.util.*;
 import star.common.*;
-import star.vis.*;           // Scene, SceneManager, Displayer (not in star.common)
+import star.vis.*;           // Scene, SceneManager, VisView, displayers (not in star.common)
 
 public class render_scenes extends StarMacro {
 
     private static final int IMG_WIDTH = {{ width }};
     private static final int IMG_HEIGHT = {{ height }};
     private static final int MAGNIFICATION = {{ magnification }};
+    // Saved views to render each scene from; empty == the scene's current view.
+    private static final String[] VIEW_NAMES = { {{ view_names_java }} };
 
     // Scene -> scalar/vector displayers to keep visible (checked by the user).
     private static Map<String, Set<String>> showMap() {
@@ -57,22 +62,18 @@ public class render_scenes extends StarMacro {
                 }
                 Scene s = (Scene) sb;
                 applyVisibility(sim, s, show.get(name));
-                String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
-                String img = simName + "__scene__" + safe + ".png";
-                String imgPath = dir + File.separator + img;
                 try {
-                    // magnification, then pixel width/height
-                    s.printAndWait(resolvePath(imgPath), MAGNIFICATION, IMG_WIDTH, IMG_HEIGHT);
-                    idx.println("still," + esc(name) + "," + esc(name) + "," + esc(img) + ",");
-                    sim.println("starpost: rendered scene '" + name + "' -> " + img);
-                } catch (Exception e) {
-                    sim.println("starpost: failed to render scene '" + name
-                        + "': " + e.getMessage());
-                    idx.println("still," + esc(name) + "," + esc(name) + ",,ERROR");
+                    if (VIEW_NAMES.length == 0) {
+                        renderOne(sim, idx, s, simName, dir, name, null);
+                    } else {
+                        for (String view : VIEW_NAMES) {
+                            applyView(sim, s, view);
+                            renderOne(sim, idx, s, simName, dir, name, view);
+                        }
+                    }
                 } finally {
                     // Release this scene's graphics resources before the next
-                    // render so memory doesn't accumulate across scenes in one
-                    // session. Best-effort: never let closing abort the run.
+                    // scene. Best-effort: never let closing abort the run.
                     try {
                         s.close();
                     } catch (Exception ce) {
@@ -83,6 +84,59 @@ public class render_scenes extends StarMacro {
             }
         } catch (IOException e) {
             sim.println("starpost: failed to write media index: " + e.getMessage());
+        }
+    }
+
+    // Renders one hardcopy of scene s (optionally from saved view viewName) and
+    // records it in the media index. A null viewName uses the current view.
+    private void renderOne(Simulation sim, PrintWriter idx, Scene s, String simName,
+                           String dir, String name, String viewName) {
+        String label = (viewName == null) ? name : name + " (" + viewName + ")";
+        String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
+        String img = simName + "__scene__" + safe;
+        if (viewName != null) {
+            img += "__view__" + viewName.replaceAll("[^A-Za-z0-9._-]", "_");
+        }
+        img += ".png";
+        String imgPath = dir + File.separator + img;
+        try {
+            // magnification, then pixel width/height
+            s.printAndWait(resolvePath(imgPath), MAGNIFICATION, IMG_WIDTH, IMG_HEIGHT);
+            idx.println("still," + esc(name) + "," + esc(label) + "," + esc(img) + ",");
+            sim.println("starpost: rendered '" + label + "' -> " + img);
+        } catch (Exception e) {
+            sim.println("starpost: failed to render '" + label + "': " + e.getMessage());
+            idx.println("still," + esc(name) + "," + esc(label) + ",,ERROR");
+        }
+    }
+
+    // Apply the saved view named viewName to the scene's current view. The view
+    // is matched by its reflective name (so we don't depend on the concrete view
+    // class name) and applied via the VisView base type. Best-effort: a
+    // lookup/apply failure is logged, not fatal.
+    private void applyView(Simulation sim, Scene s, String viewName) {
+        try {
+            for (Object o : sim.getViewManager().getObjects()) {
+                if (viewName.equals(presentationName(o))) {
+                    s.getCurrentView().setView((VisView) o);
+                    return;
+                }
+            }
+            sim.println("starpost: saved view '" + viewName + "' not found");
+        } catch (Exception e) {
+            sim.println("starpost: could not apply view '" + viewName
+                + "': " + e.getMessage());
+        }
+    }
+
+    // getPresentationName() via reflection — avoids depending on a concrete view
+    // class name that differs across releases.
+    private String presentationName(Object o) {
+        try {
+            return String.valueOf(
+                o.getClass().getMethod("getPresentationName").invoke(o));
+        } catch (Exception e) {
+            return null;
         }
     }
 

@@ -538,10 +538,14 @@ class SelectionPanel(QWidget):
         # checkable children; its Run button renders the checked scenes, showing
         # only the checked displayers.
         self.scenes = _SceneTree()
+        # Saved views: a flat checklist of the sim's saved camera views. When any
+        # are checked, each checked scene is rendered from each checked view.
+        self.views = _CheckList()
         self.reports.changed.connect(self.selection_changed)
         self.plots.changed.connect(self.selection_changed)
         self.plots.swatch_clicked.connect(self._pick_monitor_color)
         self.scenes.changed.connect(self.selection_changed)
+        self.views.changed.connect(self.selection_changed)
 
         # Region-statistics selection hooks (wired by MainWindow), so profiles can
         # persist it. The setter takes a list of stat labels, or None to reset to
@@ -574,25 +578,29 @@ class SelectionPanel(QWidget):
         self._reports_group = self._group("Reports", self.reports)
         self._plots_group = self._group("Monitor plots", self.plots)
         self._scenes_group = self._scenes_group_box("Scenes", self.scenes)
+        self._saved_views_group = self._group("Saved views", self.views)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
         layout.addLayout(prof_row)
-        # Stretch 1 so the shown checklist fills all the vertical space the panel
-        # has — including whatever the hidden section would have used.
-        layout.addWidget(self._reports_group, 1)
-        layout.addWidget(self._plots_group, 1)
-        layout.addWidget(self._scenes_group, 1)
+        # Stretch so the shown checklist fills the panel. On the Scenes tab the
+        # space is split between the Scenes tree (top, larger) and Saved views
+        # (bottom); the other tabs show a single full-height list.
+        layout.addWidget(self._reports_group, 2)
+        layout.addWidget(self._plots_group, 2)
+        layout.addWidget(self._scenes_group, 2)
+        layout.addWidget(self._saved_views_group, 1)
         # Default to the Reports section (the centre opens on the Reports tab).
         self.set_active_section("reports")
 
     def set_active_section(self, section: str) -> None:
-        """Show only the checklist relevant to the active centre tab: ``"reports"``
-        shows the Reports list, ``"scenes"`` the Scenes list, anything else the
-        Monitor plots list. The hidden groups' space is given to the visible one,
-        which fills the panel."""
+        """Show the checklist(s) for the active centre tab: ``"reports"`` shows the
+        Reports list, ``"scenes"`` shows the Scenes tree *and* the Saved views
+        list (split), anything else the Monitor plots list."""
+        scenes = section == "scenes"
         self._reports_group.setVisible(section == "reports")
-        self._scenes_group.setVisible(section == "scenes")
+        self._scenes_group.setVisible(scenes)
+        self._saved_views_group.setVisible(scenes)
         self._plots_group.setVisible(section not in ("reports", "scenes"))
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
@@ -771,6 +779,20 @@ class SelectionPanel(QWidget):
     def selected_displayers(self) -> dict[str, list[str]]:
         """The checked displayers per checked scene: ``{scene: [displayer, ...]}``."""
         return self.scenes.checked_displayers()
+
+    def set_available_views(self, view_names: list[str]) -> None:
+        """Refresh the Saved views checklist while preserving the selection. New
+        views default to unchecked (rendering from a view is opt-in)."""
+        prev_all = set(self.views.texts())
+        prev_checked = set(self.views.checked())
+        names = sorted(view_names)
+        keep = {n for n in names if n in prev_checked and n in prev_all}
+        self.views.set_items(names, checked=False)
+        self.views.set_checked(keep)
+
+    def selected_views(self) -> set[str]:
+        """The checked saved views (empty == render from the current view)."""
+        return set(self.views.checked())
 
     def set_residual_groups(self, names) -> None:
         """Name the plot groups that should plot all their monitors at once when

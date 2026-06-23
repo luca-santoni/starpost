@@ -65,6 +65,7 @@ def render_scenes_macro(
     output_dir: Path,
     dest_dir: Path,
     scene_show: dict[str, list[str]],
+    view_names: list[str],
     width: int,
     height: int,
     magnification: int,
@@ -72,6 +73,8 @@ def render_scenes_macro(
     """Render the scene-still macro that exports to ``output_dir``. Returns the
     .java path. ``scene_show`` maps each scene to render to the scalar/vector
     displayers to keep visible (its other field displayers are hidden).
+    ``view_names`` are the saved camera views to render each scene from; empty
+    renders from each scene's current view.
 
     ``dest_dir`` is where the .java file is written (a temp dir per run).
     """
@@ -79,6 +82,7 @@ def render_scenes_macro(
     text = _env.get_template(_RENDER_TEMPLATE).render(
         output_dir=out,
         show_map_puts=_java_show_map_puts(scene_show),
+        view_names_java=_java_string_array(view_names),
         width=int(width),
         height=int(height),
         magnification=int(magnification),

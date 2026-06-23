@@ -15,6 +15,7 @@ Usage (from the GUI):
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
@@ -103,11 +104,13 @@ class SceneRenderWorker(QObject):
         jobs: list[tuple[Path, dict[str, list[str]]]],
         runner: StarRunner,
         output_dir: Path,
+        views: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
         self._jobs = jobs
         self._runner = runner
         self._output_dir = output_dir
+        self._views = list(views or [])
 
     def run(self) -> None:
         total = len(self._jobs)
@@ -115,7 +118,8 @@ class SceneRenderWorker(QObject):
             self.log.emit(f"--- [{i + 1}/{total}] rendering {sim_file.name} ---")
             try:
                 artifacts = self._runner.render_scenes(
-                    sim_file, self._output_dir, scene_show, log_sink=self.log.emit
+                    sim_file, self._output_dir, scene_show, self._views,
+                    log_sink=self.log.emit,
                 )
                 self.rendered.emit(str(sim_file), artifacts)
             except Exception as e:  # noqa: BLE001 - surface any failure to the UI

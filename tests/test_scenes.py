@@ -107,6 +107,7 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
             Path("/out"),
             Path(d),
             {"Results": ["Scalar velocity", "Vector 1"], "Geometry": []},
+            ["Front", "Top"],
             1280,
             720,
             2,
@@ -118,6 +119,8 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
         assert 'm.put("Results", new HashSet<>(Arrays.asList(' in text
         assert '"Scalar velocity"' in text and '"Vector 1"' in text
         assert 'm.put("Geometry", new HashSet<>(Arrays.asList()));' in text
+        # The selected saved views are embedded.
+        assert 'VIEW_NAMES = { "Front", "Top" }' in text
         assert "IMG_WIDTH = 1280" in text
         assert "IMG_HEIGHT = 720" in text
         assert "MAGNIFICATION = 2" in text

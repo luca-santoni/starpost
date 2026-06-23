@@ -481,6 +481,9 @@ class MainWindow(QMainWindow):
             (sim_file, dict(items[i:i + per])) for i in range(0, len(items), per)
         ]
 
+        # Saved views to render each scene from (empty == the current view).
+        views = sorted(self.selection.selected_views())
+
         # No folder prompt: render into the configured output folder, or
         # alongside the .sim file when none is set.
         out_dir = (
@@ -488,14 +491,17 @@ class MainWindow(QMainWindow):
             if self.settings.default_output_dir
             else sim_file.parent
         )
-        self._start_render(jobs, out_dir)
+        self._start_render(jobs, out_dir, views)
 
     def _start_render(
-        self, jobs: list[tuple[Path, dict[str, list[str]]]], out_dir: Path
+        self,
+        jobs: list[tuple[Path, dict[str, list[str]]]],
+        out_dir: Path,
+        views: list[str],
     ) -> None:
         runner = StarRunner(self.settings)
         self._render_thread = QThread()
-        self._render_worker = SceneRenderWorker(jobs, runner, out_dir)
+        self._render_worker = SceneRenderWorker(jobs, runner, out_dir, views)
         self._render_worker.moveToThread(self._render_thread)
 
         self._render_thread.started.connect(self._render_worker.run)
@@ -715,6 +721,10 @@ class MainWindow(QMainWindow):
                     if d.name not in names:
                         names.append(d.name)
         self.selection.set_available_scenes(scene_groups)
+        # Saved views: the union of saved camera views across the loaded data sets.
+        self.selection.set_available_views(
+            sorted({v for r in results for v in r.views})
+        )
 
         self._refresh_views()
 
