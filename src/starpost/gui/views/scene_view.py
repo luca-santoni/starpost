@@ -23,6 +23,17 @@ from starpost.data.models import MediaArtifact
 _THUMB = 220  # thumbnail edge in px
 
 
+class _Gallery(QListWidget):
+    """Thumbnail list that deselects when empty space is clicked, so the accent
+    highlight is removed from any selected thumbnail (default Qt keeps it)."""
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if self.itemAt(event.position().toPoint()) is None:
+            self.clearSelection()
+            self.setCurrentItem(None)
+        super().mousePressEvent(event)
+
+
 class SceneView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -31,7 +42,7 @@ class SceneView(QWidget):
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hint.setEnabled(False)  # muted, like a placeholder
 
-        self._gallery = QListWidget()
+        self._gallery = _Gallery()
         self._gallery.setViewMode(QListWidget.ViewMode.IconMode)
         self._gallery.setIconSize(QSize(_THUMB, _THUMB))
         self._gallery.setResizeMode(QListWidget.ResizeMode.Adjust)
