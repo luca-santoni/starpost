@@ -711,8 +711,15 @@ class MainWindow(QMainWindow):
         self.selection.populate(report_union, plot_groups)
         # Residual groups plot all their monitors at once when ticked.
         self.selection.set_residual_groups(self._residual_group_names(results))
-        # Scenes: the union of scenes (and their scalar/vector displayers)
-        # discovered across the loaded data sets.
+        self._refresh_scene_choices()
+
+        self._refresh_views()
+
+    def _refresh_scene_choices(self) -> None:
+        """Populate the Scenes tree and Saved views list from the checked data
+        sets, so both reflect the selected sim(s). Scoped to the active selection
+        (not the whole batch) because a render targets the chosen sim."""
+        results = self._active_results()
         scene_groups: dict[str, list[str]] = {}
         for r in results:
             for sc in r.scenes:
@@ -721,12 +728,9 @@ class MainWindow(QMainWindow):
                     if d.name not in names:
                         names.append(d.name)
         self.selection.set_available_scenes(scene_groups)
-        # Saved views: the union of saved camera views across the loaded data sets.
         self.selection.set_available_views(
             sorted({v for r in results for v in r.views})
         )
-
-        self._refresh_views()
 
     def _active_results(self) -> list:
         """The loaded results whose .sim is checked in the Data tab. This is the
@@ -742,6 +746,8 @@ class MainWindow(QMainWindow):
         render and the view mode, so re-scope the report list (which reports
         count as empty depends on the mode) before redrawing."""
         self._refresh_report_choices()
+        # Scenes/views are scoped to the checked sim(s), so refresh them too.
+        self._refresh_scene_choices()
         self._refresh_views()
 
     def _on_selection_changed(self) -> None:
