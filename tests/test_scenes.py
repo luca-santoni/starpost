@@ -11,13 +11,23 @@ from starpost.core.starccm_runner import StarRunner
 CLASSIFICATION = {"residual_keywords": ["residual"], "force_keywords": ["force"]}
 
 
-def test_parse_sim_output_reads_scene_names(tmp_path):
+def test_parse_sim_output_reads_scenes_and_displayers(tmp_path):
     sim = tmp_path / "caseA.sim"
     (tmp_path / "caseA__scenes_index.csv").write_text(
-        "scene\nScalar Scene 1\nVelocity\n"
+        "scene,displayer,kind\n"
+        "Results,Scalar velocity,scalar\n"
+        "Results,Vector 1,vector\n"
+        "Geometry,,\n"  # a scene with no scalar/vector displayers
     )
     res = parse_sim_output(str(sim), tmp_path, CLASSIFICATION)
-    assert res.scenes == ["Scalar Scene 1", "Velocity"]
+    assert [s.name for s in res.scenes] == ["Results", "Geometry"]
+    results = next(s for s in res.scenes if s.name == "Results")
+    assert [(d.name, d.kind) for d in results.displayers] == [
+        ("Scalar velocity", "scalar"),
+        ("Vector 1", "vector"),
+    ]
+    geometry = next(s for s in res.scenes if s.name == "Geometry")
+    assert geometry.displayers == []
 
 
 def test_parse_sim_output_no_scenes_index_is_empty(tmp_path):
@@ -94,12 +104,20 @@ def test_media_config_scenes_per_checkout_round_trip():
 def test_render_scenes_macro_embeds_selection_and_resolution():
     with tempfile.TemporaryDirectory() as d:
         path = render_scenes_macro(
-            Path("/out"), Path(d), ["Scalar Scene 1"], 1280, 720, 2
+            Path("/out"),
+            Path(d),
+            {"Results": ["Scalar velocity", "Vector 1"], "Geometry": []},
+            1280,
+            720,
+            2,
         )
         text = path.read_text()
         assert path.name == "render_scenes.java"
         assert "public class render_scenes" in text
-        assert '"Scalar Scene 1"' in text
+        # The scene -> visible-displayers map is generated.
+        assert 'm.put("Results", new HashSet<>(Arrays.asList(' in text
+        assert '"Scalar velocity"' in text and '"Vector 1"' in text
+        assert 'm.put("Geometry", new HashSet<>(Arrays.asList()));' in text
         assert "IMG_WIDTH = 1280" in text
         assert "IMG_HEIGHT = 720" in text
         assert "MAGNIFICATION = 2" in text

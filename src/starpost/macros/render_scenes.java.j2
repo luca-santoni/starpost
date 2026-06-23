@@ -10,9 +10,11 @@
 //   <simname>__scene__<scene>.png    one PNG per rendered scene
 //   <simname>__media_index.csv       kind,source,name,file,error
 //
-// SCENE_NAMES is filled in by StarPost from the user's selection; an empty list
-// renders every scene. Uses scene.printAndWait(file, magnification, width,
-// height), the standard, stable image-export call.
+// SHOW maps each scene to render -> the scalar/vector displayers to keep visible
+// (the user's checked ones). Any OTHER scalar/vector displayer in that scene is
+// hidden before the hardcopy; non-scalar/vector displayers (geometry,
+// streamlines, ...) are left untouched. Uses scene.printAndWait(file,
+// magnification, width, height), the standard, stable image-export call.
 //
 // Each scene is closed (scene.close()) right after its hardcopy to release its
 // graphics resources, so memory doesn't accumulate across scenes when several
@@ -20,21 +22,29 @@
 package macro;
 
 import java.io.*;
+import java.util.*;
 import star.common.*;
-import star.vis.*;           // Scene, SceneManager (not in star.common)
+import star.vis.*;           // Scene, SceneManager, Displayer (not in star.common)
 
 public class render_scenes extends StarMacro {
 
-    private static final String[] SCENE_NAMES = { {{ scene_names_java }} };
     private static final int IMG_WIDTH = {{ width }};
     private static final int IMG_HEIGHT = {{ height }};
     private static final int MAGNIFICATION = {{ magnification }};
+
+    // Scene -> scalar/vector displayers to keep visible (checked by the user).
+    private static Map<String, Set<String>> showMap() {
+        Map<String, Set<String>> m = new HashMap<>();
+        {{ show_map_puts }}
+        return m;
+    }
 
     public void execute() {
         Simulation sim = getActiveSimulation();
         String simPath = sim.getSessionPath();
         String simName = new File(simPath).getName().replaceAll("\\.sim$", "");
         String dir = "{{ output_dir }}";
+        Map<String, Set<String>> show = showMap();
 
         String indexPath = dir + File.separator + simName + "__media_index.csv";
         try (PrintWriter idx = new PrintWriter(new FileWriter(indexPath))) {
@@ -42,13 +52,11 @@ public class render_scenes extends StarMacro {
             // getObjects() is typed as SceneBase; narrow to Scene to render.
             for (SceneBase sb : sim.getSceneManager().getObjects()) {
                 String name = sb.getPresentationName();
-                if (SCENE_NAMES.length > 0 && !contains(SCENE_NAMES, name)) {
-                    continue;
-                }
-                if (!(sb instanceof Scene)) {
+                if (!show.containsKey(name) || !(sb instanceof Scene)) {
                     continue;
                 }
                 Scene s = (Scene) sb;
+                applyVisibility(sim, s, show.get(name));
                 String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
                 String img = simName + "__scene__" + safe + ".png";
                 String imgPath = dir + File.separator + img;
@@ -78,13 +86,28 @@ public class render_scenes extends StarMacro {
         }
     }
 
-    private boolean contains(String[] arr, String value) {
-        for (String a : arr) {
-            if (a.equals(value)) {
-                return true;
+    // Hide the scalar/vector displayers NOT in keepVisible by setting their
+    // opacity to 0; leave checked ones and all other displayer types untouched.
+    // The .sim is never saved, so these changes are discarded on exit.
+    private void applyVisibility(Simulation sim, Scene s, Set<String> keepVisible) {
+        // getObjects() is typed as DisplayerBase; narrow with instanceof.
+        for (DisplayerBase d : s.getDisplayerManager().getObjects()) {
+            boolean isField = (d instanceof ScalarDisplayer)
+                || (d instanceof VectorDisplayer);
+            if (!isField || keepVisible.contains(d.getPresentationName())) {
+                continue;
+            }
+            try {
+                if (d instanceof ScalarDisplayer) {
+                    ((ScalarDisplayer) d).setOpacity(0.0);
+                } else {
+                    ((VectorDisplayer) d).setOpacity(0.0);
+                }
+            } catch (Exception e) {
+                sim.println("starpost: could not hide displayer '"
+                    + d.getPresentationName() + "': " + e.getMessage());
             }
         }
-        return false;
     }
 
     private String esc(String s) {

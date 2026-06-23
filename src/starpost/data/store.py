@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from starpost.data.models import (
+    Displayer,
     MediaArtifact,
     MonitorPlot,
     PlotKind,
     PlotSeries,
     Report,
+    Scene,
     SimResult,
 )
 from starpost.utils.paths import results_cache_path
@@ -80,12 +82,23 @@ def _result_from_dict(d: dict) -> SimResult:
             )
         )
     media = [MediaArtifact(**m) for m in d.get("media", [])]
+    scenes = [_scene_from_dict(s) for s in d.get("scenes", [])]
     return SimResult(
         sim_path=d["sim_path"],
         reports=reports,
         plots=plots,
-        scenes=list(d.get("scenes", [])),
+        scenes=scenes,
         media=media,
         extracted_at=d.get("extracted_at", ""),
         error=d.get("error"),
+    )
+
+
+def _scene_from_dict(s) -> Scene:
+    # Back-compat: caches written before displayers stored scenes as plain names.
+    if isinstance(s, str):
+        return Scene(name=s)
+    return Scene(
+        name=s["name"],
+        displayers=[Displayer(**d) for d in s.get("displayers", [])],
     )

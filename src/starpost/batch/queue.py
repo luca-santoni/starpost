@@ -86,7 +86,8 @@ class BatchWorker(QObject):
 class SceneRenderWorker(QObject):
     """Renders scene stills off the GUI thread, one .sim per STAR-CCM+ process.
 
-    Each job is a (sim_file, scene_names) pair; all of a job's scenes are rendered
+    Each job is a (sim_file, scene_show) pair, where scene_show maps each scene to
+    render to the displayers to keep visible; all of a job's scenes are rendered
     in a single starccm+ invocation — one license checkout, with the sim loaded
     once. Runs sequentially (license-safe) and emits the rendered artifacts per
     file so the UI can attach them to results.
@@ -99,7 +100,7 @@ class SceneRenderWorker(QObject):
 
     def __init__(
         self,
-        jobs: list[tuple[Path, list[str]]],
+        jobs: list[tuple[Path, dict[str, list[str]]]],
         runner: StarRunner,
         output_dir: Path,
     ) -> None:
@@ -110,11 +111,11 @@ class SceneRenderWorker(QObject):
 
     def run(self) -> None:
         total = len(self._jobs)
-        for i, (sim_file, scene_names) in enumerate(self._jobs):
+        for i, (sim_file, scene_show) in enumerate(self._jobs):
             self.log.emit(f"--- [{i + 1}/{total}] rendering {sim_file.name} ---")
             try:
                 artifacts = self._runner.render_scenes(
-                    sim_file, self._output_dir, scene_names, log_sink=self.log.emit
+                    sim_file, self._output_dir, scene_show, log_sink=self.log.emit
                 )
                 self.rendered.emit(str(sim_file), artifacts)
             except Exception as e:  # noqa: BLE001 - surface any failure to the UI

@@ -42,6 +42,20 @@ class MonitorPlot:
 
 
 @dataclass
+class Displayer:
+    """A scalar or vector displayer inside a scene (what draws a field/glyphs)."""
+    name: str
+    kind: str = "scalar"   # "scalar" | "vector"
+
+
+@dataclass
+class Scene:
+    """A STAR-CCM+ scene and its selectable scalar/vector displayers."""
+    name: str
+    displayers: list[Displayer] = field(default_factory=list)
+
+
+@dataclass
 class MediaArtifact:
     """A rendered visual output (e.g. a scene still). The file lives on disk; this
     just records where it is and what produced it."""
@@ -60,9 +74,10 @@ class SimResult:
     sim_path: str
     reports: list[Report] = field(default_factory=list)
     plots: list[MonitorPlot] = field(default_factory=list)
-    # Scene names discovered in the .sim during extraction (no rendering); these
-    # populate the Scenes selection list, mirroring reports/plots.
-    scenes: list[str] = field(default_factory=list)
+    # Scenes discovered in the .sim during extraction (no rendering), each with
+    # its scalar/vector displayers; these populate the Scenes selection tree,
+    # mirroring the monitor-plot groups.
+    scenes: list[Scene] = field(default_factory=list)
     # Visual outputs rendered from this .sim (scene stills, etc.). Produced by a
     # separate render pass, not the numeric extraction.
     media: list[MediaArtifact] = field(default_factory=list)
@@ -82,7 +97,7 @@ class SimResult:
         return {p.name for p in self.plots}
 
     def scene_names(self) -> set[str]:
-        return set(self.scenes)
+        return {s.name for s in self.scenes}
 
     def signature(self) -> tuple[frozenset[str], frozenset[str]]:
         """Used for the homogeneity check across a batch."""

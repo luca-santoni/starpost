@@ -37,33 +37,48 @@ def render_macro(output_dir: Path, dest_dir: Path) -> Path:
     return java_path
 
 
+def _java_literal(s: str) -> str:
+    """A quoted, escaped Java string literal for ``s``."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def _java_string_array(names: list[str]) -> str:
     """Render ``names`` as the body of a Java String[] initializer, i.e. a comma-
     separated list of quoted, escaped literals (empty string for an empty list)."""
-    parts = []
-    for n in names:
-        escaped = n.replace("\\", "\\\\").replace('"', '\\"')
-        parts.append(f'"{escaped}"')
-    return ", ".join(parts)
+    return ", ".join(_java_literal(n) for n in names)
+
+
+def _java_show_map_puts(scene_show: dict[str, list[str]]) -> str:
+    """Render the ``m.put(...)`` statements that populate the scene -> visible
+    displayers map in the render macro (one per scene, newline-separated)."""
+    lines = []
+    for scene, displayers in scene_show.items():
+        members = ", ".join(_java_literal(d) for d in displayers)
+        lines.append(
+            f"m.put({_java_literal(scene)}, "
+            f"new HashSet<>(Arrays.asList({members})));"
+        )
+    return "\n        ".join(lines)
 
 
 def render_scenes_macro(
     output_dir: Path,
     dest_dir: Path,
-    scene_names: list[str],
+    scene_show: dict[str, list[str]],
     width: int,
     height: int,
     magnification: int,
 ) -> Path:
     """Render the scene-still macro that exports to ``output_dir``. Returns the
-    .java path. ``scene_names`` empty means render every scene in the .sim.
+    .java path. ``scene_show`` maps each scene to render to the scalar/vector
+    displayers to keep visible (its other field displayers are hidden).
 
     ``dest_dir`` is where the .java file is written (a temp dir per run).
     """
     out = str(output_dir).replace("\\", "/")
     text = _env.get_template(_RENDER_TEMPLATE).render(
         output_dir=out,
-        scene_names_java=_java_string_array(scene_names),
+        show_map_puts=_java_show_map_puts(scene_show),
         width=int(width),
         height=int(height),
         magnification=int(magnification),

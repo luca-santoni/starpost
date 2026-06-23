@@ -462,20 +462,23 @@ class MainWindow(QMainWindow):
                 f"{result.sim_path}",
             )
             return
-        wanted = (
-            sorted(scenes & set(result.scenes)) if result.scenes else sorted(scenes)
-        )
+        available = result.scene_names()
+        wanted = sorted(s for s in scenes if s in available)
         if not wanted:
             QMessageBox.information(
                 self, "Scenes",
                 "None of the selected scenes are available in the ticked data set.",
             )
             return
+        # Each scene maps to the displayers to keep visible (its checked ones).
+        show_sel = self.selection.selected_displayers()
+        scene_show = {s: list(show_sel.get(s, [])) for s in wanted}
         # Group the scenes into checkouts of the configured size: each chunk is
         # one starccm+ session (one license, sim loaded once).
         per = max(1, self.settings.media.scenes_per_checkout)
-        jobs: list[tuple[Path, list[str]]] = [
-            (sim_file, wanted[i:i + per]) for i in range(0, len(wanted), per)
+        items = list(scene_show.items())
+        jobs: list[tuple[Path, dict[str, list[str]]]] = [
+            (sim_file, dict(items[i:i + per])) for i in range(0, len(items), per)
         ]
 
         # No folder prompt: render into the configured output folder, or
@@ -488,7 +491,7 @@ class MainWindow(QMainWindow):
         self._start_render(jobs, out_dir)
 
     def _start_render(
-        self, jobs: list[tuple[Path, list[str]]], out_dir: Path
+        self, jobs: list[tuple[Path, dict[str, list[str]]]], out_dir: Path
     ) -> None:
         runner = StarRunner(self.settings)
         self._render_thread = QThread()
@@ -702,10 +705,16 @@ class MainWindow(QMainWindow):
         self.selection.populate(report_union, plot_groups)
         # Residual groups plot all their monitors at once when ticked.
         self.selection.set_residual_groups(self._residual_group_names(results))
-        # Scenes: the union of scene names discovered across the loaded data sets.
-        self.selection.set_available_scenes(
-            sorted({s for r in results for s in r.scenes})
-        )
+        # Scenes: the union of scenes (and their scalar/vector displayers)
+        # discovered across the loaded data sets.
+        scene_groups: dict[str, list[str]] = {}
+        for r in results:
+            for sc in r.scenes:
+                names = scene_groups.setdefault(sc.name, [])
+                for d in sc.displayers:
+                    if d.name not in names:
+                        names.append(d.name)
+        self.selection.set_available_scenes(scene_groups)
 
         self._refresh_views()
 

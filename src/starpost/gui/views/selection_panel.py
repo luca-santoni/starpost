@@ -387,6 +387,118 @@ class _MonitorPlotTree(QTreeWidget):
         self.set_items(self._groups, preserve=True)
 
 
+class _SceneTree(QTreeWidget):
+    """Scene picker: a tree of scenes, each a checkable parent whose scalar/vector
+    displayers appear as checkable children. Checking a scene reveals its
+    displayers and checks them all (a scene normally shows everything); unchecking
+    a displayer hides it in the render. Mirrors the monitor-plot tree, minus the
+    colour swatches.
+    """
+
+    changed = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setHeaderHidden(True)
+        self.setRootIsDecorated(False)
+        self.setItemsExpandable(False)
+        self.setExpandsOnDoubleClick(False)
+        self.setSelectionMode(self.SelectionMode.NoSelection)
+        self.setTextElideMode(Qt.ElideNone)
+        self.header().setStretchLastSection(False)
+        self.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.sort_mode = "az"
+        self._groups: dict[str, list[str]] = {}
+        self.itemChanged.connect(self._on_item_changed)
+
+    def _sorted(self, names) -> list[str]:
+        return sorted(names, key=str.lower, reverse=self.sort_mode == "za")
+
+    def set_items(self, groups: dict[str, list[str]], preserve: bool = False) -> None:
+        """Rebuild from ``{scene: [displayer, ...]}``. With ``preserve`` the prior
+        scene/displayer check state carries across (sorting, setting refreshes)."""
+        prev_scenes = set(self.checked_scenes()) if preserve else set()
+        prev_disp = self.checked_displayers() if preserve else {}
+        self._groups = {g: list(m) for g, m in groups.items()}
+        self.blockSignals(True)
+        self.clear()
+        for g in self._sorted(self._groups):
+            gi = QTreeWidgetItem([g])
+            gi.setFlags((gi.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable)
+            on = g in prev_scenes
+            gi.setCheckState(0, Qt.Checked if on else Qt.Unchecked)
+            # Restore the prior displayer selection for a previously-checked scene;
+            # otherwise a checked scene defaults to all displayers shown.
+            sel = set(prev_disp.get(g, [])) if g in prev_disp else None
+            for m in self._sorted(self._groups[g]):
+                mi = QTreeWidgetItem([m])
+                mi.setFlags(
+                    (mi.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsSelectable
+                )
+                checked = (m in sel) if sel is not None else on
+                mi.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
+                gi.addChild(mi)
+            self.addTopLevelItem(gi)
+            gi.setExpanded(on)
+        self.blockSignals(False)
+
+    def _on_item_changed(self, item, _column) -> None:
+        """Checking a scene reveals its displayers and checks them all (a scene
+        normally shows everything); unchecking clears them. Either change emits
+        ``changed`` to drive a redraw/selection update."""
+        if item.parent() is None:  # a scene, not one of its displayers
+            checked = item.checkState(0) == Qt.Checked
+            item.setExpanded(checked)
+            self.blockSignals(True)
+            state = Qt.Checked if checked else Qt.Unchecked
+            for j in range(item.childCount()):
+                item.child(j).setCheckState(0, state)
+            self.blockSignals(False)
+        self.changed.emit()
+
+    def checked_scenes(self) -> list[str]:
+        root = self.invisibleRootItem()
+        return [
+            root.child(i).text(0)
+            for i in range(root.childCount())
+            if root.child(i).checkState(0) == Qt.Checked
+        ]
+
+    def checked_displayers(self) -> dict[str, list[str]]:
+        """The checked displayers per checked scene (unchecked scenes omitted)."""
+        out: dict[str, list[str]] = {}
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            if g.checkState(0) != Qt.Checked:
+                continue
+            out[g.text(0)] = [
+                g.child(j).text(0)
+                for j in range(g.childCount())
+                if g.child(j).checkState(0) == Qt.Checked
+            ]
+        return out
+
+    def set_all(self, state: bool) -> None:
+        self.blockSignals(True)
+        cs = Qt.Checked if state else Qt.Unchecked
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            g.setCheckState(0, cs)
+            for j in range(g.childCount()):
+                g.child(j).setCheckState(0, cs)
+            g.setExpanded(state)
+        self.blockSignals(False)
+
+    def set_sort_mode(self, mode: str) -> None:
+        if mode == self.sort_mode:
+            return
+        self.sort_mode = mode
+        self.set_items(self._groups, preserve=True)
+
+
 class _SortableGroupBox(QGroupBox):
     """A group box whose title responds to a right-click: clicking the title
     text invokes ``on_sort(global_pos)`` (to raise a sort menu). Right-clicks
@@ -422,9 +534,10 @@ class SelectionPanel(QWidget):
         # Monitor plots: a tree of groups whose checked monitors are the ones
         # drawn (the per-monitor selection lives here, not under the plot).
         self.plots = _MonitorPlotTree()
-        # Scenes: a flat checklist (like reports) of the scenes found in the
-        # loaded .sim files; its Run button renders the checked ones to stills.
-        self.scenes = _CheckList()
+        # Scenes: a tree of scenes (checkable) whose scalar/vector displayers are
+        # checkable children; its Run button renders the checked scenes, showing
+        # only the checked displayers.
+        self.scenes = _SceneTree()
         self.reports.changed.connect(self.selection_changed)
         self.plots.changed.connect(self.selection_changed)
         self.plots.swatch_clicked.connect(self._pick_monitor_color)
@@ -646,18 +759,18 @@ class SelectionPanel(QWidget):
         visible set without reloading data."""
         self.plots.set_items(plot_groups, preserve=True)
 
-    def set_available_scenes(self, scene_names: list[str]) -> None:
-        """Refresh the Scenes checklist while preserving the current selection.
-        New scenes default to *unchecked* (rendering is heavy and run manually)."""
-        prev_all = set(self.scenes.texts())
-        prev_checked = set(self.scenes.checked())
-        names = sorted(scene_names)
-        keep = {n for n in names if n in prev_checked and n in prev_all}
-        self.scenes.set_items(names, checked=False)
-        self.scenes.set_checked(keep)
+    def set_available_scenes(self, scene_groups: dict[str, list[str]]) -> None:
+        """Refresh the Scenes tree from ``{scene: [displayer, ...]}`` while
+        preserving the current selection."""
+        self.scenes.set_items(scene_groups, preserve=True)
 
     def selected_scenes(self) -> set[str]:
-        return set(self.scenes.checked())
+        """The checked scenes (tree parents)."""
+        return set(self.scenes.checked_scenes())
+
+    def selected_displayers(self) -> dict[str, list[str]]:
+        """The checked displayers per checked scene: ``{scene: [displayer, ...]}``."""
+        return self.scenes.checked_displayers()
 
     def set_residual_groups(self, names) -> None:
         """Name the plot groups that should plot all their monitors at once when

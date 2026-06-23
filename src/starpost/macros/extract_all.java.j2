@@ -7,7 +7,7 @@
 //   <simname>__plot__<plot>.csv      one X column + one column per series
 //                                    (STAR-CCM+ StarPlot.export format)
 //   <simname>__plots_index.csv       plot,csv_file   (maps plot name -> file)
-//   <simname>__scenes_index.csv      scene           (one scene name per row)
+//   <simname>__scenes_index.csv      scene,displayer,kind  (scalar/vector only)
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -31,16 +31,37 @@ public class extract_all extends StarMacro {
         exportScenes(sim, simName, dir);
     }
 
-    // Lists the scenes present in the .sim (names only — no rendering, so this
-    // stays cheap and headless-safe). The names populate StarPost's Scenes list;
-    // rendering happens in a separate render macro driven from the Scenes tab.
+    // Lists the scenes present in the .sim and their scalar/vector displayers
+    // (no rendering, so this stays cheap and headless-safe). One row per
+    // (scene, displayer, kind); a scene with no scalar/vector displayers still
+    // gets a row with empty displayer/kind so it appears in the Scenes tree.
     private void exportScenes(Simulation sim, String simName, String dir) {
         String out = dir + File.separator + simName + "__scenes_index.csv";
         try (PrintWriter w = new PrintWriter(new FileWriter(out))) {
-            w.println("scene");
-            // getObjects() is typed as SceneBase; the name is all we need here.
-            for (SceneBase s : sim.getSceneManager().getObjects()) {
-                w.println(esc(s.getPresentationName()));
+            w.println("scene,displayer,kind");
+            for (SceneBase sb : sim.getSceneManager().getObjects()) {
+                String scene = sb.getPresentationName();
+                if (!(sb instanceof Scene)) {
+                    continue;
+                }
+                boolean any = false;
+                // getObjects() is typed as DisplayerBase; narrow with instanceof.
+                for (DisplayerBase d : ((Scene) sb).getDisplayerManager().getObjects()) {
+                    String kind = null;
+                    if (d instanceof ScalarDisplayer) {
+                        kind = "scalar";
+                    } else if (d instanceof VectorDisplayer) {
+                        kind = "vector";
+                    }
+                    if (kind != null) {
+                        w.println(esc(scene) + "," + esc(d.getPresentationName())
+                            + "," + kind);
+                        any = true;
+                    }
+                }
+                if (!any) {
+                    w.println(esc(scene) + ",,");
+                }
             }
         } catch (IOException e) {
             sim.println("starpost: failed to write scenes index: " + e.getMessage());

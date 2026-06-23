@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import Optional
 
 from starpost.data.models import (
+    Displayer,
     MediaArtifact,
     MonitorPlot,
     PlotKind,
     PlotSeries,
     Report,
+    Scene,
     SimResult,
 )
 from starpost.utils.logging import get_logger
@@ -50,18 +52,26 @@ def parse_sim_output(
     return result
 
 
-def _parse_scenes(path: Path) -> list[str]:
-    """Read the scene-name list the extraction macro wrote (one name per row)."""
+def _parse_scenes(path: Path) -> list[Scene]:
+    """Read the scenes index (``scene,displayer,kind`` rows) into a list of
+    Scenes, each carrying its scalar/vector displayers. Rows are grouped by
+    scene; a row with an empty displayer just registers the scene. Preserves
+    first-seen order."""
     if not path.exists():
         # Older extractions (pre-scenes) simply have no scene list.
         return []
-    scenes: list[str] = []
+    scenes: dict[str, Scene] = {}
     with path.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             name = (row.get("scene") or "").strip()
-            if name:
-                scenes.append(name)
-    return scenes
+            if not name:
+                continue
+            scene = scenes.setdefault(name, Scene(name=name))
+            disp = (row.get("displayer") or "").strip()
+            kind = (row.get("kind") or "").strip() or "scalar"
+            if disp:
+                scene.displayers.append(Displayer(name=disp, kind=kind))
+    return list(scenes.values())
 
 
 def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
