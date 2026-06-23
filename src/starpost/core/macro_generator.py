@@ -71,12 +71,14 @@ def render_scenes_macro(
     width: int,
     height: int,
     magnification: int,
+    image_format: str = "png",
 ) -> Path:
     """Render the scene-still macro that exports to ``output_dir``. Returns the
     .java path. ``scene_show`` maps each scene to render to the scalar/vector
     displayers to keep visible (its other field displayers are hidden).
     ``view_names`` are the saved camera views to render each scene from; empty
-    renders from each scene's current view.
+    renders from each scene's current view. ``image_format`` is the output file
+    extension (png/jpg/tiff), which STAR-CCM+ uses to pick the image format.
 
     ``dest_dir`` is where the .java file is written (a temp dir per run).
     """
@@ -88,6 +90,7 @@ def render_scenes_macro(
         width=int(width),
         height=int(height),
         magnification=int(magnification),
+        image_ext=str(image_format),
     )
     java_path = dest_dir / f"{_RENDER_CLASS_NAME}.java"
     java_path.write_text(text, encoding="utf-8")

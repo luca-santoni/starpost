@@ -159,6 +159,7 @@ class StarRunner:
                 media.still_width,
                 media.still_height,
                 media.magnification,
+                media.image_format,
             )
             cmd = self.build_command(macro, sim_file, np=np)
             shown = redact_command(cmd)

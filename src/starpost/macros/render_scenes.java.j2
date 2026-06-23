@@ -7,7 +7,7 @@
 // the Scenes tab.
 //
 // Outputs (in {{ output_dir }}):
-//   <dataset>-<scene>[-<displayers>][-<view>].png   one per scene (per chosen view)
+//   <dataset>-<scene>[-<displayers>][-<view>].<ext>  one per scene (per chosen view)
 //   <simname>__media_index.csv                      kind,source,name,file,error
 // where <displayers> is the visible scalar/vector displayers joined by "_" and
 // <view> the saved view (both omitted when absent). The media "name" (shown in
@@ -36,6 +36,7 @@ public class render_scenes extends StarMacro {
     private static final int IMG_WIDTH = {{ width }};
     private static final int IMG_HEIGHT = {{ height }};
     private static final int MAGNIFICATION = {{ magnification }};
+    private static final String IMG_EXT = "{{ image_ext }}";  // png | jpg | tiff
     // Saved views to render each scene from; empty == the scene's current view.
     private static final String[] VIEW_NAMES = { {{ view_names_java }} };
 
@@ -103,7 +104,7 @@ public class render_scenes extends StarMacro {
         if (viewName != null) label += "-" + viewName;
 
         String base = simName + "-" + label;  // dataset leads the file name
-        String img = sanitizeFile(base) + ".png";
+        String img = sanitizeFile(base) + "." + IMG_EXT;
         String imgPath = dir + File.separator + img;
         try {
             // magnification, then pixel width/height

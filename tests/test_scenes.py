@@ -88,6 +88,18 @@ def test_media_config_render_np_round_trip():
     assert "render_parallel" not in s.to_dict()["media"]
 
 
+def test_media_config_image_format_round_trip():
+    assert MediaConfig().image_format == "jpg"  # default
+    s = Settings.from_dict({"media": {"image_format": "PNG"}})
+    assert s.media.image_format == "png"  # normalized to lowercase
+    assert s.to_dict()["media"]["image_format"] == "png"
+    # An unknown/removed value (e.g. tiff) falls back to the default (jpg).
+    assert (
+        Settings.from_dict({"media": {"image_format": "tiff"}}).media.image_format
+        == "jpg"
+    )
+
+
 def test_media_config_scenes_per_checkout_round_trip():
     assert MediaConfig().scenes_per_checkout == 1  # one scene per checkout default
     s = Settings.from_dict({"media": {"scenes_per_checkout": 4}})
@@ -111,9 +123,11 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
             1280,
             720,
             2,
+            "png",
         )
         text = path.read_text()
         assert path.name == "render_scenes.java"
+        assert 'IMG_EXT = "png"' in text
         assert "public class render_scenes" in text
         # The scene -> visible-displayers map is generated (ordered).
         assert 'm.put("Results", new LinkedHashSet<>(Arrays.asList(' in text

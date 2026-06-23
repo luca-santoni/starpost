@@ -77,12 +77,20 @@ class MediaConfig:
     that many scenes per checkout to cut license churn and repeated sim loads, at
     the cost of more memory accumulating within a session.
 
-    Defaults to 1080p at 1× magnification."""
+    ``image_format`` is the rendered image file type ("jpg" or "png"); it sets the
+    output file extension, which STAR-CCM+ uses to pick the format.
+
+    Defaults to 1080p JPG at 1× magnification."""
     still_width: int = 1920
     still_height: int = 1080
     magnification: int = 1
     render_np: int = 1   # cores for parallel rendering; 1 == serial
     scenes_per_checkout: int = 1   # scenes rendered per license checkout
+    image_format: str = "jpg"   # rendered image type: "jpg" | "png"
+
+
+# Image formats offered for scene rendering (file extension == value).
+IMAGE_FORMATS = ("jpg", "png")
 
 
 @dataclass
@@ -182,6 +190,11 @@ class Settings:
                 magnification=int(med.get("magnification", 1)),
                 render_np=int(med.get("render_np", 1)),
                 scenes_per_checkout=max(1, int(med.get("scenes_per_checkout", 1))),
+                image_format=(
+                    str(med.get("image_format", "jpg")).lower()
+                    if str(med.get("image_format", "jpg")).lower() in IMAGE_FORMATS
+                    else "jpg"
+                ),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -235,6 +248,7 @@ class Settings:
                 "magnification": self.media.magnification,
                 "render_np": self.media.render_np,
                 "scenes_per_checkout": self.media.scenes_per_checkout,
+                "image_format": self.media.image_format,
             },
             "appearance": {
                 "mode": self.appearance.mode,

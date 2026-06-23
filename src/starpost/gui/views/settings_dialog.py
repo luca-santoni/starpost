@@ -501,8 +501,19 @@ class SettingsDialog(QDialog):
         return self._wrap(form)
 
     def _build_scenes_page(self) -> QWidget:
-        # Empty for now; scene-rendering settings will be added here.
-        return self._wrap(QFormLayout())
+        # Output image type for scene renders (the file extension STAR-CCM+ uses
+        # to pick the format).
+        self._image_format = QComboBox()
+        self._image_format.addItem("JPG", "jpg")
+        self._image_format.addItem("PNG", "png")
+
+        form = QFormLayout()
+        form.addRow("Image format", self._image_format)
+        hint = QLabel("File type of the images rendered in the Scenes tab.")
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+        return self._wrap(form)
 
     def _build_export_page(self) -> QWidget:
         # Defaults that pre-fill the Export dialog's controls. Choices mirror the
@@ -1163,6 +1174,8 @@ class SettingsDialog(QDialog):
         self._extra.setText(" ".join(s.extra_args))
         self._render_cores.setValue(s.media.render_np)
         self._scenes_per_checkout.setValue(s.media.scenes_per_checkout)
+        idx = self._image_format.findData(s.media.image_format)
+        self._image_format.setCurrentIndex(idx if idx >= 0 else 0)
 
         idx = self._mode.findData(s.license.mode)
         self._mode.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1267,6 +1280,7 @@ class SettingsDialog(QDialog):
         # scenes-per-checkout are exposed in the dialog.
         s.media.render_np = self._render_cores.value()
         s.media.scenes_per_checkout = self._scenes_per_checkout.value()
+        s.media.image_format = self._image_format.currentData()
         s.license = LicenseConfig(
             mode=self._mode.currentData(),
             podkey=self._podkey.text().strip(),
