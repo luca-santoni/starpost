@@ -211,6 +211,7 @@ class SettingsDialog(QDialog):
         self._add_page("Files", self._build_files_page())
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
+        self._add_page("Scenes", self._build_scenes_page())
         self._add_page("Export", self._build_export_page())
         self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Misc", self._build_misc_page())
@@ -498,6 +499,10 @@ class SettingsDialog(QDialog):
         hint.setWordWrap(True)
         form.addRow("", hint)
         return self._wrap(form)
+
+    def _build_scenes_page(self) -> QWidget:
+        # Empty for now; scene-rendering settings will be added here.
+        return self._wrap(QFormLayout())
 
     def _build_export_page(self) -> QWidget:
         # Defaults that pre-fill the Export dialog's controls. Choices mirror the
