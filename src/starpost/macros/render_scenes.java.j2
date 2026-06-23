@@ -13,6 +13,10 @@
 // SCENE_NAMES is filled in by StarPost from the user's selection; an empty list
 // renders every scene. Uses scene.printAndWait(file, magnification, width,
 // height), the standard, stable image-export call.
+//
+// Each scene is closed (scene.close()) right after its hardcopy to release its
+// graphics resources, so memory doesn't accumulate across scenes when several
+// are rendered in one session (one license checkout).
 package macro;
 
 import java.io.*;
@@ -57,6 +61,16 @@ public class render_scenes extends StarMacro {
                     sim.println("starpost: failed to render scene '" + name
                         + "': " + e.getMessage());
                     idx.println("still," + esc(name) + "," + esc(name) + ",,ERROR");
+                } finally {
+                    // Release this scene's graphics resources before the next
+                    // render so memory doesn't accumulate across scenes in one
+                    // session. Best-effort: never let closing abort the run.
+                    try {
+                        s.close();
+                    } catch (Exception ce) {
+                        sim.println("starpost: could not close scene '" + name
+                            + "': " + ce.getMessage());
+                    }
                 }
             }
         } catch (IOException e) {

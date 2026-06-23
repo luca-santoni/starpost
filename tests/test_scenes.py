@@ -103,3 +103,5 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
         assert "IMG_WIDTH = 1280" in text
         assert "IMG_HEIGHT = 720" in text
         assert "MAGNIFICATION = 2" in text
+        # Each scene is closed after its hardcopy to free graphics memory.
+        assert "s.close()" in text
