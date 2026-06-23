@@ -278,6 +278,12 @@ class SettingsDialog(QDialog):
         self._render_cores.setRange(1, max_cores)
         self._render_cores.setFixedWidth(140)
 
+        # Scenes rendered per license checkout (one starccm+ session). 1 renders
+        # each scene in its own checkout; higher batches more per checkout.
+        self._scenes_per_checkout = QSpinBox()
+        self._scenes_per_checkout.setRange(1, 999)
+        self._scenes_per_checkout.setFixedWidth(140)
+
         form = QFormLayout()
         form.addRow(
             "Executable path",
@@ -307,6 +313,16 @@ class SettingsDialog(QDialog):
         cores_hint.setObjectName("hint")
         cores_hint.setWordWrap(True)
         form.addRow("", cores_hint)
+        form.addRow("Scenes per license", self._scenes_per_checkout)
+        spc_hint = QLabel(
+            "How many scenes to render per license checkout (one STAR-CCM+ "
+            "session, the sim loaded once). 1 renders each scene in its own "
+            "checkout (safest for memory); higher values batch more per checkout "
+            "to cut license churn and reloads, using more memory per session."
+        )
+        spc_hint.setObjectName("hint")
+        spc_hint.setWordWrap(True)
+        form.addRow("", spc_hint)
         return self._wrap(form)
 
     def _build_license_page(self) -> QWidget:
@@ -1141,6 +1157,7 @@ class SettingsDialog(QDialog):
         self._out.setText(s.default_output_dir)
         self._extra.setText(" ".join(s.extra_args))
         self._render_cores.setValue(s.media.render_np)
+        self._scenes_per_checkout.setValue(s.media.scenes_per_checkout)
 
         idx = self._mode.findData(s.license.mode)
         self._mode.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1241,9 +1258,10 @@ class SettingsDialog(QDialog):
         s.starccm_path = self._exe.text().strip()
         s.default_output_dir = self._out.text().strip()
         s.extra_args = shlex.split(self._extra.text())
-        # Preserve the other media fields (resolution); only the core count is
-        # exposed in the dialog.
+        # Preserve the other media fields (resolution); only the core count and
+        # scenes-per-checkout are exposed in the dialog.
         s.media.render_np = self._render_cores.value()
+        s.media.scenes_per_checkout = self._scenes_per_checkout.value()
         s.license = LicenseConfig(
             mode=self._mode.currentData(),
             podkey=self._podkey.text().strip(),

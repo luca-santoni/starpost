@@ -20,6 +20,7 @@ media:
   still_height: 1080
   magnification: 1
   render_np: 1               # cores for -np; 1 = serial, up to the machine's cores
+  scenes_per_checkout: 1     # scenes rendered per license checkout (1 = one each)
 
 # UI appearance. Changeable in-app via Settings -> Appearance.
 appearance:

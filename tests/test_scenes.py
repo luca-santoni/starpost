@@ -78,6 +78,19 @@ def test_media_config_render_np_round_trip():
     assert "render_parallel" not in s.to_dict()["media"]
 
 
+def test_media_config_scenes_per_checkout_round_trip():
+    assert MediaConfig().scenes_per_checkout == 1  # one scene per checkout default
+    s = Settings.from_dict({"media": {"scenes_per_checkout": 4}})
+    assert s.media.scenes_per_checkout == 4
+    assert s.to_dict()["media"]["scenes_per_checkout"] == 4
+    # Coerced to at least 1.
+    assert (
+        Settings.from_dict({"media": {"scenes_per_checkout": 0}})
+        .media.scenes_per_checkout
+        == 1
+    )
+
+
 def test_render_scenes_macro_embeds_selection_and_resolution():
     with tempfile.TemporaryDirectory() as d:
         path = render_scenes_macro(

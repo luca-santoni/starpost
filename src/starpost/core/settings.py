@@ -69,12 +69,20 @@ class MediaConfig:
     ``render_np`` is the number of cores used to render scenes, passed to
     starccm+'s ``-np``: 1 renders serially (the default), and 2..N partitions the
     case across that many ranks (faster and far less memory per rank). N is the
-    machine's core count, enforced by the Settings spinbox. Defaults to 1080p at
-    1× magnification."""
+    machine's core count, enforced by the Settings spinbox.
+
+    ``scenes_per_checkout`` is how many scenes are rendered per STAR-CCM+ session
+    (one license checkout, the sim loaded once): 1 (the default) renders each
+    scene in its own checkout — safest for memory — while higher values batch
+    that many scenes per checkout to cut license churn and repeated sim loads, at
+    the cost of more memory accumulating within a session.
+
+    Defaults to 1080p at 1× magnification."""
     still_width: int = 1920
     still_height: int = 1080
     magnification: int = 1
     render_np: int = 1   # cores for parallel rendering; 1 == serial
+    scenes_per_checkout: int = 1   # scenes rendered per license checkout
 
 
 @dataclass
@@ -173,6 +181,7 @@ class Settings:
                 still_height=int(med.get("still_height", 1080)),
                 magnification=int(med.get("magnification", 1)),
                 render_np=int(med.get("render_np", 1)),
+                scenes_per_checkout=max(1, int(med.get("scenes_per_checkout", 1))),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -225,6 +234,7 @@ class Settings:
                 "still_height": self.media.still_height,
                 "magnification": self.media.magnification,
                 "render_np": self.media.render_np,
+                "scenes_per_checkout": self.media.scenes_per_checkout,
             },
             "appearance": {
                 "mode": self.appearance.mode,

@@ -471,7 +471,12 @@ class MainWindow(QMainWindow):
                 "None of the selected scenes are available in the ticked data set.",
             )
             return
-        jobs: list[tuple[Path, list[str]]] = [(sim_file, wanted)]
+        # Group the scenes into checkouts of the configured size: each chunk is
+        # one starccm+ session (one license, sim loaded once).
+        per = max(1, self.settings.media.scenes_per_checkout)
+        jobs: list[tuple[Path, list[str]]] = [
+            (sim_file, wanted[i:i + per]) for i in range(0, len(wanted), per)
+        ]
 
         # No folder prompt: render into the configured output folder, or
         # alongside the .sim file when none is set.
@@ -498,9 +503,9 @@ class MainWindow(QMainWindow):
         self._render_worker.finished.connect(self._render_thread.quit)
 
         self.log_console.clear()
-        # One render per scene, so the progress total is the scene count.
-        total_scenes = sum(len(scenes) for _, scenes in jobs)
-        self.log_console.start_progress(total_scenes)
+        # All of a data set's scenes render in one checkout, so progress is per
+        # data set (the macro streams per-scene progress to the log).
+        self.log_console.start_progress(len(jobs))
         # Switch to the Scenes tab so the gallery is in view when stills land.
         self._center_tabs.setCurrentWidget(self.scene_view)
         self._render_thread.start()
