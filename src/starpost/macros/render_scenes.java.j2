@@ -7,9 +7,11 @@
 // the Scenes tab.
 //
 // Outputs (in {{ output_dir }}):
-//   <simname>__scene__<scene>.png                  (when no saved view is chosen)
-//   <simname>__scene__<scene>__view__<view>.png    (one per saved view chosen)
-//   <simname>__media_index.csv                     kind,source,name,file,error
+//   <dataset>-<scene>[-<displayers>][-<view>].png   one per scene (per chosen view)
+//   <simname>__media_index.csv                      kind,source,name,file,error
+// where <displayers> is the visible scalar/vector displayers joined by "_" and
+// <view> the saved view (both omitted when absent). The media "name" (shown in
+// the gallery) is the same minus the dataset: <scene>[-<displayers>][-<view>].
 //
 // SHOW maps each scene to render -> the scalar/vector displayers to keep visible
 // (the user's checked ones). Any OTHER scalar/vector displayer in that scene is
@@ -61,14 +63,15 @@ public class render_scenes extends StarMacro {
                     continue;
                 }
                 Scene s = (Scene) sb;
-                applyVisibility(sim, s, show.get(name));
+                Set<String> visible = show.get(name);
+                applyVisibility(sim, s, visible);
                 try {
                     if (VIEW_NAMES.length == 0) {
-                        renderOne(sim, idx, s, simName, dir, name, null);
+                        renderOne(sim, idx, s, simName, dir, name, null, visible);
                     } else {
                         for (String view : VIEW_NAMES) {
                             applyView(sim, s, view);
-                            renderOne(sim, idx, s, simName, dir, name, view);
+                            renderOne(sim, idx, s, simName, dir, name, view, visible);
                         }
                     }
                 } finally {
@@ -89,15 +92,18 @@ public class render_scenes extends StarMacro {
 
     // Renders one hardcopy of scene s (optionally from saved view viewName) and
     // records it in the media index. A null viewName uses the current view.
+    // Display name: <scene>[-<displayers>][-<view>]. File name additionally
+    // leads with the dataset: <dataset>-<scene>[-<displayers>][-<view>].png.
     private void renderOne(Simulation sim, PrintWriter idx, Scene s, String simName,
-                           String dir, String name, String viewName) {
-        String label = (viewName == null) ? name : name + " (" + viewName + ")";
-        String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
-        String img = simName + "__scene__" + safe;
-        if (viewName != null) {
-            img += "__view__" + viewName.replaceAll("[^A-Za-z0-9._-]", "_");
-        }
-        img += ".png";
+                           String dir, String name, String viewName,
+                           Set<String> visible) {
+        String disp = joinNames(visible);
+        String label = name;
+        if (!disp.isEmpty()) label += "-" + disp;
+        if (viewName != null) label += "-" + viewName;
+
+        String base = simName + "-" + label;  // dataset leads the file name
+        String img = sanitizeFile(base) + ".png";
         String imgPath = dir + File.separator + img;
         try {
             // magnification, then pixel width/height
@@ -108,6 +114,23 @@ public class render_scenes extends StarMacro {
             sim.println("starpost: failed to render '" + label + "': " + e.getMessage());
             idx.println("still," + esc(name) + "," + esc(label) + ",,ERROR");
         }
+    }
+
+    // Joins displayer names with "_" in iteration order (the map uses a
+    // LinkedHashSet so this matches the user's selection order).
+    private String joinNames(Set<String> names) {
+        StringBuilder sb = new StringBuilder();
+        for (String n : names) {
+            if (sb.length() > 0) {
+                sb.append("_");
+            }
+            sb.append(n);
+        }
+        return sb.toString();
+    }
+
+    private String sanitizeFile(String s) {
+        return s.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 
     // Apply the saved view named viewName to the scene's current view. The view

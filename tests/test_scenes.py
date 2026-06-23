@@ -115,10 +115,10 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
         text = path.read_text()
         assert path.name == "render_scenes.java"
         assert "public class render_scenes" in text
-        # The scene -> visible-displayers map is generated.
-        assert 'm.put("Results", new HashSet<>(Arrays.asList(' in text
+        # The scene -> visible-displayers map is generated (ordered).
+        assert 'm.put("Results", new LinkedHashSet<>(Arrays.asList(' in text
         assert '"Scalar velocity"' in text and '"Vector 1"' in text
-        assert 'm.put("Geometry", new HashSet<>(Arrays.asList()));' in text
+        assert 'm.put("Geometry", new LinkedHashSet<>(Arrays.asList()));' in text
         # The selected saved views are embedded.
         assert 'VIEW_NAMES = { "Front", "Top" }' in text
         assert "IMG_WIDTH = 1280" in text

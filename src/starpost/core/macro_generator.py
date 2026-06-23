@@ -54,9 +54,11 @@ def _java_show_map_puts(scene_show: dict[str, list[str]]) -> str:
     lines = []
     for scene, displayers in scene_show.items():
         members = ", ".join(_java_literal(d) for d in displayers)
+        # LinkedHashSet preserves selection order so the displayer-name component
+        # of the output file/label is deterministic.
         lines.append(
             f"m.put({_java_literal(scene)}, "
-            f"new HashSet<>(Arrays.asList({members})));"
+            f"new LinkedHashSet<>(Arrays.asList({members})));"
         )
     return "\n        ".join(lines)
 
