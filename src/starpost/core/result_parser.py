@@ -108,6 +108,8 @@ def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
                     source=row.get("source", ""),
                     kind=row.get("kind", "still") or "still",
                     error=err or None,
+                    displayers=(row.get("displayers") or "").strip(),
+                    view=(row.get("view") or "").strip(),
                 )
             )
     return media

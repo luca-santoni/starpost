@@ -66,6 +66,10 @@ class MediaArtifact:
     width: int = 0
     height: int = 0
     error: Optional[str] = None
+    # Provenance, for the gallery's Properties window.
+    sim_path: str = ""          # the .sim this was rendered from
+    displayers: str = ""        # the visible scalar/vector displayers (readable)
+    view: str = ""              # the saved view applied ("" == the current view)
 
 
 @dataclass

@@ -56,7 +56,7 @@ public class render_scenes extends StarMacro {
 
         String indexPath = dir + File.separator + simName + "__media_index.csv";
         try (PrintWriter idx = new PrintWriter(new FileWriter(indexPath))) {
-            idx.println("kind,source,name,file,error");
+            idx.println("kind,source,name,file,error,displayers,view");
             // getObjects() is typed as SceneBase; narrow to Scene to render.
             for (SceneBase sb : sim.getSceneManager().getObjects()) {
                 String name = sb.getPresentationName();
@@ -98,7 +98,9 @@ public class render_scenes extends StarMacro {
     private void renderOne(Simulation sim, PrintWriter idx, Scene s, String simName,
                            String dir, String name, String viewName,
                            Set<String> visible) {
-        String disp = joinNames(visible);
+        String disp = joinNames(visible);            // "_"-joined, for the file name
+        String dispReadable = String.join(", ", visible);  // for the Properties window
+        String viewStr = (viewName == null) ? "" : viewName;
         String label = name;
         if (!disp.isEmpty()) label += "-" + disp;
         if (viewName != null) label += "-" + viewName;
@@ -106,14 +108,15 @@ public class render_scenes extends StarMacro {
         String base = simName + "-" + label;  // dataset leads the file name
         String img = sanitizeFile(base) + "." + IMG_EXT;
         String imgPath = dir + File.separator + img;
+        String tail = "," + esc(dispReadable) + "," + esc(viewStr);
         try {
             // magnification, then pixel width/height
             s.printAndWait(resolvePath(imgPath), MAGNIFICATION, IMG_WIDTH, IMG_HEIGHT);
-            idx.println("still," + esc(name) + "," + esc(label) + "," + esc(img) + ",");
+            idx.println("still," + esc(name) + "," + esc(label) + "," + esc(img) + "," + tail);
             sim.println("starpost: rendered '" + label + "' -> " + img);
         } catch (Exception e) {
             sim.println("starpost: failed to render '" + label + "': " + e.getMessage());
-            idx.println("still," + esc(name) + "," + esc(label) + ",,ERROR");
+            idx.println("still," + esc(name) + "," + esc(label) + ",,ERROR" + tail);
         }
     }
 

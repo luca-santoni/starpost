@@ -56,6 +56,20 @@ def test_parse_media_index_missing_is_empty(tmp_path):
     assert parse_media_index("caseA", tmp_path) == []
 
 
+def test_parse_media_index_reads_displayers_and_view(tmp_path):
+    (tmp_path / "caseA__media_index.csv").write_text(
+        "kind,source,name,file,error,displayers,view\n"
+        "still,Results,Results-Scalar velocity-Front,caseA-Results.jpg,,"
+        '"Scalar velocity, Vector 1",Front\n'
+        "still,Geometry,Geometry,caseA-Geometry.png,,,\n"
+    )
+    media = parse_media_index("caseA", tmp_path)
+    assert media[0].source == "Results"
+    assert media[0].displayers == "Scalar velocity, Vector 1"
+    assert media[0].view == "Front"
+    assert media[1].displayers == "" and media[1].view == ""
+
+
 def test_java_string_array_quotes_and_escapes():
     assert _java_string_array([]) == ""
     assert _java_string_array(["A", "B"]) == '"A", "B"'

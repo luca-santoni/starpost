@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QStackedLayout,
     QWidget,
 )
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 from starpost.data.models import MediaArtifact
 
 _THUMB = 220  # thumbnail edge in px
+_ART_ROLE = Qt.ItemDataRole.UserRole + 1  # the MediaArtifact behind a thumbnail
 
 
 class _Gallery(QListWidget):
@@ -51,6 +53,8 @@ class SceneView(QWidget):
         self._gallery.setWordWrap(True)
         self._gallery.setUniformItemSizes(True)
         self._gallery.itemDoubleClicked.connect(self._open_item)
+        self._gallery.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._gallery.customContextMenuRequested.connect(self._show_context_menu)
 
         self._stack = QStackedLayout(self)
         self._stack.addWidget(self._hint)
@@ -74,6 +78,7 @@ class SceneView(QWidget):
             label = art.name or Path(art.path).stem
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, art.path)
+            item.setData(_ART_ROLE, art)
             item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             if art.error:
                 item.setText(f"{label}\n(render failed)")
@@ -92,3 +97,18 @@ class SceneView(QWidget):
         path = item.data(Qt.ItemDataRole.UserRole)
         if path and Path(path).exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def _show_context_menu(self, pos) -> None:
+        """Right-clicking a thumbnail offers Properties for that rendered still."""
+        item = self._gallery.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        properties = menu.addAction("Properties")
+        chosen = menu.exec(self._gallery.viewport().mapToGlobal(pos))
+        if chosen is properties:
+            from starpost.gui.views.properties_dialog import ScenePropertiesDialog
+
+            art = item.data(_ART_ROLE)
+            if art is not None:
+                ScenePropertiesDialog(art, self).exec()

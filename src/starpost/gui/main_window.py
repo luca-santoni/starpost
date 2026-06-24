@@ -785,7 +785,11 @@ class MainWindow(QMainWindow):
 
     def _render_scenes_view(self) -> None:
         """Show the stills rendered for the ticked data sets (if any)."""
-        media = [m for r in self._active_results() for m in r.media]
+        media = []
+        for r in self._active_results():
+            for m in r.media:
+                m.sim_path = r.sim_path  # provenance for the Properties window
+                media.append(m)
         if media:
             self.scene_view.show_media(media)
         else:
