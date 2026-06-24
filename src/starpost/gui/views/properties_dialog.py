@@ -106,6 +106,7 @@ class ScenePropertiesDialog(QDialog):
         data_set = Path(artifact.sim_path).stem if artifact.sim_path else "—"
         scene = artifact.source or "—"
         displayers = artifact.displayers or "—"
+        view = artifact.view or "—"  # "—" == rendered from the scene's current view
 
         form = QFormLayout()
         form.setHorizontalSpacing(24)  # a little more gap between names and values
@@ -121,6 +122,7 @@ class ScenePropertiesDialog(QDialog):
         form.addRow("Data set:", QLabel(data_set))
         form.addRow("Report group:", QLabel(scene))
         form.addRow("Vector/Scalar name:", QLabel(displayers))
+        form.addRow("Saved View:", QLabel(view))
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
