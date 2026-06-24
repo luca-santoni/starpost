@@ -80,17 +80,26 @@ class MediaConfig:
     ``image_format`` is the rendered image file type ("jpg" or "png"); it sets the
     output file extension, which STAR-CCM+ uses to pick the format.
 
+    ``image_resolution`` is the render resolution ("1080p" or "2160p"), mapped to
+    pixel dimensions by :data:`IMAGE_RESOLUTIONS`.
+
     Defaults to 1080p JPG at 1× magnification."""
-    still_width: int = 1920
-    still_height: int = 1080
     magnification: int = 1
     render_np: int = 1   # cores for parallel rendering; 1 == serial
     scenes_per_checkout: int = 1   # scenes rendered per license checkout
     image_format: str = "jpg"   # rendered image type: "jpg" | "png"
+    image_resolution: str = "1080p"   # render resolution: "1080p" | "2160p"
+
+    def dimensions(self) -> tuple[int, int]:
+        """The (width, height) in pixels for the configured resolution."""
+        return IMAGE_RESOLUTIONS.get(self.image_resolution, IMAGE_RESOLUTIONS["1080p"])
 
 
 # Image formats offered for scene rendering (file extension == value).
 IMAGE_FORMATS = ("jpg", "png")
+
+# Render resolutions offered for scene rendering -> (width, height) in pixels.
+IMAGE_RESOLUTIONS = {"1080p": (1920, 1080), "2160p": (3840, 2160)}
 
 
 @dataclass
@@ -185,8 +194,6 @@ class Settings:
                 license_file=lic.get("license_file", ""),
             ),
             media=MediaConfig(
-                still_width=int(med.get("still_width", 1920)),
-                still_height=int(med.get("still_height", 1080)),
                 magnification=int(med.get("magnification", 1)),
                 render_np=int(med.get("render_np", 1)),
                 scenes_per_checkout=max(1, int(med.get("scenes_per_checkout", 1))),
@@ -194,6 +201,12 @@ class Settings:
                     str(med.get("image_format", "jpg")).lower()
                     if str(med.get("image_format", "jpg")).lower() in IMAGE_FORMATS
                     else "jpg"
+                ),
+                image_resolution=(
+                    str(med.get("image_resolution", "1080p")).lower()
+                    if str(med.get("image_resolution", "1080p")).lower()
+                    in IMAGE_RESOLUTIONS
+                    else "1080p"
                 ),
             ),
             appearance=AppearanceConfig(
@@ -243,12 +256,11 @@ class Settings:
                 "license_file": self.license.license_file,
             },
             "media": {
-                "still_width": self.media.still_width,
-                "still_height": self.media.still_height,
                 "magnification": self.media.magnification,
                 "render_np": self.media.render_np,
                 "scenes_per_checkout": self.media.scenes_per_checkout,
                 "image_format": self.media.image_format,
+                "image_resolution": self.media.image_resolution,
             },
             "appearance": {
                 "mode": self.appearance.mode,

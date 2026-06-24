@@ -501,6 +501,11 @@ class SettingsDialog(QDialog):
         return self._wrap(form)
 
     def _build_scenes_page(self) -> QWidget:
+        # Render resolution for scene stills.
+        self._image_resolution = QComboBox()
+        self._image_resolution.addItem("1080p", "1080p")
+        self._image_resolution.addItem("2160p", "2160p")
+
         # Output image type for scene renders (the file extension STAR-CCM+ uses
         # to pick the format).
         self._image_format = QComboBox()
@@ -508,8 +513,9 @@ class SettingsDialog(QDialog):
         self._image_format.addItem("PNG", "png")
 
         form = QFormLayout()
+        form.addRow("Image resolution", self._image_resolution)
         form.addRow("Image format", self._image_format)
-        hint = QLabel("File type of the images rendered in the Scenes tab.")
+        hint = QLabel("Resolution and file type of the images rendered in the Scenes tab.")
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         form.addRow("", hint)
@@ -1176,6 +1182,8 @@ class SettingsDialog(QDialog):
         self._scenes_per_checkout.setValue(s.media.scenes_per_checkout)
         idx = self._image_format.findData(s.media.image_format)
         self._image_format.setCurrentIndex(idx if idx >= 0 else 0)
+        ridx = self._image_resolution.findData(s.media.image_resolution)
+        self._image_resolution.setCurrentIndex(ridx if ridx >= 0 else 0)
 
         idx = self._mode.findData(s.license.mode)
         self._mode.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1281,6 +1289,7 @@ class SettingsDialog(QDialog):
         s.media.render_np = self._render_cores.value()
         s.media.scenes_per_checkout = self._scenes_per_checkout.value()
         s.media.image_format = self._image_format.currentData()
+        s.media.image_resolution = self._image_resolution.currentData()
         s.license = LicenseConfig(
             mode=self._mode.currentData(),
             podkey=self._podkey.text().strip(),

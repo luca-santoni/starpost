@@ -149,6 +149,7 @@ class StarRunner:
         sink = log_sink or (lambda s: None)
         media = self.settings.media
         np = self._render_np(media)
+        width, height = media.dimensions()
 
         with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
             macro = render_scenes_macro(
@@ -156,8 +157,8 @@ class StarRunner:
                 Path(tmp),
                 scene_show,
                 list(view_names or []),
-                media.still_width,
-                media.still_height,
+                width,
+                height,
                 media.magnification,
                 media.image_format,
             )

@@ -16,12 +16,11 @@ license:
 # used to render (starccm+ -np): 1 = serial; 2..N partitions a large mesh across
 # ranks instead of loading it into one process — faster and less memory per rank.
 media:
-  still_width: 1920
-  still_height: 1080
   magnification: 1
   render_np: 1               # cores for -np; 1 = serial, up to the machine's cores
   scenes_per_checkout: 1     # scenes rendered per license checkout (1 = one each)
   image_format: jpg          # rendered image type: jpg | png
+  image_resolution: 1080p    # render resolution: 1080p | 2160p
 
 # UI appearance. Changeable in-app via Settings -> Appearance.
 appearance:

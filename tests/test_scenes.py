@@ -100,6 +100,21 @@ def test_media_config_image_format_round_trip():
     )
 
 
+def test_media_config_image_resolution_round_trip():
+    assert MediaConfig().image_resolution == "1080p"  # default
+    assert MediaConfig().dimensions() == (1920, 1080)
+    assert MediaConfig(image_resolution="2160p").dimensions() == (3840, 2160)
+    s = Settings.from_dict({"media": {"image_resolution": "2160p"}})
+    assert s.media.image_resolution == "2160p"
+    assert s.to_dict()["media"]["image_resolution"] == "2160p"
+    # An unknown value falls back to the default (1080p).
+    assert (
+        Settings.from_dict({"media": {"image_resolution": "4320p"}})
+        .media.image_resolution
+        == "1080p"
+    )
+
+
 def test_media_config_scenes_per_checkout_round_trip():
     assert MediaConfig().scenes_per_checkout == 1  # one scene per checkout default
     s = Settings.from_dict({"media": {"scenes_per_checkout": 4}})
