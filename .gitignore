@@ -22,5 +22,8 @@ venv/
 *.AppImage
 *.AppDir/
 
+# Local-only planning docs
+docs/screenplay_plan.md
+
 # OS
 .DS_Store
