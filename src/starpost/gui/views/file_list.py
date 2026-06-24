@@ -203,7 +203,9 @@ class FileListPanel(QWidget):
         clear = QPushButton("Clear")
         clear.setObjectName("dangerButton")
         add_files.setToolTip("Add one or more .sim files to the list")
-        add_folder.setToolTip("Add every .sim file in a folder to the list")
+        add_folder.setToolTip(
+            "Add a folder's .sim files into a new internal folder named after it"
+        )
         remove.setToolTip("Remove the selected files and folders from the list")
         clear.setToolTip("Remove all files and folders from the list")
         add_files.clicked.connect(self._add_files)
@@ -517,9 +519,34 @@ class FileListPanel(QWidget):
         self._add_paths([Path(p) for p in paths])
 
     def _add_folder(self) -> None:
-        folder = QFileDialog.getExistingDirectory(self, "Add folder of .sim files")
-        if folder:
-            self._add_paths(sorted(Path(folder).glob("*.sim")))
+        """Pick a folder and add its .sim files inside a new internal folder named
+        after it (skipping any already present elsewhere in the list)."""
+        chosen = QFileDialog.getExistingDirectory(self, "Add folder of .sim files")
+        if not chosen:
+            return
+        folder = Path(chosen)
+        sims = sorted(folder.glob("*.sim"))
+        if not sims:
+            QMessageBox.information(
+                self, "Add folder", f"No .sim files found in “{folder.name}”."
+            )
+            return
+        existing = {p.resolve() for p in self.files()}
+        new = [p for p in sims if p.resolve() not in existing]
+        if not new:
+            QMessageBox.information(
+                self, "Add folder",
+                f"Every .sim file in “{folder.name}” is already in the list.",
+            )
+            return
+
+        item = self._make_folder_item(folder.name)
+        for p in new:
+            item.addChild(self._make_file_item(p))
+        self._tree.addTopLevelItem(item)
+        item.setExpanded(True)  # captured by _apply_sort's serialize/rebuild
+        self._apply_sort()
+        self._changed()
 
     def _remove_selected(self) -> None:
         """Remove the selected items. A selected folder takes its contents with
