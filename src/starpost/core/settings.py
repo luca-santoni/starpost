@@ -158,6 +158,9 @@ class Settings:
     # Check GitHub for a newer release on startup and offer to update. Defaults
     # on; toggled from Misc settings.
     check_updates_on_startup: bool = True
+    # Show the "rendering is expensive" warning the first time the Scenes tab is
+    # opened each session. Cleared when the user ticks "Do not show this again".
+    show_scenes_warning: bool = True
     # Default selections for the Export dialog (the user can still change them
     # per-export). Formats are the dialog's display strings; the plot theme is a
     # "dark"/"light" mode like appearance.mode.
@@ -240,6 +243,7 @@ class Settings:
             plot_classification=d.get("plot_classification")
             or cls().plot_classification,
             show_setup_on_startup=bool(d.get("show_setup_on_startup", True)),
+            show_scenes_warning=bool(d.get("show_scenes_warning", True)),
             check_updates_on_startup=bool(d.get("check_updates_on_startup", True)),
             export_report_format=str(d.get("export_report_format", "CSV")),
             export_plot_format=str(d.get("export_plot_format", "PNG")),
@@ -286,6 +290,7 @@ class Settings:
             "region_stats": self.region_stats,
             "plot_classification": self.plot_classification,
             "show_setup_on_startup": self.show_setup_on_startup,
+            "show_scenes_warning": self.show_scenes_warning,
             "check_updates_on_startup": self.check_updates_on_startup,
             "export_report_format": self.export_report_format,
             "export_plot_format": self.export_plot_format,

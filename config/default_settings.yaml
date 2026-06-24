@@ -84,6 +84,10 @@ plot_classification:
 # update if one is available. Toggle in Settings -> Misc.
 check_updates_on_startup: true
 
+# Show the "rendering is expensive" warning the first time the Scenes tab is
+# opened each session. Cleared when the user ticks "Do not show this again".
+show_scenes_warning: true
+
 # Default selections used by the Export dialog. These only pre-fill the dialog's
 # controls; the format/theme can still be changed per export. Editable in-app
 # via Settings -> Export.

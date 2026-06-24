@@ -16,6 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -81,6 +82,9 @@ class MainWindow(QMainWindow):
         # Separate thread/worker for on-demand scene rendering (Scenes tab → Run).
         self._render_thread: QThread | None = None
         self._render_worker: SceneRenderWorker | None = None
+        # Whether the Scenes "rendering is expensive" warning has shown this
+        # session (shown at most once per run, unless permanently dismissed).
+        self._scenes_warning_shown = False
 
         # Panels
         self.file_list = FileListPanel(
@@ -205,6 +209,36 @@ class MainWindow(QMainWindow):
         else:
             section = "plots"
         self.selection.set_active_section(section)
+        if section == "scenes":
+            self._maybe_warn_scenes()
+
+    def _maybe_warn_scenes(self) -> None:
+        """First time the Scenes tab is opened this session, warn that rendering
+        is heavy. A "Do not show this again" tick suppresses it for good."""
+        if self._scenes_warning_shown or not self.settings.show_scenes_warning:
+            return
+        self._scenes_warning_shown = True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Scenes")
+        box.setText(
+            "Rendering scenes is very computationally expensive.\n\n"
+            "It is not recommended on systems with less than 16 GB of system "
+            "memory. Closing other programs on your computer first is recommended "
+            "to prevent memory related errors."
+        )
+        box.setStandardButtons(QMessageBox.Ok)
+        # Use the style's green circled checkmark (the Yes-button icon) on OK,
+        # matching the affirmative buttons elsewhere in the app.
+        box.button(QMessageBox.Ok).setIcon(
+            self.style().standardIcon(QStyle.SP_DialogYesButton)
+        )
+        dont_show = QCheckBox("Do not show this again")
+        box.setCheckBox(dont_show)
+        box.exec()
+        if dont_show.isChecked():
+            self.settings.show_scenes_warning = False
+            self.settings.save()
 
     def _left_tab_menu(self, tabs: QTabWidget, pos) -> None:
         """Right-clicking the Files or Data tab opens its sort menu."""
