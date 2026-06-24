@@ -3,7 +3,9 @@
 StarPost is a standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 **report values** and **monitor plots** (residuals, forces vs. iteration) from
 solved `.sim` files, lets you view and compare them, and exports tables to
-**CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**.
+**CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**. It can also
+**render scene stills** (images) from a `.sim`'s scenes — choosing which
+scalar/vector displayers are shown and which saved camera view to render from.
 
 Runs on **Linux and Windows**.
 
@@ -45,10 +47,15 @@ StarPost does **not** parse them directly. Instead it:
 1. Generates a Java macro from a template (`src/starpost/macros/`).
 2. Runs it via `starccm+ -batch <macro> <file.sim>` (one license checkout per
    file, sequential — license-safe).
-3. The macro exports **all** reports and monitor plots to CSV in an output dir;
-   StarPost parses those and caches them.
+3. The macro exports **all** reports and monitor plots to CSV in an output dir
+   (and lists the sim's scenes, their scalar/vector displayers, and its saved
+   views); StarPost parses those and caches them.
 4. The GUI filters the cached data by your selection/profile for viewing and
    export. Re-selecting never re-runs STAR-CCM+.
+5. **Scene rendering** is a separate, on-demand pass: from the **Scenes** tab you
+   pick scenes (and which displayers/saved view to show) and click **Run** to
+   render them to image stills via a second macro. Because rendering goes through
+   OpenGL and is memory-heavy, it is kept apart from the numeric extraction.
 
 A licensed STAR-CCM+ installation must be present on the machine.
 
@@ -93,8 +100,21 @@ A licensed STAR-CCM+ installation must be present on the machine.
     and axis labels, per-monitor colours (mirrored from the main view), legend
     scale, line thickness, title/axis-label text sizes, a grid toggle, theme, and
     aspect ratio.
+- **Scene rendering** (the **Scenes** tab) — render scene stills from a `.sim`:
+  - A **scene → displayer tree** (like the monitor-plot groups): tick a scene,
+    then tick which of its **scalar/vector displayers** to show; a **Saved views**
+    list renders each scene from a chosen STAR-CCM+ saved camera view.
+  - **Run** renders the selected scene(s) of the ticked data set to image stills
+    (**JPG / PNG**, **1080p / 2160p**), shown in a **thumbnail gallery**
+    (double-click to open; right-click → **Properties** for size, resolution,
+    format, and the parent sim / scene / displayers / view). **Clear scenes**
+    removes the rendered stills.
+  - Rendering runs as a separate macro pass, **in parallel** (`starccm+ -np`, a
+    configurable core count) with a configurable number of **scenes per license
+    checkout**, closing each scene after its hardcopy to limit memory use. A
+    first-open warning notes that rendering is memory-heavy (≥16 GB recommended).
 - **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
-  key), file/report/plot display options, export defaults, profile management
+  key), file/report/plot/scene display options, export defaults, profile management
   (view details / delete), a **dark/light theme with custom accent, checkmark and
   folder colours** and an **adjustable text size** previewed live, a reset, and a
   *Clear all temp files* action.
@@ -112,6 +132,10 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **A local, licensed STAR-CCM+ installation** (its executable path is set in
   Settings). The UI opens and is fully navigable without one — STAR-CCM+ is only
   needed to actually extract data from `.sim` files.
+- **Scene rendering** additionally needs working **graphics** (a GPU/display, or
+  an offscreen GL context on headless machines) and is **memory-heavy**:
+  **≥16 GB** of system RAM is recommended, and closing other programs first helps
+  avoid out-of-memory errors.
 - OS: **Linux or Windows**.
 - Python dependencies: see [`requirements.txt`](requirements.txt) /
   [`pyproject.toml`](pyproject.toml).
@@ -142,6 +166,9 @@ Key fields:
   (`export_report_format`, `export_plot_format`, `export_plot_theme`),
   `appearance` (theme, accent, checkmark + folder colours), and
   `check_updates_on_startup`.
+- `media` — scene-rendering options: `image_format` (jpg/png),
+  `image_resolution` (1080p/2160p), `magnification`, `render_np` (parallel cores
+  for `starccm+ -np`), and `scenes_per_checkout`.
 
 Extraction **profiles** (saved report/plot selections, the monitors shown per
 plot, and axis overrides) live alongside the settings file in `profiles/*.yaml`
@@ -153,16 +180,19 @@ Windows `%LOCALAPPDATA%\starpost\`).
 
 1. On first run, the **setup wizard** prompts for the STAR-CCM+ executable path,
    licensing, and theme. (Re-open it any time; it's also editable in Settings.)
-2. **Files** tab → *Add files…* / *Add folder…* to build the `.sim` list.
+2. **Files** tab → *Add files…* to add individual `.sim` files, or *Add folder…*
+   to import a folder's `.sim` files into a new internal folder named after it.
 3. **Run batch** (toolbar) and choose an output folder. STAR-CCM+ runs once per
    file and the extracted data appears in the **Data** tab.
 4. Tick **Data** sets to view (two or more → comparison), then use the
    **Reports** and **Plots** tabs plus the right-hand selection panel to filter.
    Save a selection as a **Profile** to reuse it later.
 5. **Export…** (toolbar) writes report tables and/or plot images.
+6. *(Optional)* On the **Scenes** tab, tick one **Data** set, pick scenes (and
+   their displayers / a saved view), and click **Run** to render image stills.
 
 Re-selecting, comparing, and re-exporting never re-run STAR-CCM+ — extraction
-happens once and is cached.
+happens once and is cached. (Scene rendering does run STAR-CCM+ again, on demand.)
 
 ## Documentation
 

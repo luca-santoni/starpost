@@ -2,15 +2,20 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **1.5.0**
+> Version: **2.0.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
-> smoothing), the full in-app settings dialog, a heavily customizable report/plot
-> export, an in-app update check, and packaged builds (Linux AppImage + Windows
-> Inno Setup installer). The Java extraction macro has not yet been validated
-> against a live STAR-CCM+ install (see [Limitations](#4-limitations)).
-> Document last updated: 2026-06-20
+> smoothing), **on-demand scene-still rendering** (the Scenes tab: scene →
+> scalar/vector displayer selection, saved-view rendering, parallel/`-np`
+> rendering, a thumbnail gallery with Properties), the full in-app settings
+> dialog, a heavily customizable report/plot export, an in-app update check, and
+> packaged builds (Linux AppImage + Windows Inno Setup installer). The Java
+> extraction macro has been run against a live STAR-CCM+ 2310 install (reports,
+> plots, and scene/view discovery); the scene-render *apply-saved-view* call is
+> the one remaining version-specific operation still being validated (see
+> [Limitations](#4-limitations)).
+> Document last updated: 2026-06-22
 
 ---
 
@@ -25,6 +30,7 @@
    - [3.4 Data panel](#34-data-panel)
    - [3.5 Reports view](#35-reports-view)
    - [3.6 Plots view](#36-plots-view)
+   - [3.6a Scenes view](#36a-scenes-view)
    - [3.7 Selection panel (right)](#37-selection-panel-right)
    - [3.8 Log console](#38-log-console)
    - [3.9 Export dialog](#39-export-dialog)
@@ -61,9 +67,13 @@ pulls out every report value and monitor plot, and presents them in a custom GUI
 where the engineer can **view, filter, compare, and export** the data — without
 re-solving and without manually clicking through each simulation.
 
-The focus is **numeric data only**: report values and monitor plots. 3D scene
-rendering and complex visualization are out of scope (see
-[Limitations](#4-limitations)).
+The core focus is **numeric data**: report values and monitor plots. As of
+**v2.0.0** StarPost also **renders scene stills** (images) from a `.sim`'s
+scenes — letting the engineer pick which scalar/vector displayers are shown and
+which saved camera view to render from — exported as JPG/PNG image files (see
+[Scene rendering](#scene-rendering) and the [Scenes tab](#36a-scenes-view)).
+Animations/screenplays and other field-visualization output remain out of scope
+(see [Limitations](#4-limitations)).
 
 ---
 
@@ -156,6 +166,28 @@ rendering and complex visualization are out of scope (see
 - **Configurable defaults** (Settings → Export): the report format, plot image
   format, and plot theme the Export dialog pre-fills.
 
+### Scene rendering
+- **On-demand scene stills** from the **Scenes** tab: render a `.sim`'s scenes to
+  image files (**JPG / PNG**), at **1080p** or **2160p**.
+- **Scene → displayer selection**: a tree (like the monitor-plot groups) where
+  each scene is a checkable parent and its **scalar/vector displayers** are
+  checkable children — only the ticked displayers are shown in the render.
+- **Saved-view rendering**: a **Saved views** list (the sim's saved cameras);
+  each checked scene is rendered once per checked view (its camera applied
+  first), or from the scene's current view when none is checked.
+- **Discovered during extraction**: the normal extraction pass also lists each
+  sim's scenes (and their scalar/vector displayers) and saved views, so the
+  Scenes tab populates without rendering anything.
+- **Thumbnail gallery** of the rendered stills (per ticked data set):
+  double-click to open in the system viewer; right-click → **Properties** (file
+  size, image resolution, format, and the parent `.sim`, data set, scene/report
+  group, displayers, and saved view); **Clear scenes** removes the stills.
+- **Rendering pass** (separate from numeric extraction): runs the render macro in
+  **parallel** (`starccm+ -np`, a configurable core count), rendering a
+  configurable number of **scenes per license checkout** and closing each scene
+  after its hardcopy to limit memory growth. A first-open warning notes that
+  rendering is memory-heavy (≥16 GB recommended; close other programs first).
+
 ### Configuration, appearance & resilience
 - **Configurable STAR-CCM+ executable path** and **extra CLI args**.
 - **Licensing**: defaults to **Power-on-Demand key + license server**
@@ -193,7 +225,7 @@ panels.
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  [Run batch] | [Export…]  [Settings…]                        ← toolbar    │
 ├───────────────┬───────────────────────────────────┬───────────────────┤
-│  Files | Data │   Reports | Plots                 │  Selection panel    │
+│  Files | Data │   Reports | Plots | Scenes        │  Selection panel    │
 │  (left tabs)  │   (centre tabs)                   │  (Profile + lists)  │
 │               │                                   │                     │
 ├───────────────┴───────────────────────────────────┴───────────────────┤
@@ -203,10 +235,10 @@ panels.
 ```
 
 - **Left** — a tab widget with **Files** and **Data** tabs.
-- **Centre** — a tab widget with **Reports** and **Plots** tabs.
-- **Right** — the **Selection panel** (profile controls + the report/monitor
-  list for the active centre tab — Reports list on Reports, Monitor plots on
-  Plots).
+- **Centre** — a tab widget with **Reports**, **Plots**, and **Scenes** tabs.
+- **Right** — the **Selection panel** (profile controls + the list(s) for the
+  active centre tab — Reports list on Reports, Monitor plots on Plots, and the
+  Scenes tree + Saved views list on Scenes).
 - **Bottom** — the **Log console** (progress + streaming log).
 - The three top regions and the bottom are separated by draggable splitters.
 - Window title: **StarPost**; default size 1280×800.
@@ -243,7 +275,10 @@ the filesystem.
 
 **Buttons (bottom of the panel):**
 - **Add files…** — file picker filtered to `*.sim`; adds the chosen files.
-- **Add folder…** — folder picker; adds every `*.sim` directly inside it.
+- **Add folder…** — folder picker; creates a new internal folder named after the
+  chosen directory and adds every `*.sim` directly inside it into that folder
+  (skipping any already in the list; nothing is added if the directory holds no
+  `.sim` files or they are all already present).
 - **Remove** — removes the selected rows (after a confirmation). A selected
   folder is removed with its contents.
 - **Clear** — removes all files and folders (after a confirmation). Styled as a
@@ -383,17 +418,44 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
 - Without Shift, the usual pyqtgraph **pan (drag)** and **zoom (scroll)** apply,
   and right-clicking the plot exposes pyqtgraph's built-in view-box menu.
 
+### 3.6a Scenes view
+
+The **Scenes** tab (centre): a **thumbnail gallery** of the scene stills rendered
+for the ticked data set(s).
+
+- The first time the Scenes tab is opened **each session**, a **warning** notes
+  that rendering is very computationally expensive, is not recommended under
+  **16 GB** of system memory, and that closing other programs first helps prevent
+  memory-related errors. A **"Do not show this again"** checkbox suppresses it for
+  good (persisted as `show_scenes_warning`).
+- Until something is rendered, a centred hint **"Select scenes and press Run to
+  render stills"** is shown.
+- Each rendered still appears as a **thumbnail** labelled
+  `Scene-Displayers-View`. **Double-click** opens it in the system image viewer.
+- **Clicking empty space** clears the thumbnail selection (removes the accent
+  highlight).
+- **Right-click a thumbnail → Properties** opens a small window listing the
+  **file size**, **image resolution** (read from the file), **file format**, and —
+  below a separator — the **parent `.sim` file**, **data set**, **report group**
+  (the scene), **vector/scalar name** (the visible displayers), and **saved
+  view**. (The displayer/view rows populate for stills rendered by v2.0.0+;
+  older cached stills show `—`.)
+
+Rendering is driven from the **Scenes** section of the selection panel (right);
+see [3.7](#37-selection-panel-right).
+
 ### 3.7 Selection panel (right)
 
 Chooses which reports and monitor plots are shown/exported, and manages profiles.
 It operates on the **union** of names across the loaded (and ticked) data.
 
-The panel shows **one checklist at a time, matching the active centre tab**: the
-**Reports** list while the centre is on the Reports tab, the **Monitor plots**
-list while it is on the Plots tab. The shown list expands to fill the panel.
-Both selections are always remembered — switching tabs only changes which list
-is visible, never what is ticked — and profiles still cover reports and plots
-together.
+The panel shows the list(s) **matching the active centre tab**: the **Reports**
+list on the Reports tab, the **Monitor plots** list on the Plots tab, and the
+**Scenes** tree + **Saved views** list (split, scenes on top) on the Scenes tab.
+The shown list(s) expand to fill the panel. Selections are remembered —
+switching tabs only changes which list is visible, never what is ticked — and
+profiles still cover reports and plots together (scenes/views are not part of
+profiles).
 
 **Profile row (top):**
 - **Profile dropdown** — lists the built-in **Default** first, then saved
@@ -424,6 +486,28 @@ together.
   that monitor's line in the plot. When **two or more data sets** are plotted,
   each monitor shows **one swatch per data set** (left to right), so every line
   can be recoloured individually — the same as the export menu's Monitors column.
+
+**"Scenes" group (Scenes tab):**
+- A **tree** of the scenes in the ticked data set(s), scoped to the current Data
+  selection (it updates when you tick a different sim). Each scene is a checkbox;
+  checking it **reveals its scalar/vector displayers** as checkable children,
+  **unticked**, so you pick which to show deliberately.
+- A **Run** button at the top renders the checked scenes of the **single** ticked
+  data set (it errors if more than one is ticked) to image stills, showing only
+  the checked displayers, from the checked **Saved views** (or the current view
+  if none). No folder prompt — files go to the configured output folder, or
+  alongside the `.sim`. Output runs in parallel and per the *Scenes per license*
+  setting; progress and per-scene log lines appear in the log console.
+- **Select all** / **Clear** tick/untick every scene and displayer.
+- **Clear scenes** (red) deletes all rendered stills from the workspace after a
+  confirmation (the image files already saved on disk are kept), like *Clear
+  data*.
+
+**"Saved views" group (Scenes tab, beneath Scenes):**
+- A checklist of the sim's **saved camera views**. Each checked scene is rendered
+  once **per checked view** (its camera applied first); with **none** checked,
+  scenes render from their current view. Like the scene tree, it is scoped to the
+  ticked data set(s).
 
 ### 3.8 Log console
 
@@ -502,7 +586,7 @@ monitor selections to the dialog.
 ### 3.10 Settings dialog
 
 Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
-**ten pages**, shown in a scrollable stack on the right. **Save** writes
+**eleven pages**, shown in a scrollable stack on the right. **Save** writes
 everything back to `settings.yaml`; **Cancel** discards (and reverts any live
 theme preview). A few actions take effect **immediately**, independent of
 Save/Cancel: **deleting a profile**, **Reset settings**, **Clear all temp
@@ -512,12 +596,13 @@ The pages, in nav order:
 
 | Page | Contents |
 |---|---|
-| **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated). |
+| **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated), **Parallel cores** (spinbox 1…N machine cores; the `-np` count for scene rendering — 1 = serial; numeric extraction always runs serially), **Scenes per license** (how many scenes render per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
 | **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked as `••••` with a **Show/Hide** toggle) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
 | **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons); **Text size** (1.0×–1.5× multiplier scaling every button/label, and the main view's plot title/axis labels; 1.0× is the original size). All changes **preview live** across the whole UI. |
 | **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
+| **Scenes** | Scene-rendering output options: **Image resolution** (1080p / 2160p) and **Image format** (JPG / PNG). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
 | **Profiles** | One row per profile (Default first). **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**. **Delete** (not shown for Default) removes the profile after confirmation, immediately. |
 | **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
@@ -577,8 +662,17 @@ running `__version__` against the latest release tag.
   sequential and results are cached. The tool is not a lightweight file reader.
 
 ### Scope
-- **Numeric data only** — reports and monitor plots. No 3D scenes, field
-  visualization, isosurfaces, streamlines, or section rendering.
+- **Numeric data + scene stills.** Reports, monitor plots, and **rendered scene
+  stills** (images of a sim's scenes, with selectable scalar/vector displayers
+  and saved-view cameras). **No animations/screenplays**, and no creation/editing
+  of scenes, displayers, or views inside the `.sim` — StarPost renders the scenes
+  that already exist. Streamline/other displayer types are shown if a scene
+  contains them but are **not selectable** (only scalar/vector displayers are).
+- **Scene rendering is heavy.** It goes through OpenGL (needs working graphics /
+  an offscreen GL context on headless machines) and is memory-intensive — a large
+  case can exhaust RAM, so ≥16 GB is recommended and the per-checkout scene count
+  is kept low by default. Rendering re-runs STAR-CCM+ (one or more extra license
+  checkouts), unlike the cached numeric data.
 - **Monitor plots only** for plot data (value-vs-iteration/time, e.g. residuals
   and force histories). **XY plots** (a field along a line/probe) and other plot
   types are not handled.
@@ -598,13 +692,18 @@ running `__version__` against the latest release tag.
   enforced and no warning fires when it is exceeded.
 
 ### Validation caveats
-- The **Java macro has not been validated against a live STAR-CCM+ install**
-  (none was available during development). The API calls used
-  (`getReportManager`, `getReportMonitorValue`, `StarPlot.export`) are stable
-  across recent versions, but very old releases could differ.
+- The **extraction macro has now been run against a live STAR-CCM+ 2310 install**
+  — reports, monitor plots, and scene/displayer/saved-view discovery all work.
+  Very old releases could still differ.
+- The **scene-render *apply-saved-view* call** (`getCurrentView().setView(...)`)
+  is the **one remaining unvalidated, version-specific operation**: it only runs
+  when rendering with a saved view checked. Scene discovery and rendering from the
+  current view do not depend on it. If it fails to compile on a given build, that
+  call is the place to adjust.
 - The **exact CSV layout produced by `StarPlot.export()`** for monitor plots is
-  the main unverified assumption. The parser handles the common single-X-column
-  layout and is flagged for tightening once tested on real exports.
+  still the main unverified assumption for plots. The parser handles the common
+  single-X-column layout and is flagged for tightening once tested on real
+  exports.
 
 ### Packaging
 - **PyInstaller does not cross-compile** — each OS's artifact must be built on
@@ -706,10 +805,18 @@ Defined in `src/starpost/data/models.py`:
 - **`PlotSeries`** — one line on a plot: `name`, `x[]`, `y[]` (shared X axis).
 - **`MonitorPlot`** — `name`, `series[]`, `kind` (`RESIDUAL` / `FORCE` /
   `OTHER`), `x_label`, `y_log` (resolved axis choice), optional `error`.
+- **`Displayer`** — a scene's scalar/vector displayer: `name`, `kind`
+  (`scalar` / `vector`).
+- **`Scene`** — `name` + its `displayers[]` (scalar/vector only).
+- **`MediaArtifact`** — a rendered still: `name` (display label), `path`,
+  `source` (scene), `kind` (`still`), optional `error`, plus provenance for the
+  Properties window: `sim_path`, `displayers` (the visible ones), `view`.
 - **`SimResult`** — everything from one `.sim`: `sim_path`, `reports[]`,
-  `plots[]`, `extracted_at` timestamp, optional batch-level `error`. Helpers:
-  `sim_name`, `report_names()`, `plot_names()`, and `signature()` (the set of
-  report + plot names, used for the homogeneity check).
+  `plots[]`, `scenes[]` (with displayers), `views[]` (saved-view names),
+  `media[]` (rendered stills), `extracted_at` timestamp, optional batch-level
+  `error`. Helpers: `sim_name`, `report_names()`, `plot_names()`,
+  `scene_names()`, and `signature()` (report + plot names, for the homogeneity
+  check — scenes/views/media are excluded).
 
 Persistence type in `src/starpost/core/settings.py`:
 
@@ -820,7 +927,10 @@ starpost/                           (repo; app/package = "starpost")
     │   └── updater.py              GitHub release check + installer download (UI-free)
     │
     ├── macros/
-    │   └── extract_all.java.j2     Canonical Java macro: ALL reports + ALL plots, one pass
+    │   ├── extract_all.java.j2     Canonical Java macro: ALL reports + ALL plots, one pass
+    │   │                           (also lists scenes + displayers + saved views)
+    │   └── render_scenes.java.j2   Separate render macro: scene stills via printAndWait
+    │                               (displayer visibility, saved-view camera, -np parallel)
     │
     ├── batch/                      Batch orchestration
     │   ├── job.py                  Job + JobState (pending/running/done/failed/skipped)
@@ -828,7 +938,8 @@ starpost/                           (repo; app/package = "starpost")
     │   └── aggregator.py           Wide report frames + CSV/TSV/XLSX/ODS table export
     │
     ├── data/                       Data model & storage
-    │   ├── models.py               Report, PlotSeries, MonitorPlot, SimResult, PlotKind
+    │   ├── models.py               Report, PlotSeries, MonitorPlot, SimResult, PlotKind,
+    │   │                           Scene/Displayer, MediaArtifact (rendered stills)
     │   ├── portable.py             Round-trippable StarPost-CSV (Import / Export Data)
     │   └── store.py                ResultStore: in-memory + JSON crash cache; homogeneity
     │
@@ -847,13 +958,15 @@ starpost/                           (repo; app/package = "starpost")
     │       │                       Properties, folder-colour tinting
     │       ├── data_list.py        Data tab: virtual folders, drag-drop, sort, tick
     │       │                       data sets, import/export, delete/clear
-    │       ├── selection_panel.py  Report checklist + monitor-plot tree (per-monitor
-    │       │                       picking & colour swatches), Select all, profile load/save
+    │       ├── selection_panel.py  Report checklist + monitor-plot tree + scene→displayer
+    │       │                       tree + Saved views list (Run / Clear scenes), profiles
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort
     │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-monitor
     │       │                       colours, smoothing, hover readout, Shift+drag region stats
-    │       ├── settings_dialog.py  In-app settings (10 paged groups) + profile mgmt
-    │       ├── properties_dialog.py  File / data-set / folder Properties dialogs
+    │       ├── scene_view.py       Scenes tab: rendered-still thumbnail gallery (open,
+    │       │                       right-click Properties, empty-space deselect)
+    │       ├── settings_dialog.py  In-app settings (11 paged groups, incl. Scenes) + profiles
+    │       ├── properties_dialog.py  File / data-set / folder / rendered-scene Properties
     │       ├── data_export_dialog.py  Export Data: pick data sets → portable CSVs
     │       ├── log_console.py      Live log + progress counter/bar
     │       ├── export_dialog.py    Tabbed export (Reports/Plots) + live plot preview
@@ -963,17 +1076,27 @@ PYTHONPATH=src python -m pytest tests/ -q
 - **In-app update check** — GitHub release comparison with a toolbar note, and
   download-and-install of the new installer on the packaged Windows build.
 - **First-run setup wizard.**
+- **Scene rendering (v2.0.0)** — the Scenes tab: scene/displayer/saved-view
+  discovery during extraction; a scene→displayer tree + Saved views list; an
+  on-demand render macro (`printAndWait`) driven in parallel (`-np`) with a
+  configurable core count and scenes-per-checkout; per-displayer visibility and
+  saved-view cameras; a thumbnail gallery with open / right-click Properties /
+  Clear scenes; Settings → Scenes (image format + resolution); a first-open
+  memory warning; and "Add folder…" importing into a named internal folder.
 - **Cross-platform** config/cache/log locations via platformdirs; packaged Linux
   AppImage and Windows Inno Setup installer.
 - Unit tests for parser, classifier, aggregator, license flags, profile
   round-trip, empty-series detection, portable CSV, credential redaction, file
-  permissions, the updater, tooltip timing, and temp-file clearing.
+  permissions, the updater, tooltip timing, temp-file clearing, and the scene
+  pipeline (scene/media parsing, render-macro generation, media config).
 
 **Not yet exposed / pending:** see [Limitations](#4-limitations) — stop-after-
 current UI, per-plot axis-override UI, and an enforced batch-size warning.
 
-**Not validated:** the Java macro has not been run against a live, licensed
-STAR-CCM+ install, and the `StarPlot.export()` CSV layout is assumed.
+**Not validated:** the scene-render *apply-saved-view* call
+(`getCurrentView().setView(...)`) — the one remaining version-specific macro
+operation — and the `StarPlot.export()` monitor-plot CSV layout. Reports, plots,
+and scene/view **discovery** have been run against a live STAR-CCM+ 2310 install.
 
 ---
 
@@ -1008,14 +1131,16 @@ These were locked during requirements gathering and shaped the v1 design.
 
 ## 13. Open Questions / Future Work
 
-- **Validate the Java macro** on a real STAR-CCM+ install and confirm the
-  `StarPlot.export()` CSV layout across plot types; tighten the parser.
+- **Confirm the `StarPlot.export()` CSV layout** across plot types on a real
+  install and tighten the parser; **validate the scene-render apply-saved-view
+  call** (`getCurrentView().setView(...)`) on the target STAR-CCM+ version.
 - **Surface stop-after-current** in the UI (a Stop button).
 - **Per-plot axis-override UI** (and apply `Profile.axis_overrides` on load).
 - **Enforce/warn on the batch-size ceiling** if it remains a real constraint.
 - **Validate the packaged builds** end to end on clean machines, and consider
   **code-signing** the Windows installer to avoid SmartScreen warnings.
-- **Possible later features** (out of scope today): 3D scene/image export, XY
-  plots and other plot types, richer report templating (e.g. full PDF reports),
-  and optional multi-sim-per-session macro runs to reduce license churn further.
+- **Possible later features** (out of scope today): scene **animations /
+  screenplays** (video), XY plots and other plot types, richer report templating
+  (e.g. full PDF reports), and optional multi-sim-per-session macro runs to reduce
+  license churn further.
 ```

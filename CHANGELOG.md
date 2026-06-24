@@ -3,6 +3,40 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [2.0.0] — 2026-06-22
+
+A major release adding **scene-still rendering**: StarPost can now render images
+of a `.sim`'s scenes, alongside the existing report and monitor-plot extraction.
+
+### New Features
+- **Scenes tab** — render scene stills from a `.sim`. Extraction now also
+  discovers each sim's **scenes** (with their **scalar/vector displayers**) and
+  **saved camera views**, which populate a **scene → displayer tree** and a
+  **Saved views** list in the selection panel.
+- **Run** renders the checked scenes of the **single** ticked data set to image
+  stills, showing only the checked displayers and rendering once per checked
+  saved view (or the scene's current view). Results appear in a **thumbnail
+  gallery** — double-click to open, **right-click → Properties** (file size,
+  resolution, format, parent `.sim`, data set, scene, displayers, saved view),
+  and **Clear scenes** to remove them.
+- **Settings → Scenes** — **Image resolution** (1080p / 2160p) and **Image
+  format** (JPG / PNG). **Settings → STAR-CCM+** adds **Parallel cores** (the
+  `-np` count for rendering) and **Scenes per license** (scenes per checkout).
+- **First-open warning** that scene rendering is memory-heavy (≥16 GB
+  recommended), with a "Do not show this again" opt-out.
+
+### Changes
+- **"Add folder…"** in the Files tab now imports a folder's `.sim` files into a
+  **new internal folder named after it**, instead of adding them at the top level.
+- Rendering runs as a **separate macro pass** (`printAndWait`), **in parallel**
+  (`starccm+ -np`), closing each scene after its hardcopy to limit memory growth.
+- Rendered files are named **`Dataset-Scene-Displayers-View`**.
+
+### Notes
+- The extraction macro (reports, plots, and scene/view discovery) has been run
+  against a live STAR-CCM+ 2310 install. The scene-render *apply-saved-view* call
+  is the one remaining version-specific operation still being validated.
+
 ## [1.5.0] — 2026-06-21
 
 This release adds program-wide text scaling, a more informative plot Y axis,
