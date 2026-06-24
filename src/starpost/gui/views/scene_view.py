@@ -6,10 +6,11 @@ system image viewer. While nothing has been rendered it shows a centred hint.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
@@ -61,6 +62,40 @@ class SceneView(QWidget):
         self._stack.addWidget(self._gallery)
         self._stack.setCurrentWidget(self._hint)
 
+        # path -> (mtime, QIcon) thumbnail cache, so rebuilding the gallery
+        # doesn't re-decode every (potentially 4K) image from disk each time.
+        self._thumb_cache: dict[str, tuple[float, QIcon]] = {}
+
+    def _thumbnail(self, path: str) -> QIcon | None:
+        """A thumbnail-sized QIcon for ``path``, decoded directly at thumbnail
+        resolution (cheap for large images) and cached by path + mtime. Returns
+        None if the file can't be read."""
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None
+        cached = self._thumb_cache.get(path)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+
+        reader = QImageReader(path)
+        reader.setAutoTransform(True)
+        size = reader.size()  # reads the header only — cheap
+        if size.isValid() and not size.isEmpty():
+            # Decode straight to the thumbnail box (keeping aspect), so a 3840×2160
+            # JPG isn't fully decoded just to be shrunk to ~220 px.
+            scaled = size.scaled(
+                QSize(_THUMB, _THUMB), Qt.AspectRatioMode.KeepAspectRatio
+            )
+            if not scaled.isEmpty():
+                reader.setScaledSize(scaled)
+        image = reader.read()
+        if image.isNull():
+            return None
+        icon = QIcon(QPixmap.fromImage(image))
+        self._thumb_cache[path] = (mtime, icon)
+        return icon
+
     def clear(self) -> None:
         self._gallery.clear()
         self._stack.setCurrentWidget(self._hint)
@@ -83,9 +118,9 @@ class SceneView(QWidget):
             if art.error:
                 item.setText(f"{label}\n(render failed)")
             elif art.path and Path(art.path).exists():
-                pix = QPixmap(art.path)
-                if not pix.isNull():
-                    item.setIcon(QIcon(pix))
+                icon = self._thumbnail(art.path)
+                if icon is not None:
+                    item.setIcon(icon)
                 item.setToolTip(art.path)
             else:
                 item.setText(f"{label}\n(file missing)")

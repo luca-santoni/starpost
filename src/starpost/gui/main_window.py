@@ -85,6 +85,9 @@ class MainWindow(QMainWindow):
         # Whether the Scenes "rendering is expensive" warning has shown this
         # session (shown at most once per run, unless permanently dismissed).
         self._scenes_warning_shown = False
+        # The media paths last drawn in the scene gallery, so it is only rebuilt
+        # when the set of stills actually changes (None = stale, force a rebuild).
+        self._scene_gallery_paths: list[str] | None = None
 
         # Panels
         self.file_list = FileListPanel(
@@ -210,6 +213,8 @@ class MainWindow(QMainWindow):
             section = "plots"
         self.selection.set_active_section(section)
         if section == "scenes":
+            # Build the gallery now that it's visible (deferred while hidden).
+            self._render_scenes_view()
             self._maybe_warn_scenes()
 
     def _maybe_warn_scenes(self) -> None:
@@ -572,6 +577,9 @@ class MainWindow(QMainWindow):
 
     def _on_render_finished(self) -> None:
         self.log_console.finish_progress()
+        # New stills may reuse existing file names (same paths), so force the
+        # gallery to rebuild — the thumbnail cache reloads any changed images.
+        self._scene_gallery_paths = None
         self._refresh_from_store()
 
     def _clear_scenes(self) -> None:
@@ -818,12 +826,22 @@ class MainWindow(QMainWindow):
         self.selection.refresh_monitor_swatches()
 
     def _render_scenes_view(self) -> None:
-        """Show the stills rendered for the ticked data sets (if any)."""
+        """Rebuild the rendered-stills gallery — but only when the Scenes tab is
+        showing and the set of stills actually changed. Decoding the images is
+        costly, so we skip it on unrelated refreshes (report/plot toggles, other
+        tabs) and defer to when the Scenes tab is next selected."""
+        if self._center_tabs.currentWidget() is not self.scene_view:
+            self._scene_gallery_paths = None  # stale; a switch to Scenes rebuilds
+            return
         media = []
         for r in self._active_results():
             for m in r.media:
                 m.sim_path = r.sim_path  # provenance for the Properties window
                 media.append(m)
+        paths = [m.path for m in media]
+        if paths == self._scene_gallery_paths:
+            return  # unchanged — keep the gallery (and its decoded thumbnails)
+        self._scene_gallery_paths = paths
         if media:
             self.scene_view.show_media(media)
         else:
