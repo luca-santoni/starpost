@@ -89,6 +89,69 @@ def test_batch_run_dialog_tabs_not_mouse_clickable(app):
     dlg.close()
 
 
+def test_batch_run_dialog_source_window(app):
+    """Source tab: '.sim files' leaves the right window blank; 'Loaded data sets'
+    fills it with a checkable item per loaded data set."""
+    from PySide6.QtCore import Qt
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(data_sets=["caseA", "caseB"])
+    win = dlg._source_window
+    assert dlg._source_input.currentData() == "sim" and win.count() == 0  # blank
+
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    assert [win.item(i).text() for i in range(win.count())] == ["caseA", "caseB"]
+    assert all(
+        win.item(i).flags() & Qt.ItemFlag.ItemIsUserCheckable
+        and win.item(i).checkState() == Qt.CheckState.Checked
+        for i in range(win.count())
+    )
+
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("sim"))
+    assert win.count() == 0  # back to blank
+    dlg.close()
+
+
+def test_batch_run_dialog_source_buttons(app, monkeypatch):
+    """Load File/Load Data Set toggle with the source mode and add entries;
+    Select All / Clear flip the window's checkboxes."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog(data_sets=["caseA"])
+    win = dlg._source_window
+    # .sim mode: Load File shown, Load Data Set hidden
+    assert not dlg._load_file_btn.isHidden() and dlg._load_dataset_btn.isHidden()
+    monkeypatch.setattr(
+        brd.QFileDialog, "getOpenFileNames",
+        lambda *a, **k: (["/cases/a.sim", "/cases/b.sim"], ""),
+    )
+    dlg._load_files()
+    assert [win.item(i).text() for i in range(win.count())] == ["a.sim", "b.sim"]
+
+    # data mode: Load Data Set shown, Load File hidden
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    assert dlg._load_file_btn.isHidden() and not dlg._load_dataset_btn.isHidden()
+    monkeypatch.setattr(
+        brd.QFileDialog, "getOpenFileNames", lambda *a, **k: (["/x/extra.csv"], "")
+    )
+    dlg._load_data_sets()
+    assert "extra" in [win.item(i).text() for i in range(win.count())]
+
+    # Clear unchecks all; Select All re-checks all
+    dlg._set_all_source(False)
+    assert all(
+        win.item(i).checkState() == Qt.CheckState.Unchecked for i in range(win.count())
+    )
+    dlg._set_all_source(True)
+    assert all(
+        win.item(i).checkState() == Qt.CheckState.Checked for i in range(win.count())
+    )
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""

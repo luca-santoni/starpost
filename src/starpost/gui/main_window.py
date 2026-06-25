@@ -315,11 +315,12 @@ class MainWindow(QMainWindow):
         return True
 
     def _run_batch(self) -> None:
-        """Open the run-batch dialog (a sequential, tabbed wizard). The dialog's
-        tab contents and the run itself are wired in later."""
+        """Open the run-batch dialog (a sequential, tabbed wizard). The run itself
+        is wired in later."""
         from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
-        BatchRunDialog(self).exec()
+        data_sets = [r.sim_name for r in self.store.all() if r.error is None]
+        BatchRunDialog(self, data_sets=data_sets).exec()
 
     def _open_files(self, paths: list[Path]) -> None:
         """Extract one or more .sim files (right-click → Open) and show their
