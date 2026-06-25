@@ -44,6 +44,11 @@ def profiles_dir() -> Path:
     return _ensure(config_dir() / "profiles")
 
 
+def batch_profiles_dir() -> Path:
+    """Saved batch-run profiles — a separate set from the report/plot profiles."""
+    return _ensure(config_dir() / "batch_profiles")
+
+
 def settings_path() -> Path:
     return config_dir() / "settings.yaml"
 

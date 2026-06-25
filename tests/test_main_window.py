@@ -87,3 +87,34 @@ def test_batch_run_dialog_tabs_not_mouse_clickable(app):
     bar.mousePressEvent(press)
     assert dlg._tabs.currentIndex() == 0  # unchanged by the click
     dlg.close()
+
+
+def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
+    """Saving a batch profile writes to the batch-profiles dir and is independent
+    of the regular report/plot profiles."""
+    from starpost.core import settings as cfg
+
+    assert cfg.list_batch_profiles() == []
+    cfg.BatchProfile(name="Nightly").save()
+    assert cfg.list_batch_profiles() == ["Nightly"]
+    assert cfg.BatchProfile.load("Nightly").name == "Nightly"
+    # It must not leak into the regular profiles, nor vice versa.
+    assert cfg.list_profiles() == []
+    cfg.delete_batch_profile("Nightly")
+    assert cfg.list_batch_profiles() == []
+
+
+def test_batch_run_dialog_save_and_load_profile(app, monkeypatch):
+    """The dialog's Batch profile bar saves to / lists from the batch profiles."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    assert dlg._profile_box.count() == 0
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Weekly", True))
+    dlg._save_profile()
+    assert [dlg._profile_box.itemText(i) for i in range(dlg._profile_box.count())] == [
+        "Weekly"
+    ]
+    assert dlg._profile_box.currentText() == "Weekly"
+    dlg._load_profile()  # resolves without error
+    dlg.close()

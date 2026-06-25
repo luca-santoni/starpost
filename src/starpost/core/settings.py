@@ -13,6 +13,7 @@ from typing import Optional
 import yaml
 
 from starpost.utils.paths import (
+    batch_profiles_dir,
     harden_file,
     packaged_default_settings,
     profiles_dir,
@@ -373,3 +374,38 @@ def list_profiles() -> list[str]:
 def delete_profile(name: str) -> None:
     """Remove a saved profile. No-op if it doesn't exist."""
     (profiles_dir() / f"{name}.yaml").unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
+# Batch profiles (used only by the Run-batch dialog; separate from Profiles)
+# --------------------------------------------------------------------------- #
+@dataclass
+class BatchProfile:
+    """A saved batch-run configuration, kept entirely separate from the
+    report/plot Profiles and stored under its own directory. Currently holds
+    only a name; the batch settings it captures are added later."""
+    name: str
+
+    def path(self) -> Path:
+        return batch_profiles_dir() / f"{self.name}.yaml"
+
+    def save(self) -> None:
+        self.path().write_text(
+            yaml.safe_dump({"name": self.name}, sort_keys=False), encoding="utf-8"
+        )
+
+    @classmethod
+    def load(cls, name: str) -> "BatchProfile":
+        data = yaml.safe_load(
+            (batch_profiles_dir() / f"{name}.yaml").read_text(encoding="utf-8")
+        )
+        return cls(name=data["name"])
+
+
+def list_batch_profiles() -> list[str]:
+    return sorted(p.stem for p in batch_profiles_dir().glob("*.yaml"))
+
+
+def delete_batch_profile(name: str) -> None:
+    """Remove a saved batch profile. No-op if it doesn't exist."""
+    (batch_profiles_dir() / f"{name}.yaml").unlink(missing_ok=True)
