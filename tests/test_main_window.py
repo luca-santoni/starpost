@@ -1,6 +1,4 @@
 """Tests for MainWindow behaviours that don't need a real STAR-CCM+ run."""
-from pathlib import Path
-
 import pytest
 
 import starpost.gui.main_window as mw
@@ -26,31 +24,66 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def _window(monkeypatch):
+def test_run_batch_opens_dialog(app, monkeypatch):
+    """Run batch opens the tabbed batch-run dialog (no folder prompt)."""
+    import starpost.gui.views.batch_run_dialog as brd
+
     win = mw.MainWindow(Settings())
-    # Pretend a file is queued and the exe is configured, so _run_batch reaches
-    # the output-folder dialog.
-    monkeypatch.setattr(win.file_list, "files", lambda: [Path("sim_a.sim")])
-    monkeypatch.setattr(win, "_missing_exe", lambda: False)
-    started = []
-    monkeypatch.setattr(win, "_start_jobs", lambda jobs, out_dir: started.append(out_dir))
-    return win, started
-
-
-def test_run_batch_cancelled_folder_dialog_does_not_run(app, monkeypatch):
-    """Cancelling the output-folder dialog (empty return) must not start a run."""
-    win, started = _window(monkeypatch)
-    monkeypatch.setattr(mw.QFileDialog, "getExistingDirectory", lambda *a, **k: "")
+    opened = []
+    monkeypatch.setattr(
+        brd.BatchRunDialog, "exec", lambda self: opened.append(self) or 0
+    )
     win._run_batch()
-    assert started == []  # nothing was launched
+    assert len(opened) == 1 and isinstance(opened[0], brd.BatchRunDialog)
     win.close()
 
 
-def test_run_batch_chosen_folder_starts_run(app, monkeypatch, tmp_path):
-    """Choosing a folder starts the run with that folder."""
-    win, started = _window(monkeypatch)
-    chosen = str(tmp_path / "out")
-    monkeypatch.setattr(mw.QFileDialog, "getExistingDirectory", lambda *a, **k: chosen)
-    win._run_batch()
-    assert started == [Path(chosen)]
-    win.close()
+def test_batch_run_dialog_sequential_navigation(app):
+    """Five sequential tabs; Continue advances; the button becomes Batch run on
+    the Summary tab and accepts there."""
+    from PySide6.QtWidgets import QDialog
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog()
+    tabs = dlg._tabs
+    assert [tabs.tabText(i) for i in range(tabs.count())] == [
+        "Source", "Reports", "Plots", "Scenes", "Summary"
+    ]
+    assert dlg._next.text() == "Continue"
+    for expected in range(1, tabs.count()):
+        dlg._advance()
+        assert tabs.currentIndex() == expected
+    assert dlg._next.text() == "Batch run"  # on the Summary tab
+    # Back steps to the previous tab; it's disabled only on the first tab.
+    assert dlg._back.isEnabled()
+    dlg._retreat()
+    assert tabs.currentIndex() == tabs.count() - 2 and dlg._next.text() == "Continue"
+    while tabs.currentIndex() > 0:
+        dlg._retreat()
+    assert tabs.currentIndex() == 0 and not dlg._back.isEnabled()
+    # From Summary, "Batch run" accepts.
+    tabs.setCurrentIndex(tabs.count() - 1)
+    dlg._advance()
+    assert dlg.result() == QDialog.DialogCode.Accepted
+    dlg.close()
+
+
+def test_batch_run_dialog_tabs_not_mouse_clickable(app):
+    """Clicking a tab with the mouse does not change the active tab — only the
+    Continue button advances."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog()
+    bar = dlg._tabs.tabBar()
+    target = bar.tabRect(3).center()  # the "Scenes" tab
+    press = QMouseEvent(
+        QEvent.Type.MouseButtonPress, target, Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    bar.mousePressEvent(press)
+    assert dlg._tabs.currentIndex() == 0  # unchanged by the click
+    dlg.close()

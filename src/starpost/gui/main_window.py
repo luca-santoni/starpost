@@ -315,21 +315,11 @@ class MainWindow(QMainWindow):
         return True
 
     def _run_batch(self) -> None:
-        files = self.file_list.files()
-        if not files:
-            QMessageBox.information(self, "StarPost", "Add at least one .sim file.")
-            return
-        if self._missing_exe():
-            return
+        """Open the run-batch dialog (a sequential, tabbed wizard). The dialog's
+        tab contents and the run itself are wired in later."""
+        from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
-        # Open at the configured default folder (if any); an empty return means
-        # the user cancelled, so abort without opening or running anything.
-        out_dir = QFileDialog.getExistingDirectory(
-            self, "Folder for extracted data", self.settings.default_output_dir
-        )
-        if not out_dir:
-            return
-        self._start_jobs([Job(sim_file=f) for f in files], Path(out_dir))
+        BatchRunDialog(self).exec()
 
     def _open_files(self, paths: list[Path]) -> None:
         """Extract one or more .sim files (right-click → Open) and show their
