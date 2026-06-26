@@ -206,6 +206,15 @@ def test_batch_run_dialog_reports_tab(app):
     assert fmts == ["CSV", "TSV", "XLSX", "ODS"]
     assert dlg._report_include_units.isChecked()
     assert not dlg._report_separate_files.isChecked()
+    # Select All / Clear flip every report's checkbox.
+    dlg._set_all_reports(False)
+    assert all(
+        win.item(i).checkState() == Qt.CheckState.Unchecked for i in range(win.count())
+    )
+    dlg._set_all_reports(True)
+    assert all(
+        win.item(i).checkState() == Qt.CheckState.Checked for i in range(win.count())
+    )
     dlg.close()
 
 

@@ -310,10 +310,29 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._report_separate_files)
         options.addStretch(1)
 
+        # Select All / Clear for the reports window, right-aligned beneath it.
+        select_all = QPushButton("Select All")
+        select_all.clicked.connect(lambda: self._set_all_reports(True))
+        clear = QPushButton("Clear")
+        clear.clicked.connect(lambda: self._set_all_reports(False))
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(select_all)
+        buttons.addWidget(clear)
+
+        right = QVBoxLayout()
+        right.addWidget(self._reports_window)
+        right.addLayout(buttons)
+
         row = QHBoxLayout(tab)
         row.addLayout(options, 1)
-        row.addWidget(self._reports_window, 2)
+        row.addLayout(right, 2)
         return tab
+
+    def _set_all_reports(self, checked: bool) -> None:
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for i in range(self._reports_window.count()):
+            self._reports_window.item(i).setCheckState(state)
 
     def _on_summary(self) -> bool:
         return self._tabs.currentIndex() == self._tabs.count() - 1
