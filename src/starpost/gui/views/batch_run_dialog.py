@@ -53,7 +53,7 @@ class _LockedTabBar(UniformTabBar):
         event.ignore()
 
 
-class _SourceList(QListWidget):
+class _CheckableList(QListWidget):
     """A checkable list where clicking anywhere on a row toggles its checkbox
     (not just the small indicator), and clicking empty space clears the
     selection — matching the app's other checklists."""
@@ -91,19 +91,21 @@ class _SourceList(QListWidget):
 
 
 class BatchRunDialog(QDialog):
-    def __init__(self, parent=None, *, data_sets=None) -> None:
+    def __init__(self, parent=None, *, data_sets=None, report_names=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Run batch")
         self.resize(660, 460)
         self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
         self._sim_files: list[Path] = []          # .sim files added via Load File
+        self._report_names = list(report_names or [])  # all reports across the sims
 
         self._tabs = QTabWidget()
         bar = _LockedTabBar()
         bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # no keyboard focus either
         self._tabs.setTabBar(bar)
         self._tabs.addTab(self._build_source_tab(), "Source")
-        for name in _TAB_NAMES[1:]:
+        self._tabs.addTab(self._build_reports_tab(), "Reports")
+        for name in _TAB_NAMES[2:]:
             self._tabs.addTab(QWidget(), name)
         # Keep the button label in step with the active tab, however it changed.
         self._tabs.currentChanged.connect(self._sync_button)
@@ -197,7 +199,7 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._has_similar_format)
         options.addStretch(1)
 
-        self._source_window = _SourceList()
+        self._source_window = _CheckableList()
 
         # Load File / Load Data Set are mutually exclusive (one per source mode);
         # Select All / Clear act on the window's checkboxes.
@@ -280,6 +282,38 @@ class BatchRunDialog(QDialog):
             if name not in self._data_sets:
                 self._data_sets.append(name)
         self._refresh_source_window()
+
+    # --- Reports tab ------------------------------------------------------
+    def _build_reports_tab(self) -> QWidget:
+        """Options on the left (file format, Include units, Separate files); a
+        window on the right listing every report across the sims (checkable, all
+        checked by default)."""
+        tab = QWidget()
+
+        self._reports_window = _CheckableList()
+        for name in self._report_names:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)  # all reports checked by default
+            self._reports_window.addItem(item)
+
+        self._report_format = QComboBox()
+        self._report_format.addItems(["CSV", "TSV", "XLSX", "ODS"])
+        self._report_include_units = QCheckBox("Include units")
+        self._report_include_units.setChecked(True)
+        self._report_separate_files = QCheckBox("Separate files")  # no logic yet
+
+        options = QVBoxLayout()
+        options.addWidget(QLabel("File format"))
+        options.addWidget(self._report_format)
+        options.addWidget(self._report_include_units)
+        options.addWidget(self._report_separate_files)
+        options.addStretch(1)
+
+        row = QHBoxLayout(tab)
+        row.addLayout(options, 1)
+        row.addWidget(self._reports_window, 2)
+        return tab
 
     def _on_summary(self) -> bool:
         return self._tabs.currentIndex() == self._tabs.count() - 1

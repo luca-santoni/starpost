@@ -319,8 +319,10 @@ class MainWindow(QMainWindow):
         is wired in later."""
         from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
-        data_sets = [r.sim_name for r in self.store.all() if r.error is None]
-        BatchRunDialog(self, data_sets=data_sets).exec()
+        results = [r for r in self.store.all() if r.error is None]
+        data_sets = [r.sim_name for r in results]
+        report_names = sorted({n for r in results for n in r.report_names()})
+        BatchRunDialog(self, data_sets=data_sets, report_names=report_names).exec()
 
     def _open_files(self, paths: list[Path]) -> None:
         """Extract one or more .sim files (right-click → Open) and show their

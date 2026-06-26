@@ -187,6 +187,28 @@ def test_batch_run_dialog_source_row_click_toggles(app):
     dlg.close()
 
 
+def test_batch_run_dialog_reports_tab(app):
+    """Reports tab: the window lists every report (all checked); options offer the
+    same file formats as export plus Include units / Separate files."""
+    from PySide6.QtCore import Qt
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(report_names=["Drag", "Lift", "Downforce"])
+    win = dlg._reports_window
+    assert [win.item(i).text() for i in range(win.count())] == [
+        "Drag", "Lift", "Downforce"
+    ]
+    assert all(
+        win.item(i).checkState() == Qt.CheckState.Checked for i in range(win.count())
+    )
+    fmts = [dlg._report_format.itemText(i) for i in range(dlg._report_format.count())]
+    assert fmts == ["CSV", "TSV", "XLSX", "ODS"]
+    assert dlg._report_include_units.isChecked()
+    assert not dlg._report_separate_files.isChecked()
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""
