@@ -152,6 +152,41 @@ def test_batch_run_dialog_source_buttons(app, monkeypatch):
     dlg.close()
 
 
+def test_batch_run_dialog_source_row_click_toggles(app):
+    """Clicking anywhere on a source row (not just the checkbox) toggles it."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(data_sets=["caseA"])
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    win = dlg._source_window
+    item = win.item(0)
+    assert item.checkState() == Qt.CheckState.Checked
+
+    rect = win.visualItemRect(item)
+    # Click in the row's text area (well right of the checkbox indicator).
+    point = QPointF(rect.right() - 4, rect.center().y())
+    press = QMouseEvent(
+        QEvent.Type.MouseButtonPress, point, Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    win.mousePressEvent(press)
+    assert item.checkState() == Qt.CheckState.Unchecked  # toggled by the row click
+
+    # Selecting a row then clicking empty space clears the selection.
+    win.setCurrentRow(0)
+    assert win.selectedItems()
+    empty = QMouseEvent(
+        QEvent.Type.MouseButtonPress, QPointF(5000, 5000), Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    win.mousePressEvent(empty)
+    assert not win.selectedItems() and win.currentItem() is None
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""

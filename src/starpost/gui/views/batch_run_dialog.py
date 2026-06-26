@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QStyle,
+    QStyleOptionViewItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -49,6 +51,43 @@ class _LockedTabBar(UniformTabBar):
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         event.ignore()
+
+
+class _SourceList(QListWidget):
+    """A checkable list where clicking anywhere on a row toggles its checkbox
+    (not just the small indicator), and clicking empty space clears the
+    selection — matching the app's other checklists."""
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        pos = event.position().toPoint()
+        item = self.itemAt(pos)
+        if item is None:
+            # Empty space: drop the selection so no row keeps the accent fill.
+            self.clearSelection()
+            self.setCurrentItem(None)
+        elif (
+            event.button() == Qt.MouseButton.LeftButton
+            and bool(item.flags() & Qt.ItemFlag.ItemIsUserCheckable)
+            and not self._on_check_indicator(item, pos)
+        ):
+            item.setCheckState(
+                Qt.CheckState.Unchecked
+                if item.checkState() == Qt.CheckState.Checked
+                else Qt.CheckState.Checked
+            )
+        super().mousePressEvent(event)
+
+    def _on_check_indicator(self, item, pos) -> bool:
+        """Whether ``pos`` falls on the row's checkbox indicator (the native
+        handler already toggles that, so we must not toggle again there)."""
+        opt = QStyleOptionViewItem()
+        opt.initFrom(self)
+        opt.rect = self.visualItemRect(item)
+        opt.features |= QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+        rect = self.style().subElementRect(
+            QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, self
+        )
+        return rect.contains(pos)
 
 
 class BatchRunDialog(QDialog):
@@ -158,7 +197,7 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._has_similar_format)
         options.addStretch(1)
 
-        self._source_window = QListWidget()
+        self._source_window = _SourceList()
 
         # Load File / Load Data Set are mutually exclusive (one per source mode);
         # Select All / Clear act on the window's checkboxes.
