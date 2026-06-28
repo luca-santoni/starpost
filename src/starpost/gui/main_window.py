@@ -322,7 +322,13 @@ class MainWindow(QMainWindow):
         results = [r for r in self.store.all() if r.error is None]
         data_sets = [r.sim_name for r in results]
         report_names = sorted({n for r in results for n in r.report_names()})
-        BatchRunDialog(self, data_sets=data_sets, report_names=report_names).exec()
+        monitor_groups = self._monitor_groups_union(results)
+        residual_groups = self._residual_group_names(results)
+        BatchRunDialog(
+            self, data_sets=data_sets, report_names=report_names,
+            monitor_groups=monitor_groups, residual_groups=residual_groups,
+            results=results, settings=self.settings,
+        ).exec()
 
     def _open_files(self, paths: list[Path]) -> None:
         """Extract one or more .sim files (right-click → Open) and show their

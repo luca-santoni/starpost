@@ -9,15 +9,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -25,11 +27,15 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionViewItem,
     QTabWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
+from starpost.gui.views.export_dialog import _PreviewWindow
+from starpost.gui.views.plot_view import PlotView
 from starpost.gui.widgets import UniformTabBar
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
@@ -90,14 +96,92 @@ class _CheckableList(QListWidget):
         return rect.contains(pos)
 
 
+class _MonitorTree(QTreeWidget):
+    """A tree of monitor groups (checkable) whose monitors are checkable children.
+    Checking a group reveals its monitors unchecked so the user picks them
+    deliberately — except auto-select groups (residuals), whose monitors are all
+    checked at once. The checked monitors per group drive what is plotted."""
+
+    changed = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setHeaderHidden(True)
+        self.setRootIsDecorated(False)
+        self.setItemsExpandable(False)
+        self.setExpandsOnDoubleClick(False)
+        self.setSelectionMode(self.SelectionMode.NoSelection)
+        # Groups whose monitors are all checked when the group is ticked
+        # (residual plots), so the whole set plots together.
+        self._auto_select_groups: set[str] = set()
+        self.itemChanged.connect(self._on_item_changed)
+
+    def set_auto_select_groups(self, names) -> None:
+        self._auto_select_groups = set(names)
+
+    def set_groups(self, groups: dict[str, list[str]]) -> None:
+        self.blockSignals(True)
+        self.clear()
+        for group in sorted(groups, key=str.lower):
+            gi = QTreeWidgetItem([group])
+            gi.setFlags((gi.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                        & ~Qt.ItemFlag.ItemIsSelectable)
+            gi.setCheckState(0, Qt.CheckState.Unchecked)
+            for monitor in sorted(groups[group], key=str.lower):
+                mi = QTreeWidgetItem([monitor])
+                mi.setFlags((mi.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                            & ~Qt.ItemFlag.ItemIsSelectable)
+                mi.setCheckState(0, Qt.CheckState.Unchecked)
+                gi.addChild(mi)
+            self.addTopLevelItem(gi)
+            gi.setExpanded(False)
+        self.blockSignals(False)
+
+    def _on_item_changed(self, item, _column) -> None:
+        if item.parent() is None:  # a group
+            checked = item.checkState(0) == Qt.CheckState.Checked
+            item.setExpanded(checked)
+            # Residual (auto-select) groups check all their monitors when ticked;
+            # other groups reveal them unchecked. Unticking a group clears them.
+            auto = checked and item.text(0) in self._auto_select_groups
+            state = Qt.CheckState.Checked if auto else Qt.CheckState.Unchecked
+            self.blockSignals(True)
+            for j in range(item.childCount()):
+                item.child(j).setCheckState(0, state)
+            self.blockSignals(False)
+        self.changed.emit()
+
+    def checked_monitors(self) -> dict[str, list[str]]:
+        """The checked monitors per checked group (unchecked groups omitted)."""
+        out: dict[str, list[str]] = {}
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            if g.checkState(0) != Qt.CheckState.Checked:
+                continue
+            out[g.text(0)] = [
+                g.child(j).text(0)
+                for j in range(g.childCount())
+                if g.child(j).checkState(0) == Qt.CheckState.Checked
+            ]
+        return out
+
+
 class BatchRunDialog(QDialog):
-    def __init__(self, parent=None, *, data_sets=None, report_names=None) -> None:
+    def __init__(
+        self, parent=None, *, data_sets=None, report_names=None,
+        monitor_groups=None, residual_groups=None, results=None, settings=None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Run batch")
         self.resize(660, 460)
         self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
         self._sim_files: list[Path] = []          # .sim files added via Load File
         self._report_names = list(report_names or [])  # all reports across the sims
+        self._monitor_groups = dict(monitor_groups or {})  # group -> [monitor names]
+        self._residual_groups = set(residual_groups or [])  # auto-select groups
+        self._results = list(results or [])       # SimResults, for the plot preview
+        self._settings = settings
 
         self._tabs = QTabWidget()
         bar = _LockedTabBar()
@@ -105,10 +189,15 @@ class BatchRunDialog(QDialog):
         self._tabs.setTabBar(bar)
         self._tabs.addTab(self._build_source_tab(), "Source")
         self._tabs.addTab(self._build_reports_tab(), "Reports")
-        for name in _TAB_NAMES[2:]:
+        self._plots_tab = self._build_plots_tab()
+        self._tabs.addTab(self._plots_tab, "Plots")
+        for name in _TAB_NAMES[3:]:
             self._tabs.addTab(QWidget(), name)
         # Keep the button label in step with the active tab, however it changed.
         self._tabs.currentChanged.connect(self._sync_button)
+        # Open the plot preview window beside the dialog while the Plots tab shows.
+        self._tabs.currentChanged.connect(self._update_preview)
+        self.finished.connect(lambda _r: self._preview_window.close())
 
         # Bottom-left Back button (disabled on the first tab) and bottom-right
         # Continue button (becomes "Batch run" on the last tab).
@@ -333,6 +422,130 @@ class BatchRunDialog(QDialog):
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
         for i in range(self._reports_window.count()):
             self._reports_window.item(i).setCheckState(state)
+
+    # --- Plots tab --------------------------------------------------------
+    def _build_plots_tab(self) -> QWidget:
+        """Options on the left; a monitor tree on the right. A separate plot
+        preview window (built here) opens beside the dialog while this tab shows
+        (see _update_preview), mirroring the Export dialog's plot preview."""
+        tab = QWidget()
+
+        self._monitor_tree = _MonitorTree()
+        self._monitor_tree.set_auto_select_groups(self._residual_groups)
+        self._monitor_tree.set_groups(self._monitor_groups)
+        self._monitor_tree.changed.connect(self._render_preview)
+
+        options = self._build_plot_options()
+
+        row = QHBoxLayout(tab)
+        row.addLayout(options, 1)
+        row.addWidget(self._monitor_tree, 2)
+
+        # The preview lives in its own top-level window, parented to the dialog so
+        # it's owned/closed with it but stays beside (not over) the dialog.
+        self._preview = PlotView()
+        self._configure_preview()
+        self._preview_window = _PreviewWindow(self)
+        self._preview_window.setWindowTitle("Plot preview")
+        self._preview_window.resize(720, 480)
+        pv = QVBoxLayout(self._preview_window)
+        pv.setContentsMargins(0, 0, 0, 0)
+        pv.addWidget(self._preview)
+        return tab
+
+    def _build_plot_options(self) -> QVBoxLayout:
+        """Plot options (a subset of the Export dialog's), live-applied to the
+        preview: title, axis labels, theme, grid, image format."""
+        self._plot_title = QLineEdit()
+        self._plot_title.textChanged.connect(self._preview_set_title)
+        self._plot_xlabel = QLineEdit()
+        self._plot_xlabel.textChanged.connect(self._preview_set_xlabel)
+        self._plot_ylabel = QLineEdit()
+        self._plot_ylabel.textChanged.connect(self._preview_set_ylabel)
+        self._plot_theme = QComboBox()
+        self._plot_theme.addItem("Light", "light")
+        self._plot_theme.addItem("Dark", "dark")
+        self._plot_theme.currentIndexChanged.connect(self._preview_set_theme)
+        self._plot_grid = QCheckBox("Show grid")
+        self._plot_grid.setChecked(True)
+        self._plot_grid.toggled.connect(self._preview_set_grid)
+        self._plot_format = QComboBox()
+        self._plot_format.addItems(["PNG", "JPG", "TIFF", "PDF"])
+
+        form = QFormLayout()
+        form.addRow("Plot title", self._plot_title)
+        form.addRow("X axis label", self._plot_xlabel)
+        form.addRow("Y axis label", self._plot_ylabel)
+        form.addRow("Theme", self._plot_theme)
+        form.addRow(self._plot_grid)
+        form.addRow("Format", self._plot_format)
+
+        col = QVBoxLayout()
+        col.addLayout(form)
+        col.addStretch(1)
+        return col
+
+    def _configure_preview(self) -> None:
+        """Match the preview's filtering/hover/theme to the app settings so it
+        looks like the main plot view."""
+        self._preview.set_category_controls_visible(False)
+        s = self._settings
+        if s is None:
+            return
+        self._preview.set_filter(s.hide_empty_monitors, s.monitor_zero_threshold)
+        self._preview.set_hover_options(
+            s.hover_show_monitor_name, s.hover_x_decimals, s.hover_y_decimals
+        )
+        self._preview.set_region_stats(s.region_stats)
+        self._preview.apply_theme(s.export_plot_theme)
+        idx = self._plot_theme.findData(s.export_plot_theme)
+        if idx >= 0:
+            self._plot_theme.setCurrentIndex(idx)
+
+    def _update_preview(self, *_args) -> None:
+        """Show the preview window beside the dialog while the Plots tab is in
+        front; hide it otherwise."""
+        if self._tabs.currentWidget() is self._plots_tab:
+            frame = self.frameGeometry()
+            self._preview_window.move(frame.right() + 8, frame.top())
+            self._preview_window.show()
+            self._preview_window.raise_()
+            self._render_preview()
+        else:
+            self._preview_window.hide()
+
+    def _render_preview(self) -> None:
+        """Draw the checked monitors into the preview for a SINGLE data set (the
+        first loaded sim, as a representative). The batch run will later generate
+        the same plot per data set; this preview is only for choosing the plot's
+        appearance (title, colours, legend, …)."""
+        selection = self._monitor_tree.checked_monitors()
+        groups = set(selection)
+        if not self._results or not groups:
+            self._preview.clear()
+            return
+        plots = [p for p in self._results[0].plots if p.name in groups]
+        if not plots:
+            self._preview.clear()
+            return
+        self._preview.show_plots(plots)
+        self._preview.set_monitor_selection(selection)
+
+    # Preview option handlers.
+    def _preview_set_title(self, text) -> None:
+        self._preview.set_title_override(text)
+
+    def _preview_set_xlabel(self, text) -> None:
+        self._preview.set_x_label_override(text)
+
+    def _preview_set_ylabel(self, text) -> None:
+        self._preview.set_y_label_override(text)
+
+    def _preview_set_theme(self, *_a) -> None:
+        self._preview.apply_theme(self._plot_theme.currentData())
+
+    def _preview_set_grid(self, checked) -> None:
+        self._preview.set_grid_visible(checked)
 
     def _on_summary(self) -> bool:
         return self._tabs.currentIndex() == self._tabs.count() - 1

@@ -218,6 +218,51 @@ def test_batch_run_dialog_reports_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_plots_tab(app):
+    """Plots tab: a monitor tree (groups -> monitors); checking a group checks its
+    monitors. The preview window opens only while the Plots tab is in front."""
+    from PySide6.QtCore import Qt
+
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(monitor_groups={"Residuals": ["Continuity", "X-momentum"]})
+    tree = dlg._monitor_tree
+    root = tree.invisibleRootItem()
+    assert [root.child(i).text(0) for i in range(root.childCount())] == ["Residuals"]
+    group = root.child(0)
+    # Checking the group reveals its monitors but leaves them unchecked.
+    group.setCheckState(0, Qt.CheckState.Checked)
+    assert group.isExpanded()
+    assert dlg._monitor_tree.checked_monitors() == {"Residuals": []}
+    # The user then picks individual monitors.
+    group.child(0).setCheckState(0, Qt.CheckState.Checked)
+    assert dlg._monitor_tree.checked_monitors() == {"Residuals": ["Continuity"]}
+
+    # A residual (auto-select) group instead checks all its monitors at once.
+    dlg2 = BatchRunDialog(
+        monitor_groups={"Residuals": ["Continuity", "X-momentum"]},
+        residual_groups={"Residuals"},
+    )
+    dlg2._monitor_tree.invisibleRootItem().child(0).setCheckState(
+        0, Qt.CheckState.Checked
+    )
+    assert dlg2._monitor_tree.checked_monitors() == {
+        "Residuals": ["Continuity", "X-momentum"]
+    }
+    dlg2.close()
+
+    # Preview window is hidden on the Source tab, shown on the Plots tab.
+    plots_idx = next(
+        i for i in range(dlg._tabs.count()) if dlg._tabs.widget(i) is dlg._plots_tab
+    )
+    dlg._tabs.setCurrentIndex(0)
+    dlg._update_preview()
+    assert dlg._preview_window.isHidden()
+    dlg._tabs.setCurrentIndex(plots_idx)
+    assert not dlg._preview_window.isHidden()
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""
