@@ -171,6 +171,20 @@ def test_batch_run_dialog_no_source_warns(app, monkeypatch):
     dlg.close()
 
 
+def test_batch_run_dialog_similar_format_disabled_in_data_mode(app):
+    """'Has similar format' applies only to .sim sources: enabled in '.sim files'
+    mode, grayed out in 'Loaded data sets' mode."""
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(data_sets=["caseA"])
+    assert dlg._has_similar_format.isEnabled()  # .sim mode (default)
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    assert not dlg._has_similar_format.isEnabled()  # grayed in data mode
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("sim"))
+    assert dlg._has_similar_format.isEnabled()  # re-enabled back in .sim mode
+    dlg.close()
+
+
 def test_batch_run_dialog_source_row_click_toggles(app):
     """Clicking anywhere on a source row (not just the checkbox) toggles it."""
     from PySide6.QtCore import QEvent, QPointF, Qt

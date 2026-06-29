@@ -295,7 +295,14 @@ class BatchRunDialog(QDialog):
         self._source_input.addItem(".sim files", "sim")
         self._source_input.addItem("Loaded data sets", "data")
         self._source_input.currentIndexChanged.connect(self._refresh_source_window)
-        self._has_similar_format = QCheckBox("Has similar format")  # no logic yet
+        # When checked, the batch is set up from a single representative .sim file
+        # (reports/monitors/scenes/views come from it, since the rest share its
+        # format). Only meaningful for .sim sources, so it's disabled in data mode.
+        self._has_similar_format = QCheckBox("Has similar format")
+        self._has_similar_format.setToolTip(
+            "Set the batch up from the first .sim file; the other files share its "
+            "reports, monitors, scenes and saved views."
+        )
 
         options = QVBoxLayout()
         options.addWidget(self._header("Options"))
@@ -345,6 +352,8 @@ class BatchRunDialog(QDialog):
         mode = self._source_input.currentData()
         self._load_file_btn.setVisible(mode == "sim")
         self._load_dataset_btn.setVisible(mode == "data")
+        # "Has similar format" only applies to .sim sources; gray it out otherwise.
+        self._has_similar_format.setEnabled(mode == "sim")
 
         prev = {
             self._source_window.item(i).text(): self._source_window.item(i).checkState()
