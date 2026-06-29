@@ -7,10 +7,12 @@ run wiring are filled in later — this is the navigation scaffold only.
 """
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QStyle,
     QStyleOptionViewItem,
@@ -34,8 +37,10 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
+from starpost.core.starccm_runner import StarRunner
+from starpost.data.models import PlotKind
 from starpost.gui.views.export_dialog import _PreviewWindow
-from starpost.gui.views.plot_view import PlotView, _display_name
+from starpost.gui.views.plot_view import PlotView, _display_name, _series_is_empty
 from starpost.gui.widgets import UniformTabBar
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
@@ -185,6 +190,9 @@ class BatchRunDialog(QDialog):
         self._residual_groups = set(residual_groups or [])  # auto-select groups
         self._results = list(results or [])       # SimResults, for the plot preview
         self._settings = settings
+        # The .sim already extracted to set up the tabs (via "Has similar format"),
+        # so re-pressing Continue doesn't re-check out a license for the same file.
+        self._setup_sim_extracted: Path | None = None
 
         self._tabs = QTabWidget()
         bar = _LockedTabBar()
@@ -380,6 +388,107 @@ class BatchRunDialog(QDialog):
             self._source_window.item(i).checkState() == Qt.CheckState.Checked
             for i in range(self._source_window.count())
         )
+
+    def _checked_sim_files(self) -> list[Path]:
+        """The loaded .sim files whose source-window rows are checked, in order."""
+        checked = {
+            self._source_window.item(i).text()
+            for i in range(self._source_window.count())
+            if self._source_window.item(i).checkState() == Qt.CheckState.Checked
+        }
+        return [p for p in self._sim_files if p.name in checked]
+
+    def _extract_setup_sim(self) -> bool:
+        """Extract the first selected .sim (blocking, behind a busy dialog) and
+        repopulate the Reports/Plots/Scenes tabs from it — the "Has similar
+        format" setup step. Returns True to advance, False to stay on Source.
+
+        Skips re-extraction when the first selected file is the one already
+        extracted, so going Back and Continue again doesn't burn a license."""
+        sims = self._checked_sim_files()
+        if not sims:
+            return True  # nothing loaded to set up from; let the user continue
+        sim = sims[0]
+        if sim == self._setup_sim_extracted:
+            return True  # already set up from this file
+        if self._settings is None or not self._settings.starccm_path:
+            QMessageBox.warning(
+                self, "Run batch",
+                "Set the STAR-CCM+ executable path in Settings first.",
+            )
+            return False
+
+        busy = QProgressDialog(
+            f"Extracting “{sim.name}” to set up the batch…", "", 0, 0, self
+        )
+        busy.setWindowTitle("Run batch")
+        busy.setCancelButton(None)  # no cancel: one STAR-CCM+ run, runs to the end
+        busy.setWindowModality(Qt.WindowModality.WindowModal)
+        busy.setMinimumDuration(0)
+        busy.show()
+        QApplication.processEvents()
+        try:
+            with tempfile.TemporaryDirectory(prefix="starpost_setup_") as out:
+                result = StarRunner(self._settings).extract(sim, Path(out))
+        finally:
+            busy.close()
+
+        if result.error is not None:
+            QMessageBox.warning(
+                self, "Run batch",
+                f"Couldn’t extract “{sim.name}”:\n{result.error}",
+            )
+            return False
+        self._apply_setup_result(result)
+        self._setup_sim_extracted = sim
+        return True
+
+    def _apply_setup_result(self, result) -> None:
+        """Repopulate the Reports and Plots tabs (and the preview's source result)
+        from a freshly extracted representative .sim."""
+        self._results = [result]
+
+        # Reports tab: rebuild the checklist (all reports checked by default).
+        self._report_names = sorted(result.report_names())
+        self._reports_window.clear()
+        for name in self._report_names:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
+            self._reports_window.addItem(item)
+
+        # Plots tab: rebuild the monitor tree from this sim's plots.
+        self._monitor_groups = self._monitor_groups_union([result])
+        self._residual_groups = self._residual_group_names([result])
+        self._monitor_tree.set_auto_select_groups(self._residual_groups)
+        self._monitor_tree.set_groups(self._monitor_groups)
+        # (The Scenes tab will consume result.scenes once it's built.)
+
+    def _monitor_groups_union(self, results) -> dict[str, list[str]]:
+        """``{plot group: [monitor series, ...]}`` across ``results``, dropping
+        empty monitors when "Hide empty monitors" is on — mirrors the main
+        window's helper so the tree matches the rest of the app."""
+        hide = self._settings.hide_empty_monitors if self._settings else True
+        threshold = (
+            self._settings.monitor_zero_threshold if self._settings else 1e-5
+        )
+        groups: dict[str, list[str]] = {}
+        for r in results:
+            for p in r.plots:
+                names = groups.setdefault(p.name, [])
+                for s in p.series:
+                    if hide and _series_is_empty(s, threshold):
+                        continue
+                    if s.name not in names:
+                        names.append(s.name)
+        return groups
+
+    @staticmethod
+    def _residual_group_names(results) -> set[str]:
+        """Plot groups classified as residuals (plotted all-at-once when ticked)."""
+        return {
+            p.name for r in results for p in r.plots if p.kind == PlotKind.RESIDUAL
+        }
 
     def _load_files(self) -> None:
         """Load File: add .sim files to the source list (visible in '.sim files')."""
@@ -635,13 +744,19 @@ class BatchRunDialog(QDialog):
     def _advance(self) -> None:
         """Continue moves to the next tab; on Summary, "Batch run" finishes (the
         run itself is wired in later). Leaving the Source tab requires at least
-        one selected source."""
-        if self._tabs.currentIndex() == 0 and not self._has_checked_source():
-            QMessageBox.warning(
-                self, "Run batch",
-                "No data selected. Select at least one source to continue.",
-            )
-            return
+        one selected source, and — with "Has similar format" — extracts the first
+        selected .sim to set up the downstream tabs."""
+        if self._tabs.currentIndex() == 0:
+            if not self._has_checked_source():
+                QMessageBox.warning(
+                    self, "Run batch",
+                    "No data selected. Select at least one source to continue.",
+                )
+                return
+            sim_mode = self._source_input.currentData() == "sim"
+            if sim_mode and self._has_similar_format.isChecked():
+                if not self._extract_setup_sim():
+                    return  # extraction failed or was unavailable; stay put
         if self._on_summary():
             self.accept()
         else:

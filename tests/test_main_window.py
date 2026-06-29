@@ -185,6 +185,59 @@ def test_batch_run_dialog_similar_format_disabled_in_data_mode(app):
     dlg.close()
 
 
+def test_batch_run_dialog_similar_format_extracts_first(app, monkeypatch):
+    """With 'Has similar format' checked, Continue extracts the first selected
+    .sim and repopulates the Reports and Plots tabs from its result."""
+    from pathlib import Path
+
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.core.settings import Settings
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, Report, SimResult
+
+    dlg = brd.BatchRunDialog(settings=Settings(starccm_path="/usr/bin/starccm+"))
+    monkeypatch.setattr(
+        brd.QFileDialog, "getOpenFileNames",
+        lambda *a, **k: (["/cases/a.sim", "/cases/b.sim"], ""),
+    )
+    dlg._load_files()
+    dlg._has_similar_format.setChecked(True)
+
+    result = SimResult(
+        sim_path="/cases/a.sim",
+        reports=[Report("Drag", 1.2), Report("Lift", 3.4)],
+        plots=[MonitorPlot(
+            "Residuals", [PlotSeries("Continuity", [1, 2], [0.1, 0.01])],
+            kind=PlotKind.RESIDUAL,
+        )],
+    )
+    extracted = []
+    monkeypatch.setattr(
+        brd.StarRunner, "extract",
+        lambda self, sim, out, *a, **k: extracted.append(sim) or result,
+    )
+    dlg._advance()
+
+    # The first selected .sim was extracted, the tabs repopulated, and the dialog
+    # advanced off Source. Both files stay in the source list (no trimming).
+    assert extracted == [Path("/cases/a.sim")]
+    assert [p.name for p in dlg._sim_files] == ["a.sim", "b.sim"]
+    assert dlg._tabs.currentIndex() == 1
+    reports = [dlg._reports_window.item(i).text()
+               for i in range(dlg._reports_window.count())]
+    assert reports == ["Drag", "Lift"]
+    groups = [dlg._monitor_tree.topLevelItem(i).text(0)
+              for i in range(dlg._monitor_tree.topLevelItemCount())]
+    assert groups == ["Residuals"]
+
+    # Going Back to Source and Continue again doesn't re-extract the same file.
+    dlg._retreat()
+    dlg._advance()
+    assert extracted == [Path("/cases/a.sim")]  # still just the one run
+    dlg.close()
+
+
 def test_batch_run_dialog_source_row_click_toggles(app):
     """Clicking anywhere on a source row (not just the checkbox) toggles it."""
     from PySide6.QtCore import QEvent, QPointF, Qt
