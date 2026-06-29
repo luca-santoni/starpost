@@ -45,7 +45,11 @@ def test_batch_run_dialog_sequential_navigation(app):
 
     from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
-    dlg = BatchRunDialog()
+    # Leaving the Source tab requires a selected source; a loaded data set
+    # provides one. ("Has similar format" is disabled in data mode, so advancing
+    # triggers no extraction.)
+    dlg = BatchRunDialog(data_sets=["case"])
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
     tabs = dlg._tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
         "Source", "Reports", "Plots", "Scenes", "Summary"
@@ -149,6 +153,21 @@ def test_batch_run_dialog_source_buttons(app, monkeypatch):
     assert all(
         win.item(i).checkState() == Qt.CheckState.Checked for i in range(win.count())
     )
+    dlg.close()
+
+
+def test_batch_run_dialog_no_source_warns(app, monkeypatch):
+    """Continue on the Source tab with nothing selected warns and stays put."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog(data_sets=["caseA"])
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    dlg._set_all_source(False)  # uncheck the only data set
+
+    warned = []
+    monkeypatch.setattr(brd.QMessageBox, "warning", lambda *a, **k: warned.append(a))
+    dlg._advance()
+    assert warned and dlg._tabs.currentIndex() == 0  # warned, didn't advance
     dlg.close()
 
 

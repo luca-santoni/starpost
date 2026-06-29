@@ -365,6 +365,13 @@ class BatchRunDialog(QDialog):
         for i in range(self._source_window.count()):
             self._source_window.item(i).setCheckState(state)
 
+    def _has_checked_source(self) -> bool:
+        """Whether at least one source entry is checked in the current window."""
+        return any(
+            self._source_window.item(i).checkState() == Qt.CheckState.Checked
+            for i in range(self._source_window.count())
+        )
+
     def _load_files(self) -> None:
         """Load File: add .sim files to the source list (visible in '.sim files')."""
         paths, _ = QFileDialog.getOpenFileNames(
@@ -618,7 +625,14 @@ class BatchRunDialog(QDialog):
 
     def _advance(self) -> None:
         """Continue moves to the next tab; on Summary, "Batch run" finishes (the
-        run itself is wired in later)."""
+        run itself is wired in later). Leaving the Source tab requires at least
+        one selected source."""
+        if self._tabs.currentIndex() == 0 and not self._has_checked_source():
+            QMessageBox.warning(
+                self, "Run batch",
+                "No data selected. Select at least one source to continue.",
+            )
+            return
         if self._on_summary():
             self.accept()
         else:
