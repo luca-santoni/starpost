@@ -272,6 +272,13 @@ class BatchRunDialog(QDialog):
         self._refresh_profiles()
         self._profile_box.setCurrentText(name)
 
+    @staticmethod
+    def _header(text: str) -> QLabel:
+        """A bold section header label."""
+        label = QLabel(text)
+        label.setStyleSheet("font-weight: bold;")
+        return label
+
     # --- Source tab -------------------------------------------------------
     def _build_source_tab(self) -> QWidget:
         """Options on the left (the source-input dropdown + a 'Has similar format'
@@ -286,6 +293,7 @@ class BatchRunDialog(QDialog):
         self._has_similar_format = QCheckBox("Has similar format")  # no logic yet
 
         options = QVBoxLayout()
+        options.addWidget(self._header("Options"))
         options.addWidget(QLabel("Source input"))
         options.addWidget(self._source_input)
         options.addWidget(self._has_similar_format)
@@ -314,6 +322,7 @@ class BatchRunDialog(QDialog):
         buttons.addWidget(clear)
 
         right = QVBoxLayout()
+        right.addWidget(self._header("Sources"))
         right.addWidget(self._source_window)
         right.addLayout(buttons)
 
@@ -396,6 +405,7 @@ class BatchRunDialog(QDialog):
         self._report_separate_files = QCheckBox("Separate files")  # no logic yet
 
         options = QVBoxLayout()
+        options.addWidget(self._header("Options"))
         options.addWidget(QLabel("File format"))
         options.addWidget(self._report_format)
         options.addWidget(self._report_include_units)
@@ -413,6 +423,7 @@ class BatchRunDialog(QDialog):
         buttons.addWidget(clear)
 
         right = QVBoxLayout()
+        right.addWidget(self._header("Reports"))
         right.addWidget(self._reports_window)
         right.addLayout(buttons)
 
@@ -440,9 +451,13 @@ class BatchRunDialog(QDialog):
 
         options = self._build_plot_options()
 
+        monitors = QVBoxLayout()
+        monitors.addWidget(self._header("Monitors"))
+        monitors.addWidget(self._monitor_tree)
+
         row = QHBoxLayout(tab)
         row.addLayout(options, 1)
-        row.addWidget(self._monitor_tree, 2)
+        row.addLayout(monitors, 2)
 
         # The preview lives in its own top-level window, parented to the dialog so
         # it's owned/closed with it but stays beside (not over) the dialog.
@@ -484,6 +499,7 @@ class BatchRunDialog(QDialog):
         form.addRow("Format", self._plot_format)
 
         col = QVBoxLayout()
+        col.addWidget(self._header("Options"))
         col.addLayout(form)
         col.addStretch(1)
         return col
