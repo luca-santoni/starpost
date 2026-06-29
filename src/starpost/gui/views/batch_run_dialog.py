@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.gui.views.export_dialog import _PreviewWindow
-from starpost.gui.views.plot_view import PlotView
+from starpost.gui.views.plot_view import PlotView, _display_name
 from starpost.gui.widgets import UniformTabBar
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
@@ -128,7 +128,10 @@ class _MonitorTree(QTreeWidget):
                         & ~Qt.ItemFlag.ItemIsSelectable)
             gi.setCheckState(0, Qt.CheckState.Unchecked)
             for monitor in sorted(groups[group], key=str.lower):
-                mi = QTreeWidgetItem([monitor])
+                # Show the collapsed label (STAR-CCM+ doubles single-monitor
+                # series names), but keep the raw series name as the lookup key.
+                mi = QTreeWidgetItem([_display_name(monitor)])
+                mi.setData(0, Qt.ItemDataRole.UserRole, monitor)
                 mi.setFlags((mi.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                             & ~Qt.ItemFlag.ItemIsSelectable)
                 mi.setCheckState(0, Qt.CheckState.Unchecked)
@@ -160,7 +163,7 @@ class _MonitorTree(QTreeWidget):
             if g.checkState(0) != Qt.CheckState.Checked:
                 continue
             out[g.text(0)] = [
-                g.child(j).text(0)
+                g.child(j).data(0, Qt.ItemDataRole.UserRole)
                 for j in range(g.childCount())
                 if g.child(j).checkState(0) == Qt.CheckState.Checked
             ]
