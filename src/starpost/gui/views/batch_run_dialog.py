@@ -177,7 +177,7 @@ class BatchRunDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Run batch")
-        self.resize(660, 460)
+        self.resize(820, 460)  # room for the Plots tab's three columns
         self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
         self._sim_files: list[Path] = []          # .sim files added via Load File
         self._report_names = list(report_names or [])  # all reports across the sims
@@ -206,11 +206,16 @@ class BatchRunDialog(QDialog):
         # Continue button (becomes "Batch run" on the last tab).
         self._back = QPushButton("Back")
         self._back.clicked.connect(self._retreat)
+        # "Add Plot" saves the current plot setup; only shown on the Plots tab.
+        self._add_plot = QPushButton("Add Plot")
+        self._add_plot.setVisible(False)
+        self._add_plot.clicked.connect(self._on_add_plot)
         self._next = QPushButton()
         self._next.clicked.connect(self._advance)
         row = QHBoxLayout()
         row.addWidget(self._back)
         row.addStretch(1)
+        row.addWidget(self._add_plot)
         row.addWidget(self._next)
 
         layout = QVBoxLayout(self)
@@ -455,9 +460,17 @@ class BatchRunDialog(QDialog):
         monitors.addWidget(self._header("Monitors"))
         monitors.addWidget(self._monitor_tree)
 
+        # Saved Plots: plots the user has captured with "Add Plot" (each item
+        # holds its plot characteristics in its data).
+        self._saved_plots = QListWidget()
+        saved = QVBoxLayout()
+        saved.addWidget(self._header("Saved Plots"))
+        saved.addWidget(self._saved_plots)
+
         row = QHBoxLayout(tab)
         row.addLayout(options, 1)
         row.addLayout(monitors, 2)
+        row.addLayout(saved, 2)
 
         # The preview lives in its own top-level window, parented to the dialog so
         # it's owned/closed with it but stays beside (not over) the dialog.
@@ -522,9 +535,11 @@ class BatchRunDialog(QDialog):
             self._plot_theme.setCurrentIndex(idx)
 
     def _update_preview(self, *_args) -> None:
-        """Show the preview window beside the dialog while the Plots tab is in
-        front; hide it otherwise."""
-        if self._tabs.currentWidget() is self._plots_tab:
+        """Show the preview window (and the Add Plot button) while the Plots tab
+        is in front; hide them otherwise."""
+        on_plots = self._tabs.currentWidget() is self._plots_tab
+        self._add_plot.setVisible(on_plots)
+        if on_plots:
             frame = self.frameGeometry()
             self._preview_window.move(frame.right() + 8, frame.top())
             self._preview_window.show()
@@ -532,6 +547,33 @@ class BatchRunDialog(QDialog):
             self._render_preview()
         else:
             self._preview_window.hide()
+
+    def _capture_plot(self) -> dict:
+        """Snapshot the current plot characteristics for a saved plot. The batch
+        run will later regenerate this plot per data set; for now it's stored on
+        the saved-plot list item (the run wiring comes later)."""
+        series_colors, pair_colors = self._preview.color_overrides()
+        return {
+            "title": self._plot_title.text(),
+            "x_label": self._plot_xlabel.text(),
+            "y_label": self._plot_ylabel.text(),
+            "monitors": self._monitor_tree.checked_monitors(),
+            "theme": self._plot_theme.currentData(),
+            "grid": self._plot_grid.isChecked(),
+            "format": self._plot_format.currentText(),
+            "series_colors": dict(series_colors),
+            "pair_colors": dict(pair_colors),
+        }
+
+    def _on_add_plot(self) -> None:
+        """Prompt for a name and add the current plot setup to Saved Plots."""
+        name, ok = QInputDialog.getText(self, "Add plot", "Saved plot name:")
+        name = name.strip() if ok else ""
+        if not name:
+            return
+        item = QListWidgetItem(name)
+        item.setData(Qt.ItemDataRole.UserRole, self._capture_plot())
+        self._saved_plots.addItem(item)
 
     def _render_preview(self) -> None:
         """Draw the checked monitors into the preview for a SINGLE data set (the

@@ -263,6 +263,41 @@ def test_batch_run_dialog_plots_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_add_plot(app, monkeypatch):
+    """Add Plot (shown only on the Plots tab) saves the plot characteristics under
+    a prompted name into the Saved Plots list."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog(monitor_groups={"Residuals": ["Continuity"]})
+    plots_idx = next(
+        i for i in range(dlg._tabs.count()) if dlg._tabs.widget(i) is dlg._plots_tab
+    )
+    # Add Plot is hidden off the Plots tab, shown on it.
+    dlg._tabs.setCurrentIndex(0)
+    dlg._update_preview()
+    assert dlg._add_plot.isHidden()
+    dlg._tabs.setCurrentIndex(plots_idx)
+    assert not dlg._add_plot.isHidden()
+
+    # Pick a monitor and a title, then Add Plot.
+    g = dlg._monitor_tree.invisibleRootItem().child(0)
+    g.setCheckState(0, Qt.CheckState.Checked)
+    g.child(0).setCheckState(0, Qt.CheckState.Checked)
+    dlg._plot_title.setText("My Plot")
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Forces", True))
+    dlg._on_add_plot()
+
+    assert dlg._saved_plots.count() == 1
+    item = dlg._saved_plots.item(0)
+    assert item.text() == "Forces"
+    chars = item.data(Qt.ItemDataRole.UserRole)
+    assert chars["title"] == "My Plot"
+    assert chars["monitors"] == {"Residuals": ["Continuity"]}
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""
