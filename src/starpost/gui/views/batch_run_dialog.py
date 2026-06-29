@@ -467,10 +467,11 @@ class BatchRunDialog(QDialog):
         saved.addWidget(self._header("Saved Plots"))
         saved.addWidget(self._saved_plots)
 
+        # Widths (stretch): wider Options, Monitors unchanged, Saved Plots halved.
         row = QHBoxLayout(tab)
-        row.addLayout(options, 1)
+        row.addLayout(options, 2)
         row.addLayout(monitors, 2)
-        row.addLayout(saved, 2)
+        row.addLayout(saved, 1)
 
         # The preview lives in its own top-level window, parented to the dialog so
         # it's owned/closed with it but stays beside (not over) the dialog.
