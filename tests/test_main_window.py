@@ -450,6 +450,58 @@ def test_batch_run_dialog_plot_option_parity(app):
     dlg.close()
 
 
+def test_batch_run_dialog_scenes_tab(app):
+    """Scenes tab: options on the left, a scene tree (checking a scene reveals its
+    scalar/vector displayers) in the middle, and a saved-views checklist on the
+    right — all populated from the loaded sim."""
+    from PySide6.QtCore import Qt
+
+    from starpost.core.settings import Settings
+    from starpost.data.models import Displayer, Scene, SimResult
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        scenes=[
+            Scene("Pressure", [Displayer("Static Pressure", "scalar"),
+                               Displayer("Velocity", "vector")]),
+            Scene("Mesh", [Displayer("Mesh", "scalar")]),
+        ],
+        views=["Top", "Iso"],
+    )
+    dlg = BatchRunDialog(results=[result], settings=Settings())
+
+    # Scene tree lists the scenes; checking one reveals its displayers as
+    # checkable children, and the checked displayers are reported.
+    root = dlg._scene_tree.invisibleRootItem()
+    assert {root.child(i).text(0) for i in range(root.childCount())} == {
+        "Pressure", "Mesh"
+    }
+    pressure = next(
+        root.child(i) for i in range(root.childCount())
+        if root.child(i).text(0) == "Pressure"
+    )
+    pressure.setCheckState(0, Qt.CheckState.Checked)
+    assert pressure.isExpanded()
+    assert [pressure.child(j).text(0) for j in range(pressure.childCount())] == [
+        "Static Pressure", "Velocity"
+    ]
+    pressure.child(0).setCheckState(0, Qt.CheckState.Checked)
+    assert dlg._scene_tree.checked_displayers() == {"Pressure": ["Static Pressure"]}
+
+    # Saved views: checkable, opt-in (start unchecked).
+    vw = dlg._views_window
+    assert {vw.item(i).text() for i in range(vw.count())} == {"Top", "Iso"}
+    assert all(
+        vw.item(i).checkState() == Qt.CheckState.Unchecked for i in range(vw.count())
+    )
+
+    # Options exist and are seeded from settings.
+    assert dlg._scene_resolution.currentData() == "1080p"
+    assert dlg._scene_format.currentData() == "jpg"
+    dlg.close()
+
+
 def test_batch_run_dialog_add_plot(app, monkeypatch):
     """Add Plot (shown only on the Plots tab) saves the plot characteristics under
     a prompted name into the Saved Plots list."""

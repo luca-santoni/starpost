@@ -76,6 +76,7 @@ from starpost.gui.views.plot_view import (
     _display_name,
     _series_is_empty,
 )
+from starpost.gui.views.selection_panel import _SceneTree
 from starpost.gui.widgets import UniformTabBar
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
@@ -408,6 +409,9 @@ class BatchRunDialog(QDialog):
         self._residual_groups = set(residual_groups or [])  # auto-select groups
         self._results = list(results or [])       # SimResults, for the plot preview
         self._settings = settings
+        # Scenes tab data, derived from the loaded results (union across sims).
+        self._scene_groups = self._scene_groups_union(self._results)
+        self._saved_views = sorted({v for r in self._results for v in r.views})
         # The .sim already extracted to set up the tabs (via "Has similar format"),
         # so re-pressing Continue doesn't re-check out a license for the same file.
         self._setup_sim_extracted: Path | None = None
@@ -420,8 +424,8 @@ class BatchRunDialog(QDialog):
         self._tabs.addTab(self._build_reports_tab(), "Reports")
         self._plots_tab = self._build_plots_tab()
         self._tabs.addTab(self._plots_tab, "Plots")
-        for name in _TAB_NAMES[3:]:
-            self._tabs.addTab(QWidget(), name)
+        self._tabs.addTab(self._build_scenes_tab(), "Scenes")
+        self._tabs.addTab(QWidget(), "Summary")  # filled in later
         # Keep the button label in step with the active tab, however it changed.
         self._tabs.currentChanged.connect(self._sync_button)
         # Open the plot preview window beside the dialog while the Plots tab shows.
@@ -712,7 +716,12 @@ class BatchRunDialog(QDialog):
         self._residual_groups = self._residual_group_names([result])
         self._monitor_tree.set_auto_select_groups(self._residual_groups)
         self._monitor_tree.set_groups(self._monitor_groups)
-        # (The Scenes tab will consume result.scenes once it's built.)
+
+        # Scenes tab: rebuild the scene tree and saved-views list from this sim.
+        self._scene_groups = self._scene_groups_union([result])
+        self._saved_views = sorted(result.views)
+        self._scene_tree.set_items(self._scene_groups)
+        self._set_views_items(self._saved_views)
 
     def _monitor_groups_union(self, results) -> dict[str, list[str]]:
         """``{plot group: [monitor series, ...]}`` across ``results``, dropping
@@ -816,6 +825,81 @@ class BatchRunDialog(QDialog):
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
         for i in range(self._reports_window.count()):
             self._reports_window.item(i).setCheckState(state)
+
+    # --- Scenes tab -------------------------------------------------------
+    def _build_scenes_tab(self) -> QWidget:
+        """Three columns: render options on the left; a tree of scenes in the
+        middle (checking a scene reveals its scalar/vector displayers as checkable
+        children, mirroring the app's Scenes view); a checklist of the sim's saved
+        camera views on the right."""
+        tab = QWidget()
+
+        # Options: the scene-render image options, seeded from settings.
+        self._scene_resolution = QComboBox()
+        self._scene_resolution.addItem("1080p", "1080p")
+        self._scene_resolution.addItem("2160p", "2160p")
+        self._scene_format = QComboBox()
+        self._scene_format.addItem("JPG", "jpg")
+        self._scene_format.addItem("PNG", "png")
+        if self._settings is not None:
+            ri = self._scene_resolution.findData(self._settings.media.image_resolution)
+            if ri >= 0:
+                self._scene_resolution.setCurrentIndex(ri)
+            fi = self._scene_format.findData(self._settings.media.image_format)
+            if fi >= 0:
+                self._scene_format.setCurrentIndex(fi)
+
+        options = QVBoxLayout()
+        options.addWidget(self._header("Options"))
+        options.addWidget(QLabel("Image resolution"))
+        options.addWidget(self._scene_resolution)
+        options.addWidget(QLabel("Image format"))
+        options.addWidget(self._scene_format)
+        options.addStretch(1)
+
+        # Scenes: a tree of scenes whose displayers appear (checkable) when the
+        # scene is checked.
+        self._scene_tree = _SceneTree()
+        self._scene_tree.set_items(self._scene_groups)
+        scenes = QVBoxLayout()
+        scenes.addWidget(self._header("Scenes"))
+        scenes.addWidget(self._scene_tree)
+
+        # Saved views: a checklist of the sim's saved camera views (opt-in).
+        self._views_window = _CheckableList()
+        self._set_views_items(self._saved_views)
+        views = QVBoxLayout()
+        views.addWidget(self._header("Saved Views"))
+        views.addWidget(self._views_window)
+
+        row = QHBoxLayout(tab)
+        row.addLayout(options, 2)
+        row.addLayout(scenes, 2)
+        row.addLayout(views, 1)
+        return tab
+
+    @staticmethod
+    def _scene_groups_union(results) -> dict[str, list[str]]:
+        """``{scene: [displayer, ...]}`` union across ``results`` — mirrors the
+        main window's scene-choice builder."""
+        groups: dict[str, list[str]] = {}
+        for r in results:
+            for sc in r.scenes:
+                names = groups.setdefault(sc.name, [])
+                for d in sc.displayers:
+                    if d.name not in names:
+                        names.append(d.name)
+        return groups
+
+    def _set_views_items(self, views) -> None:
+        """Fill the Saved Views checklist (rendering from a view is opt-in, so
+        each starts unchecked)."""
+        self._views_window.clear()
+        for name in views:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Unchecked)
+            self._views_window.addItem(item)
 
     # --- Plots tab --------------------------------------------------------
     def _build_plots_tab(self) -> QWidget:
