@@ -10,9 +10,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEventLoop, QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -25,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressBar,
     QProgressDialog,
     QPushButton,
     QStyle,
@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.core.starccm_runner import StarRunner
-from starpost.data.models import PlotKind
+from starpost.data.models import PlotKind, SimResult
 from starpost.gui.views.export_dialog import _PreviewWindow
 from starpost.gui.views.plot_view import PlotView, _display_name, _series_is_empty
 from starpost.gui.widgets import UniformTabBar
@@ -173,6 +173,27 @@ class _MonitorTree(QTreeWidget):
                 if g.child(j).checkState(0) == Qt.CheckState.Checked
             ]
         return out
+
+
+class _ExtractWorker(QObject):
+    """Runs a single .sim extraction off the GUI thread so the setup progress
+    dialog keeps painting (and its bar animating) while STAR-CCM+ works."""
+
+    done = Signal()  # extraction finished; the result is on ``self.result``
+
+    def __init__(self, runner: StarRunner, sim: Path, out_dir: Path) -> None:
+        super().__init__()
+        self._runner = runner
+        self._sim = sim
+        self._out_dir = out_dir
+        self.result: SimResult | None = None
+
+    def run(self) -> None:
+        try:
+            self.result = self._runner.extract(self._sim, self._out_dir)
+        except Exception as e:  # noqa: BLE001 - surface any failure to the UI
+            self.result = SimResult(sim_path=str(self._sim), error=str(e))
+        self.done.emit()
 
 
 class BatchRunDialog(QDialog):
@@ -399,12 +420,14 @@ class BatchRunDialog(QDialog):
         return [p for p in self._sim_files if p.name in checked]
 
     def _extract_setup_sim(self) -> bool:
-        """Extract the first selected .sim (blocking, behind a busy dialog) and
-        repopulate the Reports/Plots/Scenes tabs from it — the "Has similar
-        format" setup step. Returns True to advance, False to stay on Source.
+        """Extract the first selected .sim and repopulate the Reports/Plots/Scenes
+        tabs from it — the "Has similar format" setup step. Returns True to
+        advance, False to stay on Source.
 
-        Skips re-extraction when the first selected file is the one already
-        extracted, so going Back and Continue again doesn't burn a license."""
+        The extraction runs on a worker thread while a modal progress dialog
+        shows an animated (accent-coloured) bar, so the wizard is blocked but the
+        dialog stays painted. Skips re-extraction when the first selected file is
+        the one already extracted, so Back/Continue doesn't burn a license."""
         sims = self._checked_sim_files()
         if not sims:
             return True  # nothing loaded to set up from; let the user continue
@@ -418,21 +441,7 @@ class BatchRunDialog(QDialog):
             )
             return False
 
-        busy = QProgressDialog(
-            f"Extracting “{sim.name}” to set up the batch…", "", 0, 0, self
-        )
-        busy.setWindowTitle("Run batch")
-        busy.setCancelButton(None)  # no cancel: one STAR-CCM+ run, runs to the end
-        busy.setWindowModality(Qt.WindowModality.WindowModal)
-        busy.setMinimumDuration(0)
-        busy.show()
-        QApplication.processEvents()
-        try:
-            with tempfile.TemporaryDirectory(prefix="starpost_setup_") as out:
-                result = StarRunner(self._settings).extract(sim, Path(out))
-        finally:
-            busy.close()
-
+        result = self._run_extraction(sim)
         if result.error is not None:
             QMessageBox.warning(
                 self, "Run batch",
@@ -442,6 +451,49 @@ class BatchRunDialog(QDialog):
         self._apply_setup_result(result)
         self._setup_sim_extracted = sim
         return True
+
+    def _run_extraction(self, sim: Path) -> SimResult:
+        """Extract ``sim`` on a worker thread, pumping the GUI event loop so the
+        progress dialog animates, and return its parsed result."""
+        busy = self._make_busy_dialog(sim.name)
+        # Hold the result and keep the temp output dir alive until extraction and
+        # parsing finish (the parser reads the CSVs the macro writes there).
+        with tempfile.TemporaryDirectory(prefix="starpost_setup_") as out:
+            thread = QThread(self)
+            worker = _ExtractWorker(StarRunner(self._settings), sim, Path(out))
+            worker.moveToThread(thread)
+            loop = QEventLoop()
+            # loop.quit lives on the GUI thread, so this cross-thread signal is a
+            # queued connection and quit() runs back on the GUI thread.
+            worker.done.connect(loop.quit)
+            thread.started.connect(worker.run)
+            thread.start()
+            busy.show()
+            loop.exec()  # waits for worker.done while the GUI keeps repainting
+            thread.quit()
+            thread.wait()
+            result = worker.result
+            worker.deleteLater()
+            busy.close()
+        return result
+
+    def _make_busy_dialog(self, sim_name: str) -> QProgressDialog:
+        """A modal, cancel-less progress dialog with an indeterminate bar. The
+        bar's fill is the user's accent colour via the app's QProgressBar QSS."""
+        dlg = QProgressDialog(
+            f"Extracting “{sim_name}” to set up the batch…", "", 0, 0, self
+        )
+        dlg.setWindowTitle("Run batch")
+        dlg.setCancelButton(None)  # no cancel: one STAR-CCM+ run, runs to the end
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(0)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        bar = QProgressBar(dlg)
+        bar.setRange(0, 0)  # busy/indeterminate — STAR-CCM+ gives no % progress
+        bar.setTextVisible(False)
+        dlg.setBar(bar)
+        return dlg
 
     def _apply_setup_result(self, result) -> None:
         """Repopulate the Reports and Plots tabs (and the preview's source result)
