@@ -56,10 +56,19 @@ from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind, SimResult
 from starpost.gui.theme import _DARK, _LIGHT, normalize_accent
 from starpost.gui.views.export_dialog import (
+    _AXIS_LABEL_PT_DEFAULT,
+    _AXIS_LABEL_PT_MAX,
+    _AXIS_LABEL_PT_MIN,
+    _LINE_WIDTH_DEFAULT,
+    _LINE_WIDTH_MAX,
+    _LINE_WIDTH_MIN,
     _PreviewWindow,
     _SWATCH_GAP,
     _SWATCH_ROLE,
     _SWATCH_SIZE,
+    _TITLE_PT_DEFAULT,
+    _TITLE_PT_MAX,
+    _TITLE_PT_MIN,
 )
 from starpost.gui.views.plot_view import (
     _COLORS,
@@ -852,26 +861,68 @@ class BatchRunDialog(QDialog):
         return tab
 
     def _build_plot_options(self) -> QVBoxLayout:
-        """Plot options (a subset of the Export dialog's), live-applied to the
-        preview: title, axis labels, theme, legend scale, grid, image format."""
+        """Plot options matching the Export dialog's, live-applied to the preview:
+        aspect ratio, title (+size), axis labels (+size), theme, legend scale,
+        line thickness, grid, image format. Each slider's value is set before its
+        signal is connected so configuring it doesn't fire into the preview (which
+        isn't built yet)."""
+        # Aspect ratio of the preview window ("Custom" == free resize).
+        self._plot_aspect = QComboBox()
+        self._plot_aspect.addItems(["1:1", "3:2", "4:3", "16:9", "Custom"])
+        self._plot_aspect.setCurrentText("Custom")
+        self._plot_aspect.setToolTip("Lock the plot's width-to-height ratio")
+        self._plot_aspect.currentTextChanged.connect(self._on_aspect_changed)
+
         self._plot_title = QLineEdit()
         self._plot_title.textChanged.connect(self._preview_set_title)
+
+        # Title size: a slider setting the plot title's font size (points).
+        self._title_size = QSlider(Qt.Orientation.Horizontal)
+        self._title_size.setRange(0, 100)
+        self._title_size.setValue(
+            self._text_size_slider(_TITLE_PT_DEFAULT, _TITLE_PT_MIN, _TITLE_PT_MAX)
+        )
+        self._title_size.setToolTip("Font size of the plot title")
+        self._title_size.valueChanged.connect(self._preview_set_title_size)
+
         self._plot_xlabel = QLineEdit()
         self._plot_xlabel.textChanged.connect(self._preview_set_xlabel)
         self._plot_ylabel = QLineEdit()
         self._plot_ylabel.textChanged.connect(self._preview_set_ylabel)
+
+        # Axis label size: one slider for both axis labels, so X and Y match.
+        self._axis_label_size = QSlider(Qt.Orientation.Horizontal)
+        self._axis_label_size.setRange(0, 100)
+        self._axis_label_size.setValue(
+            self._text_size_slider(
+                _AXIS_LABEL_PT_DEFAULT, _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX
+            )
+        )
+        self._axis_label_size.setToolTip(
+            "Font size of both axis labels (X and Y change together)"
+        )
+        self._axis_label_size.valueChanged.connect(self._preview_set_axis_label_size)
+
         self._plot_theme = QComboBox()
         self._plot_theme.addItem("Light", "light")
         self._plot_theme.addItem("Dark", "dark")
         self._plot_theme.currentIndexChanged.connect(self._preview_set_theme)
-        # Legend size: a slider whose mid-point is the natural size (1.0×) and
-        # which scales the legend down (left) or up (right) symmetrically — same
-        # mapping as the Export dialog's slider.
+
+        # Legend size: midpoint is the natural size (1.0×), scaling down (left) or
+        # up (right) symmetrically — same mapping as the Export dialog's slider.
         self._legend_scale = QSlider(Qt.Orientation.Horizontal)
         self._legend_scale.setRange(0, 100)
         self._legend_scale.setValue(50)  # middle of the track == default 1.0×
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._preview_set_legend_scale)
+
+        # Line thickness: pen width of every line, thin (left) to thick (right).
+        self._line_width = QSlider(Qt.Orientation.Horizontal)
+        self._line_width.setRange(0, 100)
+        self._line_width.setValue(self._line_width_slider(_LINE_WIDTH_DEFAULT))
+        self._line_width.setToolTip("Thickness of every line on the plot")
+        self._line_width.valueChanged.connect(self._preview_set_line_width)
+
         self._plot_grid = QCheckBox("Show grid")
         self._plot_grid.setChecked(True)
         self._plot_grid.toggled.connect(self._preview_set_grid)
@@ -879,11 +930,15 @@ class BatchRunDialog(QDialog):
         self._plot_format.addItems(["PNG", "JPG", "TIFF", "PDF"])
 
         form = QFormLayout()
+        form.addRow("Aspect ratio", self._plot_aspect)
         form.addRow("Plot title", self._plot_title)
+        form.addRow("Title size", self._title_size)
         form.addRow("X axis label", self._plot_xlabel)
         form.addRow("Y axis label", self._plot_ylabel)
+        form.addRow("Axis label size", self._axis_label_size)
         form.addRow("Theme", self._plot_theme)
         form.addRow("Legend scale", self._legend_scale)
+        form.addRow("Line thickness", self._line_width)
         form.addRow(self._plot_grid)
         form.addRow("Format", self._plot_format)
 
@@ -893,11 +948,35 @@ class BatchRunDialog(QDialog):
         col.addStretch(1)
         return col
 
+    # --- option slider mappings (shared with the Export dialog) -----------
     @staticmethod
     def _legend_factor(value: int) -> float:
         """Map the slider's 0–100 position to a legend scale factor, with the
         midpoint (50) at 1.0×; each half spans one octave (ends 0.5× and 2.0×)."""
         return 2.0 ** ((value - 50) / 50.0)
+
+    @staticmethod
+    def _line_width_for(value: int) -> float:
+        """Map the slider's 0–100 position to a pen width across the thin–thick
+        range."""
+        span = _LINE_WIDTH_MAX - _LINE_WIDTH_MIN
+        return _LINE_WIDTH_MIN + span * value / 100.0
+
+    @staticmethod
+    def _line_width_slider(width: float) -> int:
+        """The slider position that yields ``width`` (inverse of _line_width_for)."""
+        span = _LINE_WIDTH_MAX - _LINE_WIDTH_MIN
+        return round((width - _LINE_WIDTH_MIN) / span * 100)
+
+    @staticmethod
+    def _text_size_for(value: int, lo: int, hi: int) -> int:
+        """Map a slider's 0–100 position to a font size (points) in [lo, hi]."""
+        return round(lo + (hi - lo) * value / 100.0)
+
+    @staticmethod
+    def _text_size_slider(pt: float, lo: int, hi: int) -> int:
+        """The slider position that yields ``pt`` (inverse of _text_size_for)."""
+        return round((pt - lo) / (hi - lo) * 100)
 
     def _configure_preview(self) -> None:
         """Match the preview's filtering/hover/theme to the app settings so it
@@ -1080,6 +1159,28 @@ class BatchRunDialog(QDialog):
 
     def _preview_set_legend_scale(self, value) -> None:
         self._preview.set_legend_scale(self._legend_factor(value))
+
+    def _preview_set_title_size(self, value) -> None:
+        self._preview.set_title_size(
+            self._text_size_for(value, _TITLE_PT_MIN, _TITLE_PT_MAX)
+        )
+
+    def _preview_set_axis_label_size(self, value) -> None:
+        self._preview.set_axis_label_size(
+            self._text_size_for(value, _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX)
+        )
+
+    def _preview_set_line_width(self, value) -> None:
+        self._preview.set_line_width(self._line_width_for(value))
+
+    def _on_aspect_changed(self, text) -> None:
+        """Lock the preview window to the chosen aspect ratio; "Custom" (any
+        non-ratio text) frees it to resize to any size."""
+        if ":" not in text:  # "Custom"
+            self._preview_window.set_aspect(None)
+            return
+        w, h = text.split(":")
+        self._preview_window.set_aspect(int(w) / int(h))
 
     def _on_summary(self) -> bool:
         return self._tabs.currentIndex() == self._tabs.count() - 1
