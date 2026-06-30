@@ -66,7 +66,10 @@ def test_batch_run_dialog_sequential_navigation(app):
     while tabs.currentIndex() > 0:
         dlg._retreat()
     assert tabs.currentIndex() == 0 and not dlg._back.isEnabled()
-    # From Summary, "Batch run" accepts.
+    # From Summary, the primary button runs the batch (covered separately); stub
+    # it to the dialog's accept so this test just checks Summary's advance fires
+    # the terminal action.
+    dlg._run_batch = dlg.accept
     tabs.setCurrentIndex(tabs.count() - 1)
     dlg._advance()
     assert dlg.result() == QDialog.DialogCode.Accepted
@@ -868,4 +871,158 @@ def test_batch_run_dialog_save_scene_captures_image_options(app, monkeypatch):
     dlg._on_save_scene()
     data = dlg._saved_scenes.item(0).data(Qt.ItemDataRole.UserRole)
     assert data["resolution"] == "2160p" and data["format"] == "png"
+    dlg.close()
+
+
+def _sim_result_with_data():
+    from starpost.data.models import (
+        MonitorPlot, PlotKind, PlotSeries, Report, SimResult,
+    )
+
+    return SimResult(
+        sim_path="/c/caseA.sim",
+        reports=[Report("Drag", 1.5, units="N")],
+        plots=[MonitorPlot(
+            "Forces", [PlotSeries("Drag", [1, 2, 3], [10.0, 9.0, 8.0])],
+            kind=PlotKind.FORCE,
+        )],
+    )
+
+
+def test_render_saved_plot(app, tmp_path):
+    """A saved plot renders to an image file; an unmatched plot writes nothing."""
+    from starpost.batch.run import render_saved_plot
+
+    result = _sim_result_with_data()
+    out = tmp_path / "p.png"
+    assert render_saved_plot(
+        result,
+        {"monitors": {"Forces": ["Drag"]}, "title": "Drag", "format": "png"},
+        Settings(), out,
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+    # A plot whose groups aren't in this result writes nothing.
+    missing = tmp_path / "none.png"
+    assert not render_saved_plot(
+        result, {"monitors": {"Nope": ["x"]}, "format": "png"}, Settings(), missing
+    )
+    assert not missing.exists()
+
+
+def test_build_batch_archive(app, tmp_path, monkeypatch):
+    """The batch archive holds one folder per data set with its report, saved-plot
+    image and saved-scene still."""
+    import zipfile
+    from pathlib import Path
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(
+            name="caseA", result=result, sim_file=Path("/c/caseA.sim")
+        )],
+        reports={"Drag"}, report_format="csv", include_units=True,
+        saved_plots=[{
+            "name": "Drag plot",
+            "data": {"monitors": {"Forces": ["Drag"]}, "format": "png"},
+        }],
+        saved_scenes=[{
+            "name": "Pressure",
+            "data": {"displayers": {"Pressure": ["Static Pressure"]},
+                     "views": [], "resolution": "1080p", "format": "png"},
+        }],
+    )
+
+    # Stub scene rendering (needs STAR-CCM+): drop a still into the folder.
+    def fake_render_scenes(self, sim_file, output_dir, scene_show,
+                           view_names=None, log_sink=None):
+        (Path(output_dir) / "Pressure.png").write_bytes(b"\x89PNG")
+        return []
+    monkeypatch.setattr(run.StarRunner, "render_scenes", fake_render_scenes)
+
+    dest = tmp_path / "out" / "batch.zip"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    assert dest.exists()
+    with zipfile.ZipFile(dest) as zf:
+        names = set(zf.namelist())
+    assert "caseA/reports.csv" in names
+    assert "caseA/Drag plot.png" in names
+    assert "caseA/Pressure.png" in names
+
+
+def test_build_batch_archive_extracts_sim_sources(app, tmp_path, monkeypatch):
+    """A .sim source (no preloaded result) is extracted during the run."""
+    from pathlib import Path
+
+    import starpost.batch.run as run
+
+    extracted = []
+
+    def fake_extract(self, sim_file, output_dir, log_sink=None):
+        extracted.append(Path(sim_file))
+        return _sim_result_with_data()
+    monkeypatch.setattr(run.StarRunner, "extract", fake_extract)
+
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseB", sim_file=Path("/c/caseB.sim"))],
+        reports={"Drag"}, report_format="csv",
+    )
+    dest = tmp_path / "batch.zip"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    assert extracted == [Path("/c/caseB.sim")]
+    import zipfile
+    with zipfile.ZipFile(dest) as zf:
+        assert "caseB/reports.csv" in set(zf.namelist())
+
+
+def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
+    """Batch run resolves the checked source + selections into a config, builds the
+    archive in the chosen folder, and accepts the dialog."""
+    from pathlib import Path
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDialog, QListWidgetItem
+
+    import starpost.batch.run as run
+    import starpost.gui.views.batch_run_dialog as brd
+
+    result = _sim_result_with_data()
+    dlg = brd.BatchRunDialog(
+        data_sets=["caseA"], report_names=["Drag"], results=[result],
+        settings=Settings(starccm_path="/usr/bin/starccm+"),
+    )
+    # Data mode → caseA is listed and checked.
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    plot = QListWidgetItem("Drag plot")
+    plot.setData(Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"})
+    dlg._saved_plots.addItem(plot)
+
+    captured = {}
+
+    def fake_build(config, settings, runner, dest, **_kw):
+        captured["config"] = config
+        captured["dest"] = Path(dest)
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        Path(dest).write_bytes(b"zip")
+        return dest
+
+    monkeypatch.setattr(run, "build_batch_archive", fake_build)
+    monkeypatch.setattr(
+        brd.QFileDialog, "getExistingDirectory", lambda *a, **k: str(tmp_path)
+    )
+    monkeypatch.setattr(brd.QMessageBox, "information", lambda *a, **k: None)
+
+    dlg._run_batch()
+
+    cfg = captured["config"]
+    assert [s.name for s in cfg.sources] == ["caseA"]
+    assert cfg.sources[0].result is result
+    assert cfg.reports == {"Drag"}
+    assert [e["name"] for e in cfg.saved_plots] == ["Drag plot"]
+    assert captured["dest"].parent == tmp_path and captured["dest"].suffix == ".zip"
+    assert dlg.result() == QDialog.DialogCode.Accepted
     dlg.close()

@@ -8,6 +8,7 @@ run wiring are filled in later — this is the navigation scaffold only.
 from __future__ import annotations
 
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -23,6 +24,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -1450,10 +1452,10 @@ class BatchRunDialog(QDialog):
         self._back.setEnabled(self._tabs.currentIndex() > 0)
 
     def _advance(self) -> None:
-        """Continue moves to the next tab; on Summary, "Batch run" finishes (the
-        run itself is wired in later). Leaving the Source tab requires at least
-        one selected source, and — with "Has similar format" — extracts the first
-        selected .sim to set up the downstream tabs."""
+        """Continue moves to the next tab; on Summary, "Batch run" runs the batch.
+        Leaving the Source tab requires at least one selected source, and — with
+        "Has similar format" — extracts the first selected .sim to set up the
+        downstream tabs."""
         if self._tabs.currentIndex() == 0:
             if not self._has_checked_source():
                 QMessageBox.warning(
@@ -1466,9 +1468,113 @@ class BatchRunDialog(QDialog):
                 if not self._extract_setup_sim():
                     return  # extraction failed or was unavailable; stay put
         if self._on_summary():
-            self.accept()
+            self._run_batch()
         else:
             self._tabs.setCurrentIndex(self._tabs.currentIndex() + 1)
+
+    # --- the run ----------------------------------------------------------
+    def _batch_sources(self) -> list:
+        """The checked sources resolved for the run: loaded data sets carry their
+        already-extracted result; .sim files are extracted during the run. A data
+        set's .sim path (when it exists) lets its scenes render."""
+        from starpost.batch.run import BatchSource
+
+        if self._source_input.currentData() == "sim":
+            return [BatchSource(name=p.stem, sim_file=p)
+                    for p in self._checked_sim_files()]
+        by_name = {r.sim_name: r for r in self._results}
+        sources = []
+        for i in range(self._source_window.count()):
+            item = self._source_window.item(i)
+            if item.checkState() != Qt.CheckState.Checked:
+                continue
+            result = by_name.get(item.text())
+            if result is None:
+                continue
+            sim_path = Path(result.sim_path) if result.sim_path else None
+            sim_file = (
+                sim_path
+                if sim_path and sim_path.suffix == ".sim" and sim_path.exists()
+                else None
+            )
+            sources.append(BatchSource(name=item.text(), result=result,
+                                       sim_file=sim_file))
+        return sources
+
+    def _run_batch(self) -> None:
+        """Batch run: write each data set's reports, saved-plot images and
+        saved-scene stills into a per-data-set folder, packed into one .zip in the
+        chosen output folder. Blocks behind a progress dialog (plot rendering must
+        run on the GUI thread)."""
+        from starpost.batch.run import BatchConfig, build_batch_archive
+
+        sources = self._batch_sources()
+        if not sources:
+            QMessageBox.warning(self, "Run batch", "No data selected.")
+            return
+        reports = {
+            self._reports_window.item(i).text()
+            for i in range(self._reports_window.count())
+            if self._reports_window.item(i).checkState() == Qt.CheckState.Checked
+        }
+        saved_plots = self._saved_entries(self._saved_plots)
+        saved_scenes = self._saved_entries(self._saved_scenes)
+        if not reports and not saved_plots and not saved_scenes:
+            QMessageBox.warning(
+                self, "Run batch",
+                "Nothing to output — select reports or save a plot/scene first.",
+            )
+            return
+
+        # STAR-CCM+ is needed to extract .sim sources or render any scenes.
+        needs_exe = any(s.result is None for s in sources) or (
+            bool(saved_scenes) and any(s.sim_file for s in sources)
+        )
+        if needs_exe and (self._settings is None or not self._settings.starccm_path):
+            QMessageBox.warning(
+                self, "Run batch",
+                "Set the STAR-CCM+ executable path in Settings first.",
+            )
+            return
+
+        out_dir = QFileDialog.getExistingDirectory(self, "Choose output folder")
+        if not out_dir:
+            return
+        dest = Path(out_dir) / f"starpost_batch_{datetime.now():%Y%m%d_%H%M%S}.zip"
+        config = BatchConfig(
+            sources=sources,
+            reports=reports,
+            report_format=self._report_format.currentText().lower(),
+            include_units=self._report_include_units.isChecked(),
+            saved_plots=saved_plots,
+            saved_scenes=saved_scenes,
+        )
+        runner = StarRunner(self._settings) if self._settings else None
+
+        busy = QProgressDialog("Running batch…", "", 0, len(sources), self)
+        busy.setWindowTitle("Run batch")
+        busy.setCancelButton(None)
+        busy.setWindowModality(Qt.WindowModality.WindowModal)
+        busy.setMinimumDuration(0)
+        busy.setAutoClose(False)
+        busy.setAutoReset(False)
+        busy.show()
+
+        def progress(done: int, total: int, name: str) -> None:
+            busy.setMaximum(total)
+            busy.setValue(done)
+            busy.setLabelText(f"Processing “{name}”…" if name else "Packaging…")
+            QApplication.processEvents()
+
+        try:
+            build_batch_archive(config, self._settings, runner, dest, progress=progress)
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the user
+            busy.close()
+            QMessageBox.critical(self, "Run batch failed", str(exc))
+            return
+        busy.close()
+        QMessageBox.information(self, "Run batch", f"Batch written to:\n{dest}")
+        self.accept()
 
     def _retreat(self) -> None:
         """Back moves to the previous tab (disabled on the first)."""
