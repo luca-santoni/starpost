@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QProgressDialog,
@@ -226,6 +228,65 @@ class _BusyBar(QProgressBar):
         p.setPen(QPen(self._border, 1.0))
         p.drawPath(track)
         p.end()
+
+
+class _SavedPlotPropertiesDialog(QDialog):
+    """Read-only properties for a saved plot: its title, axis labels, theme and
+    file format, plus the monitors it draws shown with their colours."""
+
+    def __init__(self, name: str, data: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Properties — {name}")
+
+        def _or_dash(text: str) -> str:
+            return text if text else "—"
+
+        form = QFormLayout()
+        form.setHorizontalSpacing(24)
+        form.addRow("Plot title:", QLabel(_or_dash(data.get("title", ""))))
+        form.addRow("X axis label:", QLabel(_or_dash(data.get("x_label", ""))))
+        form.addRow("Y axis label:", QLabel(_or_dash(data.get("y_label", ""))))
+        form.addRow("Theme:", QLabel((data.get("theme") or "").capitalize() or "—"))
+        form.addRow("File format:", QLabel(_or_dash(data.get("format", ""))))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+
+        monitors_label = QLabel("Monitors")
+        monitors_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(monitors_label)
+
+        monitors = data.get("monitors") or {}
+        colors = data.get("monitor_colors") or {}
+        series = [s for group in monitors.values() for s in group]
+        if series:
+            for s in series:
+                layout.addLayout(self._monitor_row(s, colors.get(s)))
+        else:
+            layout.addWidget(QLabel("—"))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _monitor_row(series: str, color: str | None) -> QHBoxLayout:
+        """A monitor's colour swatch and (collapsed) label, with the hex value."""
+        row = QHBoxLayout()
+        swatch = QLabel()
+        swatch.setFixedSize(14, 14)
+        fill = f"background: {color}; " if color else ""
+        swatch.setStyleSheet(
+            f"{fill}border: 1px solid rgba(127, 127, 127, 0.5); border-radius: 3px;"
+        )
+        row.addWidget(swatch)
+        label = _display_name(series)
+        row.addWidget(QLabel(f"{label}  ({color})" if color else label))
+        row.addStretch(1)
+        return row
 
 
 class _ExtractWorker(QObject):
@@ -692,8 +753,15 @@ class BatchRunDialog(QDialog):
         monitors.addWidget(self._monitor_tree)
 
         # Saved Plots: plots the user has captured with "Add Plot" (each item
-        # holds its plot characteristics in its data).
+        # holds its plot characteristics in its data). Right-click a plot for
+        # Properties / Delete.
         self._saved_plots = QListWidget()
+        self._saved_plots.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._saved_plots.customContextMenuRequested.connect(
+            self._on_saved_plot_menu
+        )
         saved = QVBoxLayout()
         saved.addWidget(self._header("Saved Plots"))
         saved.addWidget(self._saved_plots)
@@ -785,11 +853,20 @@ class BatchRunDialog(QDialog):
         run will later regenerate this plot per data set; for now it's stored on
         the saved-plot list item (the run wiring comes later)."""
         series_colors, pair_colors = self._preview.color_overrides()
+        monitors = self._monitor_tree.checked_monitors()
+        # The resolved (drawn) colour of each selected monitor, captured now for
+        # the saved plot's Properties view since the preview may change later.
+        monitor_colors = {
+            s: self._preview.series_color(s)
+            for series in monitors.values()
+            for s in series
+        }
         return {
             "title": self._plot_title.text(),
             "x_label": self._plot_xlabel.text(),
             "y_label": self._plot_ylabel.text(),
-            "monitors": self._monitor_tree.checked_monitors(),
+            "monitors": monitors,
+            "monitor_colors": monitor_colors,
             "theme": self._plot_theme.currentData(),
             "grid": self._plot_grid.isChecked(),
             "format": self._plot_format.currentText(),
@@ -806,6 +883,25 @@ class BatchRunDialog(QDialog):
         item = QListWidgetItem(name)
         item.setData(Qt.ItemDataRole.UserRole, self._capture_plot())
         self._saved_plots.addItem(item)
+
+    def _on_saved_plot_menu(self, pos) -> None:
+        """Right-click a saved plot: Properties (its captured settings) or Delete."""
+        item = self._saved_plots.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._saved_plots)
+        menu.addAction("Properties", lambda: self._show_saved_plot_properties(item))
+        menu.addAction("Delete", lambda: self._delete_saved_plot(item))
+        menu.exec(self._saved_plots.viewport().mapToGlobal(pos))
+
+    def _show_saved_plot_properties(self, item) -> None:
+        """Open the read-only properties window for a saved plot."""
+        data = item.data(Qt.ItemDataRole.UserRole) or {}
+        _SavedPlotPropertiesDialog(item.text(), data, self).exec()
+
+    def _delete_saved_plot(self, item) -> None:
+        """Remove a saved plot from the list."""
+        self._saved_plots.takeItem(self._saved_plots.row(item))
 
     def _render_preview(self) -> None:
         """Draw the checked monitors into the preview for a SINGLE data set (the

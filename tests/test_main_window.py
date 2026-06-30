@@ -381,6 +381,68 @@ def test_batch_run_dialog_add_plot(app, monkeypatch):
     chars = item.data(Qt.ItemDataRole.UserRole)
     assert chars["title"] == "My Plot"
     assert chars["monitors"] == {"Residuals": ["Continuity"]}
+    assert "Continuity" in chars["monitor_colors"]  # colour captured per monitor
+    dlg.close()
+
+
+def test_batch_run_dialog_saved_plot_delete(app):
+    """The Delete context-menu action removes that plot from Saved Plots."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    dlg._saved_plots.addItem("p1")
+    dlg._saved_plots.addItem("p2")
+    dlg._delete_saved_plot(dlg._saved_plots.item(0))
+    assert [
+        dlg._saved_plots.item(i).text() for i in range(dlg._saved_plots.count())
+    ] == ["p2"]
+    dlg.close()
+
+
+def test_batch_run_dialog_saved_plot_properties(app, monkeypatch):
+    """The Properties context-menu action opens the dialog for that plot."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    data = {
+        "title": "T", "x_label": "X", "y_label": "Y", "theme": "dark",
+        "format": "PNG", "monitors": {"G": ["m1"]},
+        "monitor_colors": {"m1": "#ff0000"},
+    }
+    item = QListWidgetItem("p1")
+    item.setData(Qt.ItemDataRole.UserRole, data)
+    dlg._saved_plots.addItem(item)
+    # Capture the dialog instead of showing it modally.
+    opened = []
+    monkeypatch.setattr(
+        brd._SavedPlotPropertiesDialog, "exec",
+        lambda self: opened.append(self) or 0,
+    )
+    dlg._show_saved_plot_properties(item)
+    assert len(opened) == 1
+    dlg.close()
+
+
+def test_saved_plot_properties_dialog_content(app):
+    """The properties dialog shows the plot's settings and each monitor's colour."""
+    from PySide6.QtWidgets import QLabel
+
+    from starpost.gui.views.batch_run_dialog import _SavedPlotPropertiesDialog
+
+    data = {
+        "title": "Drag", "x_label": "Iteration", "y_label": "Drag (N)",
+        "theme": "dark", "format": "PNG",
+        "monitors": {"Forces": ["Drag Monitor"]},
+        "monitor_colors": {"Drag Monitor": "#e6194b"},
+    }
+    dlg = _SavedPlotPropertiesDialog("Drag", data)
+    texts = [w.text() for w in dlg.findChildren(QLabel)]
+    assert "Drag" in texts and "Iteration" in texts and "Drag (N)" in texts
+    assert "Dark" in texts and "PNG" in texts
+    assert any("Drag Monitor" in t and "#e6194b" in t for t in texts)
     dlg.close()
 
 
