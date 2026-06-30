@@ -10,7 +10,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, QObject, Qt, QThread, Signal
+from PySide6.QtCore import QEventLoop, QObject, QRectF, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
 from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind, SimResult
+from starpost.gui.theme import _DARK, _LIGHT, normalize_accent
 from starpost.gui.views.export_dialog import _PreviewWindow
 from starpost.gui.views.plot_view import PlotView, _display_name, _series_is_empty
 from starpost.gui.widgets import UniformTabBar
@@ -173,6 +175,57 @@ class _MonitorTree(QTreeWidget):
                 if g.child(j).checkState(0) == Qt.CheckState.Checked
             ]
         return out
+
+
+class _BusyBar(QProgressBar):
+    """An indeterminate progress bar that animates a sliding accent segment at
+    ~60 fps, painted ourselves so the motion isn't capped at the Qt style's busy
+    frame rate. Track and segment colours follow the app theme and accent."""
+
+    _SEGMENT_FRAC = 0.30   # segment width as a fraction of the track width
+    _STEP = 0.014          # phase advanced per frame (~1.2 s per sweep)
+
+    def __init__(self, accent: str, mode: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setRange(0, 0)  # busy/indeterminate
+        self.setTextVisible(False)
+        self.setMinimumHeight(18)
+        palette = _LIGHT if mode == "light" else _DARK
+        self._track = QColor(palette["input_bg"])
+        self._border = QColor(palette["border"])
+        self._accent = QColor(normalize_accent(accent))
+        self._phase = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)  # ~60 fps
+        self._timer.timeout.connect(self._advance)
+        self._timer.start()
+
+    def _advance(self) -> None:
+        self._phase = (self._phase + self._STEP) % 1.0
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802 (Qt override)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = 4.0
+        track = QPainterPath()
+        track.addRoundedRect(rect, radius, radius)
+        p.fillPath(track, self._track)
+        # Sliding accent segment, clipped to the rounded track so its corners
+        # stay inside as it slides on and off each edge.
+        p.setClipPath(track)
+        seg_w = max(24.0, rect.width() * self._SEGMENT_FRAC)
+        x = rect.left() - seg_w + self._phase * (rect.width() + seg_w)
+        seg = QPainterPath()
+        seg.addRoundedRect(
+            QRectF(x, rect.top() + 1.0, seg_w, rect.height() - 2.0), radius, radius
+        )
+        p.fillPath(seg, self._accent)
+        p.setClipping(False)
+        p.setPen(QPen(self._border, 1.0))
+        p.drawPath(track)
+        p.end()
 
 
 class _ExtractWorker(QObject):
@@ -478,8 +531,8 @@ class BatchRunDialog(QDialog):
         return result
 
     def _make_busy_dialog(self, sim_name: str) -> QProgressDialog:
-        """A modal, cancel-less progress dialog with an indeterminate bar. The
-        bar's fill is the user's accent colour via the app's QProgressBar QSS."""
+        """A modal, cancel-less progress dialog with a smooth (~60 fps) sliding
+        accent bar that follows the user's theme and accent colour."""
         dlg = QProgressDialog(
             f"Extracting “{sim_name}” to set up the batch…", "", 0, 0, self
         )
@@ -489,10 +542,11 @@ class BatchRunDialog(QDialog):
         dlg.setMinimumDuration(0)
         dlg.setAutoClose(False)
         dlg.setAutoReset(False)
-        bar = QProgressBar(dlg)
-        bar.setRange(0, 0)  # busy/indeterminate — STAR-CCM+ gives no % progress
-        bar.setTextVisible(False)
-        dlg.setBar(bar)
+        accent, mode = "#ffc829", "dark"
+        if self._settings is not None:
+            accent = self._settings.appearance.accent
+            mode = self._settings.appearance.mode
+        dlg.setBar(_BusyBar(accent, mode, dlg))
         return dlg
 
     def _apply_setup_result(self, result) -> None:
