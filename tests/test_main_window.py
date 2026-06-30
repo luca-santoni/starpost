@@ -502,6 +502,50 @@ def test_batch_run_dialog_scenes_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_summary_tab(app):
+    """Summary tab: export options plus read-only lists of the selected reports,
+    the saved plots and the saved scenes, refreshed when the tab is shown."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    from starpost.core.settings import Settings
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    dlg = BatchRunDialog(
+        report_names=["Drag", "Lift", "Downforce"], settings=Settings()
+    )
+    # Deselect a report so "selected" differs from "all".
+    dlg._reports_window.item(1).setCheckState(Qt.CheckState.Unchecked)  # Lift
+    # Saved plots / scenes captured on earlier tabs.
+    dlg._saved_plots.addItem(QListWidgetItem("Drag plot"))
+    dlg._saved_scenes.addItem(QListWidgetItem("Pressure scene"))
+
+    summary_idx = next(
+        i for i in range(dlg._tabs.count()) if dlg._tabs.tabText(i) == "Summary"
+    )
+    dlg._tabs.setCurrentIndex(summary_idx)
+
+    # Export options offer the archive formats.
+    assert [
+        dlg._export_format.itemData(i) for i in range(dlg._export_format.count())
+    ] == ["zip", "7z", "rar"]
+    # Reports column lists only the checked reports.
+    assert [
+        dlg._summary_reports.item(i).text()
+        for i in range(dlg._summary_reports.count())
+    ] == ["Drag", "Downforce"]
+    # Plots / Scenes columns mirror the saved lists.
+    assert [
+        dlg._summary_plots.item(i).text()
+        for i in range(dlg._summary_plots.count())
+    ] == ["Drag plot"]
+    assert [
+        dlg._summary_scenes.item(i).text()
+        for i in range(dlg._summary_scenes.count())
+    ] == ["Pressure scene"]
+    dlg.close()
+
+
 def test_batch_run_dialog_save_scene(app, monkeypatch):
     """Save Scene (shown only on the Scenes tab) captures the scene setup
     (displayers, views, image options) into the Saved Scenes list."""

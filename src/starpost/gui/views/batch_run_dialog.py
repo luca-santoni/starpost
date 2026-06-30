@@ -426,11 +426,14 @@ class BatchRunDialog(QDialog):
         self._tabs.addTab(self._plots_tab, "Plots")
         self._scenes_tab = self._build_scenes_tab()
         self._tabs.addTab(self._scenes_tab, "Scenes")
-        self._tabs.addTab(QWidget(), "Summary")  # filled in later
+        self._summary_tab = self._build_summary_tab()
+        self._tabs.addTab(self._summary_tab, "Summary")
         # Keep the button label in step with the active tab, however it changed.
         self._tabs.currentChanged.connect(self._sync_button)
         # Open the plot preview window beside the dialog while the Plots tab shows.
         self._tabs.currentChanged.connect(self._update_preview)
+        # Refresh the Summary lists from the other tabs whenever it's brought up.
+        self._tabs.currentChanged.connect(self._refresh_summary)
         self.finished.connect(lambda _r: self._preview_window.close())
 
         # Bottom-left Back button (disabled on the first tab) and bottom-right
@@ -916,6 +919,70 @@ class BatchRunDialog(QDialog):
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Unchecked)
             self._views_window.addItem(item)
+
+    # --- Summary tab ------------------------------------------------------
+    def _build_summary_tab(self) -> QWidget:
+        """Four columns reviewing what the batch will produce: export options
+        (left), then read-only lists of the selected reports, the saved plots and
+        the saved scenes. The lists are filled from the other tabs each time the
+        Summary tab is shown (see _refresh_summary)."""
+        tab = QWidget()
+
+        # Export options: the archive format for the produced output.
+        self._export_format = QComboBox()
+        self._export_format.addItem("ZIP", "zip")
+        self._export_format.addItem("7Z", "7z")
+        self._export_format.addItem("RAR", "rar")
+        options = QVBoxLayout()
+        options.addWidget(self._header("Export options"))
+        options.addWidget(QLabel("Archive format"))
+        options.addWidget(self._export_format)
+        options.addStretch(1)
+
+        self._summary_reports = QListWidget()
+        reports = QVBoxLayout()
+        reports.addWidget(self._header("Reports"))
+        reports.addWidget(self._summary_reports)
+
+        self._summary_plots = QListWidget()
+        plots = QVBoxLayout()
+        plots.addWidget(self._header("Plots"))
+        plots.addWidget(self._summary_plots)
+
+        self._summary_scenes = QListWidget()
+        scenes = QVBoxLayout()
+        scenes.addWidget(self._header("Scenes"))
+        scenes.addWidget(self._summary_scenes)
+
+        row = QHBoxLayout(tab)
+        row.addLayout(options, 1)
+        row.addLayout(reports, 1)
+        row.addLayout(plots, 1)
+        row.addLayout(scenes, 1)
+        return tab
+
+    def _refresh_summary(self, *_args) -> None:
+        """Repopulate the Summary lists from the other tabs: the currently checked
+        reports, the saved plots and the saved scenes. A no-op unless the Summary
+        tab is in front."""
+        if self._tabs.currentWidget() is not self._summary_tab:
+            return
+        self._summary_reports.clear()
+        self._summary_reports.addItems([
+            self._reports_window.item(i).text()
+            for i in range(self._reports_window.count())
+            if self._reports_window.item(i).checkState() == Qt.CheckState.Checked
+        ])
+        self._summary_plots.clear()
+        self._summary_plots.addItems([
+            self._saved_plots.item(i).text()
+            for i in range(self._saved_plots.count())
+        ])
+        self._summary_scenes.clear()
+        self._summary_scenes.addItems([
+            self._saved_scenes.item(i).text()
+            for i in range(self._saved_scenes.count())
+        ])
 
     # --- Plots tab --------------------------------------------------------
     def _build_plots_tab(self) -> QWidget:
