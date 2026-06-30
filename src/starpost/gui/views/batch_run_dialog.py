@@ -323,7 +323,7 @@ class BatchRunDialog(QDialog):
 
         # Load File / Load Data Set are mutually exclusive (one per source mode);
         # Select All / Clear act on the window's checkboxes.
-        self._load_file_btn = QPushButton("Load File")
+        self._load_file_btn = QPushButton("Load Files")
         self._load_file_btn.setToolTip("Add .sim files to the source list")
         self._load_file_btn.clicked.connect(self._load_files)
         self._load_dataset_btn = QPushButton("Load Data Set")
