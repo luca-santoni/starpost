@@ -424,7 +424,8 @@ class BatchRunDialog(QDialog):
         self._tabs.addTab(self._build_reports_tab(), "Reports")
         self._plots_tab = self._build_plots_tab()
         self._tabs.addTab(self._plots_tab, "Plots")
-        self._tabs.addTab(self._build_scenes_tab(), "Scenes")
+        self._scenes_tab = self._build_scenes_tab()
+        self._tabs.addTab(self._scenes_tab, "Scenes")
         self._tabs.addTab(QWidget(), "Summary")  # filled in later
         # Keep the button label in step with the active tab, however it changed.
         self._tabs.currentChanged.connect(self._sync_button)
@@ -440,12 +441,17 @@ class BatchRunDialog(QDialog):
         self._add_plot = QPushButton("Add Plot")
         self._add_plot.setVisible(False)
         self._add_plot.clicked.connect(self._on_add_plot)
+        # "Save Scene" saves the current scene setup; only shown on the Scenes tab.
+        self._save_scene = QPushButton("Save Scene")
+        self._save_scene.setVisible(False)
+        self._save_scene.clicked.connect(self._on_save_scene)
         self._next = QPushButton()
         self._next.clicked.connect(self._advance)
         row = QHBoxLayout()
         row.addWidget(self._back)
         row.addStretch(1)
         row.addWidget(self._add_plot)
+        row.addWidget(self._save_scene)
         row.addWidget(self._next)
 
         layout = QVBoxLayout(self)
@@ -828,10 +834,10 @@ class BatchRunDialog(QDialog):
 
     # --- Scenes tab -------------------------------------------------------
     def _build_scenes_tab(self) -> QWidget:
-        """Three columns: render options on the left; a tree of scenes in the
-        middle (checking a scene reveals its scalar/vector displayers as checkable
-        children, mirroring the app's Scenes view); a checklist of the sim's saved
-        camera views on the right."""
+        """Four columns: render options (left, narrow); the Saved Scenes the user
+        has captured with "Save Scene"; a tree of scenes (checking one reveals its
+        scalar/vector displayers as checkable children, mirroring the app's Scenes
+        view); and a checklist of the sim's saved camera views on the right."""
         tab = QWidget()
 
         # Options: the scene-render image options, seeded from settings.
@@ -857,6 +863,13 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._scene_format)
         options.addStretch(1)
 
+        # Saved Scenes: scene setups captured with "Save Scene" (each item holds
+        # its scene characteristics in its data).
+        self._saved_scenes = QListWidget()
+        saved = QVBoxLayout()
+        saved.addWidget(self._header("Saved Scenes"))
+        saved.addWidget(self._saved_scenes)
+
         # Scenes: a tree of scenes whose displayers appear (checkable) when the
         # scene is checked.
         self._scene_tree = _SceneTree()
@@ -872,8 +885,10 @@ class BatchRunDialog(QDialog):
         views.addWidget(self._header("Saved Views"))
         views.addWidget(self._views_window)
 
+        # Options halved (1) frees room for the new Saved Scenes column (1).
         row = QHBoxLayout(tab)
-        row.addLayout(options, 2)
+        row.addLayout(options, 1)
+        row.addLayout(saved, 1)
         row.addLayout(scenes, 2)
         row.addLayout(views, 1)
         return tab
@@ -1090,9 +1105,11 @@ class BatchRunDialog(QDialog):
 
     def _update_preview(self, *_args) -> None:
         """Show the preview window (and the Add Plot button) while the Plots tab
-        is in front; hide them otherwise."""
+        is in front; hide them otherwise. The Save Scene button likewise shows
+        only on the Scenes tab."""
         on_plots = self._tabs.currentWidget() is self._plots_tab
         self._add_plot.setVisible(on_plots)
+        self._save_scene.setVisible(self._tabs.currentWidget() is self._scenes_tab)
         if on_plots:
             frame = self.frameGeometry()
             self._preview_window.move(frame.right() + 8, frame.top())
@@ -1147,6 +1164,34 @@ class BatchRunDialog(QDialog):
         item = QListWidgetItem(name)
         item.setData(Qt.ItemDataRole.UserRole, self._capture_plot())
         self._saved_plots.addItem(item)
+
+    def _checked_views(self) -> list[str]:
+        """The checked saved camera views, in list order."""
+        return [
+            self._views_window.item(i).text()
+            for i in range(self._views_window.count())
+            if self._views_window.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    def _capture_scene(self) -> dict:
+        """Snapshot the current scene setup for a saved scene: the checked scenes
+        and their displayers, the chosen views, and the image options."""
+        return {
+            "displayers": self._scene_tree.checked_displayers(),
+            "views": self._checked_views(),
+            "resolution": self._scene_resolution.currentData(),
+            "format": self._scene_format.currentData(),
+        }
+
+    def _on_save_scene(self) -> None:
+        """Prompt for a name and add the current scene setup to Saved Scenes."""
+        name, ok = QInputDialog.getText(self, "Save scene", "Saved scene name:")
+        name = name.strip() if ok else ""
+        if not name:
+            return
+        item = QListWidgetItem(name)
+        item.setData(Qt.ItemDataRole.UserRole, self._capture_scene())
+        self._saved_scenes.addItem(item)
 
     def _on_saved_plot_menu(self, pos) -> None:
         """Right-click a saved plot: Properties (its captured settings) or Delete."""

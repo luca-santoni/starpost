@@ -502,6 +502,57 @@ def test_batch_run_dialog_scenes_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_save_scene(app, monkeypatch):
+    """Save Scene (shown only on the Scenes tab) captures the scene setup
+    (displayers, views, image options) into the Saved Scenes list."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.core.settings import Settings
+    from starpost.data.models import Displayer, Scene, SimResult
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        scenes=[Scene("Pressure", [Displayer("Static Pressure", "scalar"),
+                                   Displayer("Velocity", "vector")])],
+        views=["Top", "Iso"],
+    )
+    dlg = brd.BatchRunDialog(results=[result], settings=Settings())
+    scenes_idx = next(
+        i for i in range(dlg._tabs.count()) if dlg._tabs.tabText(i) == "Scenes"
+    )
+
+    # Save Scene is hidden off the Scenes tab, shown on it (and Add Plot the
+    # reverse).
+    dlg._tabs.setCurrentIndex(0)
+    dlg._update_preview()
+    assert dlg._save_scene.isHidden()
+    dlg._tabs.setCurrentIndex(scenes_idx)
+    dlg._update_preview()
+    assert not dlg._save_scene.isHidden()
+    assert dlg._add_plot.isHidden()
+
+    # Configure a scene + displayer + view, then Save Scene.
+    g = dlg._scene_tree.invisibleRootItem().child(0)
+    g.setCheckState(0, Qt.CheckState.Checked)
+    g.child(0).setCheckState(0, Qt.CheckState.Checked)  # Static Pressure
+    views = dlg._views_window
+    next(views.item(i) for i in range(views.count())
+         if views.item(i).text() == "Top").setCheckState(Qt.CheckState.Checked)
+
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Scene A", True))
+    dlg._on_save_scene()
+
+    assert dlg._saved_scenes.count() == 1
+    item = dlg._saved_scenes.item(0)
+    assert item.text() == "Scene A"
+    data = item.data(Qt.ItemDataRole.UserRole)
+    assert data["displayers"] == {"Pressure": ["Static Pressure"]}
+    assert data["views"] == ["Top"]
+    assert data["resolution"] == "1080p" and data["format"] == "jpg"
+    dlg.close()
+
+
 def test_batch_run_dialog_add_plot(app, monkeypatch):
     """Add Plot (shown only on the Plots tab) saves the plot characteristics under
     a prompted name into the Saved Plots list."""
