@@ -834,10 +834,10 @@ class BatchRunDialog(QDialog):
 
     # --- Scenes tab -------------------------------------------------------
     def _build_scenes_tab(self) -> QWidget:
-        """Four columns: render options (left, narrow); the Saved Scenes the user
-        has captured with "Save Scene"; a tree of scenes (checking one reveals its
-        scalar/vector displayers as checkable children, mirroring the app's Scenes
-        view); and a checklist of the sim's saved camera views on the right."""
+        """Four columns: render options (left, narrow); a tree of scenes (checking
+        one reveals its scalar/vector displayers as checkable children, mirroring
+        the app's Scenes view); a checklist of the sim's saved camera views; and
+        the Saved Scenes the user has captured with "Save Scene" on the right."""
         tab = QWidget()
 
         # Options: the scene-render image options, seeded from settings.
@@ -885,12 +885,13 @@ class BatchRunDialog(QDialog):
         views.addWidget(self._header("Saved Views"))
         views.addWidget(self._views_window)
 
-        # Options halved (1) frees room for the new Saved Scenes column (1).
+        # Options stays narrow (1); Saved Scenes sits at the far right, after
+        # Saved Views.
         row = QHBoxLayout(tab)
         row.addLayout(options, 1)
-        row.addLayout(saved, 1)
         row.addLayout(scenes, 2)
         row.addLayout(views, 1)
+        row.addLayout(saved, 1)
         return tab
 
     @staticmethod
