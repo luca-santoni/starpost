@@ -388,6 +388,27 @@ def test_batch_run_dialog_monitor_color_swatches(app):
     dlg.close()
 
 
+def test_batch_run_dialog_legend_scale(app):
+    """The legend-scale slider applies to the preview and saves with the plot:
+    mid is 1.0×, ends are 0.5×/2.0×, and the factor is captured."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog(monitor_groups={"Residuals": ["Continuity"]})
+    assert dlg._legend_scale.value() == 50  # opens at the natural size
+    assert dlg._legend_factor(50) == 1.0
+    assert dlg._legend_factor(0) == 0.5 and dlg._legend_factor(100) == 2.0
+
+    # Moving the slider scales the preview's legend.
+    applied = []
+    dlg._preview.set_legend_scale = lambda f: applied.append(f)
+    dlg._legend_scale.setValue(100)
+    assert applied == [2.0]
+
+    # The factor is captured into a saved plot.
+    assert dlg._capture_plot()["legend_scale"] == 2.0
+    dlg.close()
+
+
 def test_batch_run_dialog_add_plot(app, monkeypatch):
     """Add Plot (shown only on the Plots tab) saves the plot characteristics under
     a prompted name into the Saved Plots list."""

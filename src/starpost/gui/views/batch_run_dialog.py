@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QProgressDialog,
     QPushButton,
+    QSlider,
     QStyle,
     QStyleOptionViewItem,
     QTabWidget,
@@ -306,6 +307,11 @@ class _SavedPlotPropertiesDialog(QDialog):
         form.addRow("X axis label:", QLabel(_or_dash(data.get("x_label", ""))))
         form.addRow("Y axis label:", QLabel(_or_dash(data.get("y_label", ""))))
         form.addRow("Theme:", QLabel((data.get("theme") or "").capitalize() or "—"))
+        scale = data.get("legend_scale")
+        form.addRow(
+            "Legend scale:",
+            QLabel(f"{round(scale, 2):g}×" if scale is not None else "—"),
+        )
         form.addRow("File format:", QLabel(_or_dash(data.get("format", ""))))
 
         layout = QVBoxLayout(self)
@@ -847,7 +853,7 @@ class BatchRunDialog(QDialog):
 
     def _build_plot_options(self) -> QVBoxLayout:
         """Plot options (a subset of the Export dialog's), live-applied to the
-        preview: title, axis labels, theme, grid, image format."""
+        preview: title, axis labels, theme, legend scale, grid, image format."""
         self._plot_title = QLineEdit()
         self._plot_title.textChanged.connect(self._preview_set_title)
         self._plot_xlabel = QLineEdit()
@@ -858,6 +864,14 @@ class BatchRunDialog(QDialog):
         self._plot_theme.addItem("Light", "light")
         self._plot_theme.addItem("Dark", "dark")
         self._plot_theme.currentIndexChanged.connect(self._preview_set_theme)
+        # Legend size: a slider whose mid-point is the natural size (1.0×) and
+        # which scales the legend down (left) or up (right) symmetrically — same
+        # mapping as the Export dialog's slider.
+        self._legend_scale = QSlider(Qt.Orientation.Horizontal)
+        self._legend_scale.setRange(0, 100)
+        self._legend_scale.setValue(50)  # middle of the track == default 1.0×
+        self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
+        self._legend_scale.valueChanged.connect(self._preview_set_legend_scale)
         self._plot_grid = QCheckBox("Show grid")
         self._plot_grid.setChecked(True)
         self._plot_grid.toggled.connect(self._preview_set_grid)
@@ -869,6 +883,7 @@ class BatchRunDialog(QDialog):
         form.addRow("X axis label", self._plot_xlabel)
         form.addRow("Y axis label", self._plot_ylabel)
         form.addRow("Theme", self._plot_theme)
+        form.addRow("Legend scale", self._legend_scale)
         form.addRow(self._plot_grid)
         form.addRow("Format", self._plot_format)
 
@@ -877,6 +892,12 @@ class BatchRunDialog(QDialog):
         col.addLayout(form)
         col.addStretch(1)
         return col
+
+    @staticmethod
+    def _legend_factor(value: int) -> float:
+        """Map the slider's 0–100 position to a legend scale factor, with the
+        midpoint (50) at 1.0×; each half spans one octave (ends 0.5× and 2.0×)."""
+        return 2.0 ** ((value - 50) / 50.0)
 
     def _configure_preview(self) -> None:
         """Match the preview's filtering/hover/theme to the app settings so it
@@ -929,6 +950,7 @@ class BatchRunDialog(QDialog):
             "monitors": monitors,
             "monitor_colors": monitor_colors,
             "theme": self._plot_theme.currentData(),
+            "legend_scale": self._legend_factor(self._legend_scale.value()),
             "grid": self._plot_grid.isChecked(),
             "format": self._plot_format.currentText(),
             "series_colors": dict(series_colors),
@@ -1055,6 +1077,9 @@ class BatchRunDialog(QDialog):
 
     def _preview_set_grid(self, checked) -> None:
         self._preview.set_grid_visible(checked)
+
+    def _preview_set_legend_scale(self, value) -> None:
+        self._preview.set_legend_scale(self._legend_factor(value))
 
     def _on_summary(self) -> bool:
         return self._tabs.currentIndex() == self._tabs.count() - 1
