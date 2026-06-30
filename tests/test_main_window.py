@@ -813,10 +813,6 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     })
     dlg._saved_scenes.addItem(scene_item)
 
-    # Scene image options on the Scenes tab — also part of the profile.
-    dlg._scene_resolution.setCurrentIndex(dlg._scene_resolution.findData("2160p"))
-    dlg._scene_format.setCurrentIndex(dlg._scene_format.findData("png"))
-
     monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Full", True))
     dlg._save_profile()
     dlg.close()
@@ -848,10 +844,6 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     assert s.data(Qt.ItemDataRole.UserRole)["displayers"] == {
         "Pressure": ["Static Pressure"]
     }
-
-    # The Scenes tab's image options were restored too.
-    assert dlg2._scene_resolution.currentData() == "2160p"
-    assert dlg2._scene_format.currentData() == "png"
     dlg2.close()
 
 

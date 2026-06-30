@@ -389,9 +389,6 @@ class BatchProfile:
     selected_reports: list[str] = field(default_factory=list)
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
-    # The Scenes tab's image-render options (empty == use the dialog defaults).
-    scene_resolution: str = ""
-    scene_format: str = ""
 
     def path(self) -> Path:
         return batch_profiles_dir() / f"{self.name}.yaml"
@@ -402,8 +399,6 @@ class BatchProfile:
             "selected_reports": list(self.selected_reports),
             "saved_plots": [_plot_entry_to_yaml(e) for e in self.saved_plots],
             "saved_scenes": list(self.saved_scenes),
-            "scene_resolution": self.scene_resolution,
-            "scene_format": self.scene_format,
         }
         self.path().write_text(
             yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
@@ -421,8 +416,6 @@ class BatchProfile:
                 _plot_entry_from_yaml(e) for e in data.get("saved_plots", [])
             ],
             saved_scenes=list(data.get("saved_scenes", [])),
-            scene_resolution=data.get("scene_resolution", ""),
-            scene_format=data.get("scene_format", ""),
         )
 
 
