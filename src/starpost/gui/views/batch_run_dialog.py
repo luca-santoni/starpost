@@ -496,9 +496,7 @@ class BatchRunDialog(QDialog):
         name = self._profile_box.currentText()
         if not name:
             return
-        # Nothing to apply yet — the batch settings a profile captures are wired
-        # in later; this just resolves the saved profile.
-        BatchProfile.load(name)
+        self._apply_profile(BatchProfile.load(name))
 
     def _save_profile(self) -> None:
         name, ok = QInputDialog.getText(
@@ -512,9 +510,56 @@ class BatchRunDialog(QDialog):
             f"A batch profile named “{name}” already exists. Overwrite it?",
         ) != QMessageBox.StandardButton.Yes:
             return
-        BatchProfile(name=name).save()
+        self._build_profile(name).save()
         self._refresh_profiles()
         self._profile_box.setCurrentText(name)
+
+    def _build_profile(self, name: str) -> BatchProfile:
+        """Capture the current batch setup — the ticked reports and the saved
+        plots/scenes (name + characteristics) — into a profile."""
+        return BatchProfile(
+            name=name,
+            selected_reports=[
+                self._reports_window.item(i).text()
+                for i in range(self._reports_window.count())
+                if self._reports_window.item(i).checkState() == Qt.CheckState.Checked
+            ],
+            saved_plots=self._saved_entries(self._saved_plots),
+            saved_scenes=self._saved_entries(self._saved_scenes),
+        )
+
+    @staticmethod
+    def _saved_entries(list_widget) -> list[dict]:
+        """``[{"name": str, "data": dict}, ...]`` for a Saved Plots/Scenes list."""
+        return [
+            {
+                "name": list_widget.item(i).text(),
+                "data": list_widget.item(i).data(Qt.ItemDataRole.UserRole) or {},
+            }
+            for i in range(list_widget.count())
+        ]
+
+    def _apply_profile(self, profile: BatchProfile) -> None:
+        """Apply a loaded profile: tick its reports (within those available) and
+        replace the saved plots/scenes with the profile's."""
+        selected = set(profile.selected_reports)
+        for i in range(self._reports_window.count()):
+            item = self._reports_window.item(i)
+            item.setCheckState(
+                Qt.CheckState.Checked if item.text() in selected
+                else Qt.CheckState.Unchecked
+            )
+        self._restore_saved(self._saved_plots, profile.saved_plots)
+        self._restore_saved(self._saved_scenes, profile.saved_scenes)
+
+    @staticmethod
+    def _restore_saved(list_widget, entries) -> None:
+        """Replace a Saved Plots/Scenes list with the profile's entries."""
+        list_widget.clear()
+        for entry in entries:
+            item = QListWidgetItem(entry.get("name", ""))
+            item.setData(Qt.ItemDataRole.UserRole, entry.get("data", {}))
+            list_widget.addItem(item)
 
     @staticmethod
     def _header(text: str) -> QLabel:

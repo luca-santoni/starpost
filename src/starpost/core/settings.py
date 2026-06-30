@@ -382,16 +382,26 @@ def delete_profile(name: str) -> None:
 @dataclass
 class BatchProfile:
     """A saved batch-run configuration, kept entirely separate from the
-    report/plot Profiles and stored under its own directory. Currently holds
-    only a name; the batch settings it captures are added later."""
+    report/plot Profiles and stored under its own directory. Captures the
+    Run-batch dialog's selection: which reports are ticked, and the saved plots
+    and saved scenes (each ``{"name": str, "data": dict}``)."""
     name: str
+    selected_reports: list[str] = field(default_factory=list)
+    saved_plots: list[dict] = field(default_factory=list)
+    saved_scenes: list[dict] = field(default_factory=list)
 
     def path(self) -> Path:
         return batch_profiles_dir() / f"{self.name}.yaml"
 
     def save(self) -> None:
+        data = {
+            "name": self.name,
+            "selected_reports": list(self.selected_reports),
+            "saved_plots": [_plot_entry_to_yaml(e) for e in self.saved_plots],
+            "saved_scenes": list(self.saved_scenes),
+        }
         self.path().write_text(
-            yaml.safe_dump({"name": self.name}, sort_keys=False), encoding="utf-8"
+            yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
         )
 
     @classmethod
@@ -399,7 +409,35 @@ class BatchProfile:
         data = yaml.safe_load(
             (batch_profiles_dir() / f"{name}.yaml").read_text(encoding="utf-8")
         )
-        return cls(name=data["name"])
+        return cls(
+            name=data["name"],
+            selected_reports=list(data.get("selected_reports", [])),
+            saved_plots=[
+                _plot_entry_from_yaml(e) for e in data.get("saved_plots", [])
+            ],
+            saved_scenes=list(data.get("saved_scenes", [])),
+        )
+
+
+def _plot_entry_to_yaml(entry: dict) -> dict:
+    """Make a saved-plot entry YAML-safe: a plot's per-(data set, series) colour
+    overrides are keyed by a ``(sim, series)`` tuple, which YAML can't represent,
+    so flatten them to ``[sim, series, colour]`` rows."""
+    data = dict(entry.get("data", {}))
+    pair = data.get("pair_colors")
+    if isinstance(pair, dict):
+        data["pair_colors"] = [[s, n, c] for (s, n), c in pair.items()]
+    return {"name": entry.get("name", ""), "data": data}
+
+
+def _plot_entry_from_yaml(entry: dict) -> dict:
+    """Inverse of :func:`_plot_entry_to_yaml`: rebuild the tuple-keyed
+    ``pair_colors`` dict from its flattened rows."""
+    data = dict(entry.get("data", {}))
+    pair = data.get("pair_colors")
+    if isinstance(pair, list):
+        data["pair_colors"] = {(row[0], row[1]): row[2] for row in pair}
+    return {"name": entry.get("name", ""), "data": data}
 
 
 def list_batch_profiles() -> list[str]:

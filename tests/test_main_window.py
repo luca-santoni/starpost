@@ -785,3 +785,63 @@ def test_batch_run_dialog_save_and_load_profile(app, monkeypatch):
     assert dlg._profile_box.currentText() == "Weekly"
     dlg._load_profile()  # resolves without error
     dlg.close()
+
+
+def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
+    """Saving a batch profile captures the ticked reports and the saved plots and
+    scenes; loading it into a fresh dialog restores all of them."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog(report_names=["Drag", "Lift", "Downforce"])
+    # Deselect a report, and capture a plot + a scene (with full data, including a
+    # tuple-keyed pair_colors that must survive the YAML round-trip).
+    dlg._reports_window.item(1).setCheckState(Qt.CheckState.Unchecked)  # Lift
+    plot_item = QListWidgetItem("Drag plot")
+    plot_item.setData(Qt.ItemDataRole.UserRole, {
+        "title": "Drag", "monitors": {"Forces": ["Drag"]},
+        "series_colors": {"Drag": "#e6194b"},
+        "pair_colors": {("caseA", "Drag"): "#123456"},
+    })
+    dlg._saved_plots.addItem(plot_item)
+    scene_item = QListWidgetItem("Pressure scene")
+    scene_item.setData(Qt.ItemDataRole.UserRole, {
+        "displayers": {"Pressure": ["Static Pressure"]}, "views": ["Top"],
+        "resolution": "1080p", "format": "jpg",
+    })
+    dlg._saved_scenes.addItem(scene_item)
+
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Full", True))
+    dlg._save_profile()
+    dlg.close()
+
+    # A fresh dialog with the same reports available, loading the saved profile.
+    dlg2 = brd.BatchRunDialog(report_names=["Drag", "Lift", "Downforce"])
+    dlg2._profile_box.setCurrentText("Full")
+    dlg2._load_profile()
+
+    checked = [
+        dlg2._reports_window.item(i).text()
+        for i in range(dlg2._reports_window.count())
+        if dlg2._reports_window.item(i).checkState() == Qt.CheckState.Checked
+    ]
+    assert checked == ["Drag", "Downforce"]
+
+    assert dlg2._saved_plots.count() == 1
+    p = dlg2._saved_plots.item(0)
+    assert p.text() == "Drag plot"
+    pdata = p.data(Qt.ItemDataRole.UserRole)
+    assert pdata["title"] == "Drag"
+    assert pdata["monitors"] == {"Forces": ["Drag"]}
+    assert pdata["series_colors"] == {"Drag": "#e6194b"}
+    assert pdata["pair_colors"] == {("caseA", "Drag"): "#123456"}  # tuple restored
+
+    assert dlg2._saved_scenes.count() == 1
+    s = dlg2._saved_scenes.item(0)
+    assert s.text() == "Pressure scene"
+    assert s.data(Qt.ItemDataRole.UserRole)["displayers"] == {
+        "Pressure": ["Static Pressure"]
+    }
+    dlg2.close()
