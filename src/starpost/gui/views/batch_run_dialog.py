@@ -10,10 +10,21 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, QObject, QRectF, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtCore import (
+    QEventLoop,
+    QObject,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -43,8 +54,18 @@ from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind, SimResult
 from starpost.gui.theme import _DARK, _LIGHT, normalize_accent
-from starpost.gui.views.export_dialog import _PreviewWindow
-from starpost.gui.views.plot_view import PlotView, _display_name, _series_is_empty
+from starpost.gui.views.export_dialog import (
+    _PreviewWindow,
+    _SWATCH_GAP,
+    _SWATCH_ROLE,
+    _SWATCH_SIZE,
+)
+from starpost.gui.views.plot_view import (
+    _COLORS,
+    PlotView,
+    _display_name,
+    _series_is_empty,
+)
 from starpost.gui.widgets import UniformTabBar
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
@@ -112,6 +133,7 @@ class _MonitorTree(QTreeWidget):
     checked at once. The checked monitors per group drive what is plotted."""
 
     changed = Signal()
+    swatch_clicked = Signal(object, int)  # the monitor item, and which swatch
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -124,6 +146,43 @@ class _MonitorTree(QTreeWidget):
         # (residual plots), so the whole set plots together.
         self._auto_select_groups: set[str] = set()
         self.itemChanged.connect(self._on_item_changed)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        # A click on a monitor's colour swatch opens its colour menu instead of
+        # toggling the checkbox; everything else falls through to the default.
+        pos = event.position().toPoint()
+        item = self.itemAt(pos)
+        if item is not None and item.parent() is not None:
+            for i, rect in enumerate(self._swatch_rects(item)):
+                if rect.contains(pos):
+                    self.swatch_clicked.emit(item, i)
+                    event.accept()
+                    return
+        super().mousePressEvent(event)
+
+    def _swatch_rects(self, item) -> list[QRect]:
+        """The clickable band of each colour swatch, just right of the checkbox.
+        Empty when the monitor has no swatch (unchecked / not drawn)."""
+        colors = item.data(0, _SWATCH_ROLE)
+        if not colors:
+            return []
+        item_rect = self.visualRect(self.indexFromItem(item, 0))
+        opt = QStyleOptionViewItem()
+        opt.initFrom(self)
+        opt.rect = item_rect
+        opt.features |= QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+        opt.checkState = item.checkState(0)
+        check = self.style().subElementRect(
+            QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, self
+        )
+        start = check.right() + 2  # where the swatch icon begins
+        return [
+            QRect(
+                start + i * (_SWATCH_SIZE + _SWATCH_GAP),
+                item_rect.top(), _SWATCH_SIZE, item_rect.height(),
+            )
+            for i in range(len(colors))
+        ]
 
     def set_auto_select_groups(self, names) -> None:
         self._auto_select_groups = set(names)
@@ -745,6 +804,8 @@ class BatchRunDialog(QDialog):
         self._monitor_tree.set_auto_select_groups(self._residual_groups)
         self._monitor_tree.set_groups(self._monitor_groups)
         self._monitor_tree.changed.connect(self._render_preview)
+        # Clicking a checked monitor's colour swatch recolours its line.
+        self._monitor_tree.swatch_clicked.connect(self._pick_monitor_color)
 
         options = self._build_plot_options()
 
@@ -910,15 +971,74 @@ class BatchRunDialog(QDialog):
         appearance (title, colours, legend, …)."""
         selection = self._monitor_tree.checked_monitors()
         groups = set(selection)
-        if not self._results or not groups:
+        plots = (
+            [p for p in self._results[0].plots if p.name in groups]
+            if self._results and groups else []
+        )
+        if plots:
+            self._preview.show_plots(plots)
+            self._preview.set_monitor_selection(selection)
+        else:
             self._preview.clear()
+        # Keep each checked monitor's swatch in step with the colour it's drawn in.
+        self._refresh_monitor_swatches()
+
+    # --- monitor colour swatches ----------------------------------------
+    @staticmethod
+    def _color_icon(color: str) -> QIcon:
+        """A filled square swatch of ``color`` for the tree and the colour menu."""
+        px = QPixmap(_SWATCH_SIZE, _SWATCH_SIZE)
+        px.fill(QColor(color))
+        return QIcon(px)
+
+    def _refresh_monitor_swatches(self) -> None:
+        """Give every checked monitor a colour swatch matching the colour it's
+        drawn in (the representative data set's line); clear it on unchecked
+        monitors. Signals are blocked so setting an icon doesn't re-fire
+        itemChanged."""
+        tree = self._monitor_tree
+        tree.setIconSize(QSize(_SWATCH_SIZE, _SWATCH_SIZE))
+        tree.blockSignals(True)
+        root = tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            group = root.child(i)
+            for j in range(group.childCount()):
+                m = group.child(j)
+                if m.checkState(0) == Qt.CheckState.Checked:
+                    name = m.data(0, Qt.ItemDataRole.UserRole)
+                    color = self._preview.series_color(name) or "#888888"
+                    m.setData(0, _SWATCH_ROLE, [color])
+                    m.setIcon(0, self._color_icon(color))
+                else:
+                    m.setData(0, _SWATCH_ROLE, None)
+                    m.setIcon(0, QIcon())
+        tree.blockSignals(False)
+
+    def _pick_monitor_color(self, item, _swatch: int) -> None:
+        """Colour menu for a monitor's swatch: pick a palette colour or a custom
+        one; the choice recolours that monitor's line in the preview and updates
+        the swatch."""
+        name = item.data(0, Qt.ItemDataRole.UserRole)
+        current = self._preview.series_color(name)
+        menu = QMenu(self)
+        for c in _COLORS:
+            menu.addAction(self._color_icon(c), c).setData(c)
+        menu.addSeparator()
+        custom = menu.addAction("Custom…")
+        chosen = menu.exec(QCursor.pos())
+        if chosen is None:
             return
-        plots = [p for p in self._results[0].plots if p.name in groups]
-        if not plots:
-            self._preview.clear()
-            return
-        self._preview.show_plots(plots)
-        self._preview.set_monitor_selection(selection)
+        if chosen is custom:
+            picked = QColorDialog.getColor(
+                QColor(current or "#ffffff"), self, "Monitor colour"
+            )
+            if not picked.isValid():
+                return
+            color = picked.name()
+        else:
+            color = chosen.data()
+        self._preview.set_series_color(name, color)
+        self._refresh_monitor_swatches()
 
     # Preview option handlers.
     def _preview_set_title(self, text) -> None:

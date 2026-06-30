@@ -349,6 +349,45 @@ def test_batch_run_dialog_plots_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_monitor_color_swatches(app):
+    """Checked monitors get a colour swatch matching their drawn line; recolouring
+    a monitor updates its swatch; unchecking clears it."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        plots=[MonitorPlot(
+            "Forces", [PlotSeries("Drag", [1, 2], [10.0, 9.0])],
+            kind=PlotKind.FORCE,
+        )],
+    )
+    dlg = brd.BatchRunDialog(monitor_groups={"Forces": ["Drag"]}, results=[result])
+    g = dlg._monitor_tree.invisibleRootItem().child(0)
+    g.setCheckState(0, Qt.CheckState.Checked)
+    monitor = g.child(0)
+    monitor.setCheckState(0, Qt.CheckState.Checked)
+    # Checked → a swatch colour is stored (the drawn cycle colour).
+    assert monitor.data(0, brd._SWATCH_ROLE)
+
+    # Recolour the monitor → its swatch follows the new colour.
+    dlg._preview.set_series_color("Drag", "#e6194b")
+    dlg._refresh_monitor_swatches()
+    assert monitor.data(0, brd._SWATCH_ROLE) == ["#e6194b"]
+
+    # The chosen colour is captured into a saved plot.
+    g_sel = dlg._monitor_tree.checked_monitors()
+    assert g_sel == {"Forces": ["Drag"]}
+    assert dlg._capture_plot()["monitor_colors"]["Drag"] == "#e6194b"
+
+    # Unchecking the monitor clears its swatch.
+    monitor.setCheckState(0, Qt.CheckState.Unchecked)
+    assert monitor.data(0, brd._SWATCH_ROLE) is None
+    dlg.close()
+
+
 def test_batch_run_dialog_add_plot(app, monkeypatch):
     """Add Plot (shown only on the Plots tab) saves the plot characteristics under
     a prompted name into the Saved Plots list."""
