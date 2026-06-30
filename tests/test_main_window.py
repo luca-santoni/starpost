@@ -813,6 +813,10 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     })
     dlg._saved_scenes.addItem(scene_item)
 
+    # Scene image options on the Scenes tab — also part of the profile.
+    dlg._scene_resolution.setCurrentIndex(dlg._scene_resolution.findData("2160p"))
+    dlg._scene_format.setCurrentIndex(dlg._scene_format.findData("png"))
+
     monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("Full", True))
     dlg._save_profile()
     dlg.close()
@@ -844,4 +848,32 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     assert s.data(Qt.ItemDataRole.UserRole)["displayers"] == {
         "Pressure": ["Static Pressure"]
     }
+
+    # The Scenes tab's image options were restored too.
+    assert dlg2._scene_resolution.currentData() == "2160p"
+    assert dlg2._scene_format.currentData() == "png"
     dlg2.close()
+
+
+def test_batch_run_dialog_save_scene_captures_image_options(app, monkeypatch):
+    """Save Scene records the current image resolution and format with the
+    scene, so each saved scene carries its own render options."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.core.settings import Settings
+    from starpost.data.models import Displayer, Scene, SimResult
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        scenes=[Scene("Pressure", [Displayer("Static Pressure", "scalar")])],
+    )
+    dlg = brd.BatchRunDialog(results=[result], settings=Settings())
+    dlg._scene_resolution.setCurrentIndex(dlg._scene_resolution.findData("2160p"))
+    dlg._scene_format.setCurrentIndex(dlg._scene_format.findData("png"))
+
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("S", True))
+    dlg._on_save_scene()
+    data = dlg._saved_scenes.item(0).data(Qt.ItemDataRole.UserRole)
+    assert data["resolution"] == "2160p" and data["format"] == "png"
+    dlg.close()

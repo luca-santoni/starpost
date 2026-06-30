@@ -526,6 +526,8 @@ class BatchRunDialog(QDialog):
             ],
             saved_plots=self._saved_entries(self._saved_plots),
             saved_scenes=self._saved_entries(self._saved_scenes),
+            scene_resolution=self._scene_resolution.currentData(),
+            scene_format=self._scene_format.currentData(),
         )
 
     @staticmethod
@@ -551,6 +553,15 @@ class BatchRunDialog(QDialog):
             )
         self._restore_saved(self._saved_plots, profile.saved_plots)
         self._restore_saved(self._saved_scenes, profile.saved_scenes)
+        # Scene image options (left empty in older profiles).
+        if profile.scene_resolution:
+            ri = self._scene_resolution.findData(profile.scene_resolution)
+            if ri >= 0:
+                self._scene_resolution.setCurrentIndex(ri)
+        if profile.scene_format:
+            fi = self._scene_format.findData(profile.scene_format)
+            if fi >= 0:
+                self._scene_format.setCurrentIndex(fi)
 
     @staticmethod
     def _restore_saved(list_widget, entries) -> None:
