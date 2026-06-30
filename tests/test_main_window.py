@@ -409,6 +409,47 @@ def test_batch_run_dialog_legend_scale(app):
     dlg.close()
 
 
+def test_batch_run_dialog_plot_option_parity(app):
+    """The Plots tab carries the Export dialog's full option set (aspect ratio,
+    title/axis-label sizes, line thickness), applied live and captured."""
+    import starpost.gui.views.batch_run_dialog as brd
+    import starpost.gui.views.export_dialog as exp
+
+    dlg = brd.BatchRunDialog(monitor_groups={"Residuals": ["Continuity"]})
+
+    # Sliders open at the same defaults as the Export dialog (unchanged plot).
+    assert dlg._text_size_for(
+        dlg._title_size.value(), exp._TITLE_PT_MIN, exp._TITLE_PT_MAX
+    ) == exp._TITLE_PT_DEFAULT
+    assert dlg._text_size_for(
+        dlg._axis_label_size.value(), exp._AXIS_LABEL_PT_MIN, exp._AXIS_LABEL_PT_MAX
+    ) == exp._AXIS_LABEL_PT_DEFAULT
+    assert dlg._plot_aspect.currentText() == "Custom"
+
+    # Each control applies to the preview / preview window.
+    applied = {"title": [], "axis": [], "line": [], "aspect": []}
+    dlg._preview.set_title_size = lambda v: applied["title"].append(v)
+    dlg._preview.set_axis_label_size = lambda v: applied["axis"].append(v)
+    dlg._preview.set_line_width = lambda v: applied["line"].append(v)
+    dlg._preview_window.set_aspect = lambda r: applied["aspect"].append(r)
+    dlg._title_size.setValue(100)
+    dlg._axis_label_size.setValue(0)
+    dlg._line_width.setValue(100)
+    dlg._plot_aspect.setCurrentText("16:9")
+    assert applied["title"] == [exp._TITLE_PT_MAX]
+    assert applied["axis"] == [exp._AXIS_LABEL_PT_MIN]
+    assert applied["line"] == [exp._LINE_WIDTH_MAX]
+    assert applied["aspect"] == [16 / 9]
+
+    # All new options are captured into a saved plot.
+    chars = dlg._capture_plot()
+    assert chars["title_size"] == exp._TITLE_PT_MAX
+    assert chars["axis_label_size"] == exp._AXIS_LABEL_PT_MIN
+    assert chars["line_width"] == exp._LINE_WIDTH_MAX
+    assert chars["aspect"] == "16:9"
+    dlg.close()
+
+
 def test_batch_run_dialog_add_plot(app, monkeypatch):
     """Add Plot (shown only on the Plots tab) saves the plot characteristics under
     a prompted name into the Saved Plots list."""
@@ -442,6 +483,68 @@ def test_batch_run_dialog_add_plot(app, monkeypatch):
     assert chars["title"] == "My Plot"
     assert chars["monitors"] == {"Residuals": ["Continuity"]}
     assert "Continuity" in chars["monitor_colors"]  # colour captured per monitor
+    dlg.close()
+
+
+def test_batch_run_dialog_add_plot_saves_every_option(app, monkeypatch):
+    """Clicking Add Plot saves *every* plot option (and the monitor colours) on
+    the saved-plot item, not just a subset."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        plots=[MonitorPlot(
+            "Forces", [PlotSeries("Drag", [1, 2], [10.0, 9.0])],
+            kind=PlotKind.FORCE,
+        )],
+    )
+    dlg = brd.BatchRunDialog(monitor_groups={"Forces": ["Drag"]}, results=[result])
+    plots_idx = next(
+        i for i in range(dlg._tabs.count()) if dlg._tabs.widget(i) is dlg._plots_tab
+    )
+    dlg._tabs.setCurrentIndex(plots_idx)
+    dlg._update_preview()
+
+    # Set every option to a distinct, non-default value.
+    dlg._plot_aspect.setCurrentText("16:9")
+    dlg._plot_title.setText("My Title")
+    dlg._title_size.setValue(100)            # -> max pt
+    dlg._plot_xlabel.setText("Iter")
+    dlg._plot_ylabel.setText("Force (N)")
+    dlg._axis_label_size.setValue(0)         # -> min pt
+    dlg._plot_theme.setCurrentIndex(dlg._plot_theme.findData("dark"))
+    dlg._legend_scale.setValue(0)            # -> 0.5x
+    dlg._line_width.setValue(100)            # -> max px
+    dlg._plot_grid.setChecked(False)
+    dlg._plot_format.setCurrentText("PDF")
+
+    # Pick a monitor and give it a colour.
+    g = dlg._monitor_tree.invisibleRootItem().child(0)
+    g.setCheckState(0, Qt.CheckState.Checked)
+    g.child(0).setCheckState(0, Qt.CheckState.Checked)
+    dlg._preview.set_series_color("Drag", "#e6194b")
+
+    monkeypatch.setattr(brd.QInputDialog, "getText", lambda *a, **k: ("P", True))
+    dlg._on_add_plot()
+
+    chars = dlg._saved_plots.item(0).data(Qt.ItemDataRole.UserRole)
+    assert chars["aspect"] == "16:9"
+    assert chars["title"] == "My Title"
+    assert chars["title_size"] == brd._TITLE_PT_MAX
+    assert chars["x_label"] == "Iter"
+    assert chars["y_label"] == "Force (N)"
+    assert chars["axis_label_size"] == brd._AXIS_LABEL_PT_MIN
+    assert chars["theme"] == "dark"
+    assert chars["legend_scale"] == 0.5
+    assert chars["line_width"] == brd._LINE_WIDTH_MAX
+    assert chars["grid"] is False
+    assert chars["format"] == "PDF"
+    assert chars["monitors"] == {"Forces": ["Drag"]}
+    assert chars["monitor_colors"]["Drag"] == "#e6194b"
+    assert chars["series_colors"]["Drag"] == "#e6194b"
     dlg.close()
 
 

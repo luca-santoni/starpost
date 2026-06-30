@@ -310,17 +310,26 @@ class _SavedPlotPropertiesDialog(QDialog):
         def _or_dash(text: str) -> str:
             return text if text else "—"
 
+        def _pt(v) -> str:
+            return f"{v} pt" if v is not None else "—"
+
+        def _scale(v) -> str:
+            return f"{round(v, 2):g}×" if v is not None else "—"
+
+        def _px(v) -> str:
+            return f"{v:g} px" if v is not None else "—"
+
         form = QFormLayout()
         form.setHorizontalSpacing(24)
         form.addRow("Plot title:", QLabel(_or_dash(data.get("title", ""))))
+        form.addRow("Title size:", QLabel(_pt(data.get("title_size"))))
         form.addRow("X axis label:", QLabel(_or_dash(data.get("x_label", ""))))
         form.addRow("Y axis label:", QLabel(_or_dash(data.get("y_label", ""))))
+        form.addRow("Axis label size:", QLabel(_pt(data.get("axis_label_size"))))
+        form.addRow("Aspect ratio:", QLabel(_or_dash(data.get("aspect", ""))))
         form.addRow("Theme:", QLabel((data.get("theme") or "").capitalize() or "—"))
-        scale = data.get("legend_scale")
-        form.addRow(
-            "Legend scale:",
-            QLabel(f"{round(scale, 2):g}×" if scale is not None else "—"),
-        )
+        form.addRow("Legend scale:", QLabel(_scale(data.get("legend_scale"))))
+        form.addRow("Line thickness:", QLabel(_px(data.get("line_width"))))
         form.addRow("File format:", QLabel(_or_dash(data.get("format", ""))))
 
         layout = QVBoxLayout(self)
@@ -1024,12 +1033,21 @@ class BatchRunDialog(QDialog):
         }
         return {
             "title": self._plot_title.text(),
+            "title_size": self._text_size_for(
+                self._title_size.value(), _TITLE_PT_MIN, _TITLE_PT_MAX
+            ),
             "x_label": self._plot_xlabel.text(),
             "y_label": self._plot_ylabel.text(),
+            "axis_label_size": self._text_size_for(
+                self._axis_label_size.value(),
+                _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX,
+            ),
+            "aspect": self._plot_aspect.currentText(),
             "monitors": monitors,
             "monitor_colors": monitor_colors,
             "theme": self._plot_theme.currentData(),
             "legend_scale": self._legend_factor(self._legend_scale.value()),
+            "line_width": self._line_width_for(self._line_width.value()),
             "grid": self._plot_grid.isChecked(),
             "format": self._plot_format.currentText(),
             "series_colors": dict(series_colors),
