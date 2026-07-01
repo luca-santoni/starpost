@@ -407,7 +407,7 @@ class ExportDialog(QDialog):
         format. The user names the file via the native save dialog (opened in the
         default output folder). With "Separate files" on, one file per data set
         is written, each named in turn."""
-        from starpost.batch.aggregator import reports_wide_frame, write_report_table
+        from starpost.batch.aggregator import reports_long_frame, write_report_table
 
         names = set(self.checked_data_names())
         reports = set(self.checked_report_names())
@@ -431,7 +431,7 @@ class ExportDialog(QDialog):
                     if path is None:
                         return
                     # Same layout as a singular-file export, just one sim per file.
-                    df = reports_wide_frame([res], reports, units).reset_index()
+                    df = reports_long_frame([res], reports, units)
                     write_report_table(df, path, fmt)
             else:
                 # A single data set is named after it; combining several keeps
@@ -440,7 +440,7 @@ class ExportDialog(QDialog):
                 path = self._ask_save_path(default, fmt)
                 if path is None:
                     return
-                df = reports_wide_frame(results, reports, units).reset_index()
+                df = reports_long_frame(results, reports, units)
                 write_report_table(df, path, fmt)
         except Exception as exc:  # surface any write/engine error to the user
             QMessageBox.critical(self, "Export failed", str(exc))

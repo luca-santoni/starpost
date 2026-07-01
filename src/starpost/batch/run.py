@@ -230,7 +230,7 @@ def build_batch_archive(
             if config.reports:
                 steps.at(f"Writing reports for {source.name}…")
                 df = reports_long_frame(
-                    result, config.reports, config.include_units
+                    [result], config.reports, config.include_units
                 )
                 rpath = folder / f"reports.{config.report_format.lower()}"
                 write_report_table(df, rpath, config.report_format)

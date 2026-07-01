@@ -43,22 +43,19 @@ def reports_wide_frame(
 
 
 def reports_long_frame(
-    result: SimResult,
+    results: list[SimResult],
     selected: Optional[set[str]] = None,
     include_units: bool = True,
 ) -> pd.DataFrame:
-    """Tall report table for one sim (the transpose of a single wide row): a
-    "Report" column of names (units embedded when ``include_units``) and a value
-    column headed with the sim's name — one row per report."""
-    rows: list[dict] = []
-    for rep in result.reports:
-        if selected is not None and rep.name not in selected:
-            continue
-        name = (
-            f"{rep.name} [{rep.units}]" if include_units and rep.units else rep.name
-        )
-        rows.append({"Report": name, result.sim_name: rep.value})
-    return pd.DataFrame(rows, columns=["Report", result.sim_name])
+    """Tall report table — the transpose of :func:`reports_wide_frame`: a "Report"
+    column of names (units embedded when ``include_units``) and one value column
+    per sim, i.e. one row per report."""
+    wide = reports_wide_frame(results, selected, include_units)
+    if wide.empty:
+        return pd.DataFrame(columns=["Report"])
+    long = wide.T
+    long.index.name = "Report"
+    return long.reset_index()
 
 
 def write_report_table(df: pd.DataFrame, path: Path, fmt: str) -> None:
