@@ -1300,6 +1300,8 @@ class BatchRunDialog(QDialog):
             for series in monitors.values()
             for s in series
         }
+        # The legend position as a list (YAML-safe) so it saves in batch profiles.
+        legend_offset = self._preview.legend_offset()
         return {
             "title": self._plot_title.text(),
             "title_size": self._text_size_for(
@@ -1316,6 +1318,7 @@ class BatchRunDialog(QDialog):
             "monitor_colors": monitor_colors,
             "theme": self._plot_theme.currentData(),
             "legend_scale": self._legend_factor(self._legend_scale.value()),
+            "legend_offset": list(legend_offset) if legend_offset else None,
             "line_width": self._line_width_for(self._line_width.value()),
             "grid": self._plot_grid.isChecked(),
             "format": self._plot_format.currentText(),

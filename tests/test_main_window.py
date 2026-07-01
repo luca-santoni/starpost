@@ -689,6 +689,7 @@ def test_batch_run_dialog_add_plot_saves_every_option(app, monkeypatch):
     assert chars["axis_label_size"] == brd._AXIS_LABEL_PT_MIN
     assert chars["theme"] == "dark"
     assert chars["legend_scale"] == 0.5
+    assert "legend_offset" in chars  # legend position captured (None until drawn)
     assert chars["line_width"] == brd._LINE_WIDTH_MAX
     assert chars["grid"] is False
     assert chars["format"] == "PDF"

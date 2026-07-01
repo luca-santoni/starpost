@@ -97,3 +97,44 @@ def test_export_preview_ignores_text_scale(app):
         assert _title_pt(dlg._preview) == "11pt"  # base size, unscaled
     finally:
         dlg.deleteLater()
+
+
+def test_legend_offset_round_trips_across_sizes(app):
+    """The legend position is captured as a fraction of the plot area and restores
+    to the same spot at a different render size (so saved plots keep it)."""
+    import pyqtgraph as pg
+    from PySide6.QtCore import Qt
+
+    from starpost.data.models import MonitorPlot, PlotKind
+
+    def _laid_out(size):
+        pv = PlotView()
+        pv.set_category_controls_visible(False)
+        pv.show_plots([MonitorPlot(
+            "G", [PlotSeries("A", [1, 2, 3], [1, 2, 3]),
+                  PlotSeries("B", [1, 2, 3], [3, 2, 1])], kind=PlotKind.FORCE,
+        )])
+        pv.resize(*size)
+        pv.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        pv.show()
+        for _ in range(3):
+            app.processEvents()
+        return pv
+
+    src = _laid_out((720, 480))
+    rect = src._vb.boundingRect()
+    src._legend.autoAnchor(pg.Point(0.6 * rect.width(), 0.3 * rect.height()))
+    for _ in range(3):
+        app.processEvents()
+    frac = src.legend_offset()
+    assert frac is not None
+    assert abs(frac[0] - 0.6) < 0.02 and abs(frac[1] - 0.3) < 0.02
+
+    dst = _laid_out((1280, 720))  # different size
+    dst.set_legend_offset(frac)
+    for _ in range(3):
+        app.processEvents()
+    frac2 = dst.legend_offset()
+    assert abs(frac2[0] - frac[0]) < 0.02 and abs(frac2[1] - frac[1]) < 0.02
+    src.deleteLater()
+    dst.deleteLater()

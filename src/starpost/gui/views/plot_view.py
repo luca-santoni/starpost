@@ -639,6 +639,28 @@ class PlotView(QWidget):
         self._legend_scale = factor
         self._legend.setScale(factor)
 
+    def legend_offset(self) -> tuple[float, float] | None:
+        """The legend's position as a fraction (fx, fy) of the plot area, so a
+        saved/exported plot can restore it at any render size. None until the plot
+        area has a size (nothing laid out yet)."""
+        rect = self._vb.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return None
+        p = self._legend.pos()
+        return (p.x() / rect.width(), p.y() / rect.height())
+
+    def set_legend_offset(self, frac) -> None:
+        """Move the legend to a fractional position from :meth:`legend_offset`
+        (the plot area must already be laid out)."""
+        if not frac:
+            return
+        rect = self._vb.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return
+        self._legend.autoAnchor(
+            pg.Point(frac[0] * rect.width(), frac[1] * rect.height())
+        )
+
     def set_line_width(self, width: float) -> None:
         """Set the pen width used for every plotted line and redraw. Applies
         globally to all series; carries through to the exported image."""

@@ -114,6 +114,10 @@ def render_saved_plot(result: SimResult, plot_data: dict, settings, path) -> boo
     view.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     view.show()
     QApplication.processEvents()
+    # Restore the saved legend position now the plot area has a real size.
+    if plot_data.get("legend_offset"):
+        view.set_legend_offset(plot_data["legend_offset"])
+        QApplication.processEvents()
     try:
         if not view.has_content():
             return False
