@@ -1082,7 +1082,8 @@ class MainWindow(QMainWindow):
         monitor_groups = self._monitor_groups_union(results)
         checked_groups = sorted(self.selection.selected_plots())
         checked_monitors = self.selection.selected_monitors()
-        # Mirror the colours chosen in the main UI's plot onto the export preview.
+        # Mirror the colours and legend position chosen in the main UI's plot onto
+        # the export preview.
         series_colors, pair_colors = self.plot_view.color_overrides()
 
         dlg = ExportDialog(
@@ -1098,6 +1099,7 @@ class MainWindow(QMainWindow):
             self.settings,
             series_colors=series_colors,
             pair_colors=pair_colors,
+            legend_offset=self.plot_view.legend_offset(),
             residual_groups=sorted(self._residual_group_names(results)),
             parent=self,
         )

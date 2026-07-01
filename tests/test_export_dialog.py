@@ -47,3 +47,36 @@ def test_clicking_monitor_name_toggles_its_checkbox(app):
     _click_name(tree, group)
     assert group.checkState(0) == Qt.CheckState.Unchecked  # toggles back off
     tree.deleteLater()
+
+
+def test_export_dialog_seeds_legend_offset(app):
+    """The legend position carried from the main window's plot is applied to the
+    export preview once the Plots tab (and its preview) opens."""
+    from starpost.core.settings import Settings
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
+    from starpost.gui.views.export_dialog import ExportDialog
+
+    result = SimResult(
+        sim_path="/c/caseA.sim",
+        plots=[MonitorPlot(
+            "G", [PlotSeries("A", [1, 2, 3], [1, 2, 3]),
+                  PlotSeries("B", [1, 2, 3], [3, 2, 1])], kind=PlotKind.FORCE,
+        )],
+    )
+    dlg = ExportDialog(
+        data_names=["caseA"], checked_names=["caseA"],
+        monitor_groups={"G": ["A", "B"]}, checked_groups=["G"],
+        checked_monitors={"G": ["A", "B"]}, results=[result], settings=Settings(),
+        legend_offset=[0.65, 0.25],
+    )
+    try:
+        dlg.resize(660, 460)
+        dlg.show()
+        dlg._tabs.setCurrentWidget(dlg._plots_tab)  # shows + renders the preview
+        for _ in range(6):
+            app.processEvents()
+        assert dlg._legend_seeded
+        off = dlg._preview.legend_offset()
+        assert abs(off[0] - 0.65) < 0.03 and abs(off[1] - 0.25) < 0.03
+    finally:
+        dlg.deleteLater()

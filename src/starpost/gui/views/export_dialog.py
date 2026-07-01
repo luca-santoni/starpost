@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -203,6 +203,7 @@ class ExportDialog(QDialog):
         settings=None,
         series_colors: dict[str, str] | None = None,
         pair_colors: dict[tuple[str, str], str] | None = None,
+        legend_offset=None,
         residual_groups: list[str] | None = None,
         parent=None,
     ) -> None:
@@ -214,6 +215,10 @@ class ExportDialog(QDialog):
         # opens with the same line colours the user chose there.
         self._seed_series_colors = dict(series_colors or {})
         self._seed_pair_colors = dict(pair_colors or {})
+        # Legend position from the main window's plot, applied to the preview once
+        # it's laid out (a legend can only be placed on a sized plot).
+        self._seed_legend_offset = legend_offset
+        self._legend_seeded = False
         # Groups that plot all their monitors at once when checked (residuals).
         self._residual_groups = set(residual_groups or [])
 
@@ -556,6 +561,8 @@ class ExportDialog(QDialog):
             self._preview_window.show()
             self._preview_window.raise_()
             self._refresh_preview()
+            # Backstop: apply the seeded legend once the preview has laid out.
+            QTimer.singleShot(0, self._apply_seed_legend)
         else:
             self._preview_window.hide()
 
@@ -567,7 +574,19 @@ class ExportDialog(QDialog):
         """Redraw the preview, then sync the monitor colour swatches to match the
         colours actually drawn."""
         self._render_preview()
+        self._apply_seed_legend()
         self._refresh_monitor_swatches()
+
+    def _apply_seed_legend(self) -> None:
+        """Move the preview's legend to the position carried over from the main
+        window's plot — once, and only after the preview has a size (a legend can
+        only be placed on a laid-out plot)."""
+        if self._legend_seeded or not self._seed_legend_offset:
+            return
+        if self._preview.legend_offset() is None:
+            return  # not laid out yet; a later refresh retries
+        self._preview.set_legend_offset(self._seed_legend_offset)
+        self._legend_seeded = True
 
     def _render_preview(self) -> None:
         """Draw the currently selected monitors into the preview, mirroring how
