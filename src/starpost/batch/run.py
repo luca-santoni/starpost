@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from starpost.batch.aggregator import reports_wide_frame, write_report_table
+from starpost.batch.aggregator import reports_long_frame, write_report_table
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import SimResult
 from starpost.gui.views.plot_view import PlotView
@@ -229,9 +229,9 @@ def build_batch_archive(
 
             if config.reports:
                 steps.at(f"Writing reports for {source.name}…")
-                df = reports_wide_frame(
-                    [result], config.reports, config.include_units
-                ).reset_index()
+                df = reports_long_frame(
+                    result, config.reports, config.include_units
+                )
                 rpath = folder / f"reports.{config.report_format.lower()}"
                 write_report_table(df, rpath, config.report_format)
                 log(f"  reports -> {rpath.name}")

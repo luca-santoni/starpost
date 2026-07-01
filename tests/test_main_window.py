@@ -952,9 +952,13 @@ def test_build_batch_archive(app, tmp_path, monkeypatch):
     assert dest.exists()
     with zipfile.ZipFile(dest) as zf:
         names = set(zf.namelist())
+        report_csv = zf.read("caseA/reports.csv").decode().strip().splitlines()
     assert "caseA/reports.csv" in names
     assert "caseA/Drag plot.png" in names
     assert "caseA/Pressure.png" in names
+    # Reports are laid out vertically: a header then one row per report.
+    assert report_csv[0] == "Report,caseA"
+    assert report_csv[1].startswith("Drag [N],")
 
     # Progress runs 0..1 and names each action.
     fractions = [f for f, _ in progress]
