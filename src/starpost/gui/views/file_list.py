@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -89,11 +89,60 @@ def _dot_icon(color: str, size: int = 32) -> QIcon:
     return QIcon(pixmap)
 
 
+# Colour of the tree connector lines (STAR-CCM+ links nested items to their
+# parent with thin dotted lines).
+_LINE_COLOR = "#6f6f6f"
+
+
+def _has_following_sibling(tree: QTreeWidget, item: QTreeWidgetItem) -> bool:
+    """Whether ``item`` has another sibling below it (so its branch continues)."""
+    parent = item.parent()
+    if parent is None:
+        i = tree.indexOfTopLevelItem(item)
+        return 0 <= i < tree.topLevelItemCount() - 1
+    i = parent.indexOfChild(item)
+    return 0 <= i < parent.childCount() - 1
+
+
+def _draw_tree_lines(tree: QTreeWidget, painter, rect, index) -> None:
+    """Draw STAR-CCM+-style connector lines in a row's branch area: a hook from
+    each item to its parent's vertical line, with the vertical continued through
+    ancestor columns whose branch hasn't ended. Call after the base
+    ``drawBranches`` so it overlays the expand arrows."""
+    item = tree.itemFromIndex(index)
+    indent = tree.indentation()
+    if item is None or item.parent() is None or indent <= 0:
+        return  # top-level rows get no hook (there's no parent to link to)
+    painter.save()
+    pen = QPen(QColor(_LINE_COLOR))
+    pen.setStyle(Qt.PenStyle.DotLine)
+    painter.setPen(pen)
+    top, bottom, cy = rect.top(), rect.bottom(), rect.center().y()
+    # The hook sits in the indent slot one level left of the item's content —
+    # i.e. under the parent's expand arrow.
+    x = rect.right() - indent + indent // 2
+    painter.drawLine(x, top, x, cy)                 # up to the parent/prev sibling
+    if _has_following_sibling(tree, item):
+        painter.drawLine(x, cy, x, bottom)          # down to the next sibling
+    painter.drawLine(x, cy, rect.right(), cy)       # across to the item
+    # Ancestor columns still carrying a vertical line (they have siblings below).
+    ax, anc = x - indent, item.parent()
+    while anc is not None:
+        if _has_following_sibling(tree, anc):
+            painter.drawLine(ax, top, ax, bottom)
+        anc, ax = anc.parent(), ax - indent
+    painter.restore()
+
+
 class _FileTree(QTreeWidget):
     """A tree whose drag-drop re-parents items, refusing only the one move Qt
     would otherwise allow into corruption: a folder into its own subtree."""
 
     dropped = Signal()
+
+    def drawBranches(self, painter, rect, index) -> None:  # noqa: N802 (Qt override)
+        super().drawBranches(painter, rect, index)
+        _draw_tree_lines(self, painter, rect, index)
 
     def dropEvent(self, event) -> None:  # noqa: N802 (Qt override)
         target = self._drop_parent(event)

@@ -35,7 +35,12 @@ from PySide6.QtWidgets import (
 # Reuse the Files tab's folder-icon tinting and the nested-row dash so the two
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
-from starpost.gui.views.file_list import _LEAF_COLOR, _dot_icon, _tinted_icon
+from starpost.gui.views.file_list import (
+    _LEAF_COLOR,
+    _dot_icon,
+    _draw_tree_lines,
+    _tinted_icon,
+)
 from starpost.utils.paths import data_list_cache_path
 
 # Item data roles and the type tag they carry (matching file_list's layout).
@@ -101,6 +106,10 @@ class _DataTree(QTreeWidget):
         self._press_pos = None
         self._press_item: QTreeWidgetItem | None = None
         self._press_on_check = False
+
+    def drawBranches(self, painter, rect, index) -> None:  # noqa: N802 (Qt override)
+        super().drawBranches(painter, rect, index)
+        _draw_tree_lines(self, painter, rect, index)
 
     # --- drag-drop -------------------------------------------------------
     def dropEvent(self, event) -> None:  # noqa: N802 (Qt override)
