@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -22,8 +22,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStyle,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -71,45 +69,24 @@ def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
     return QIcon(tinted)
 
 
-class _NestedDashDelegate(QStyledItemDelegate):
-    """Marks nested files with a small dash, drawn one indent level to the left
-    of the row's content — i.e. lined up under the parent folder's icon. Nested
-    folders are skipped (their own expand/folder icon already reads clearly).
-    Purely visual: the stored name/path is untouched, and the dash follows a
-    file as it re-parents."""
+# Leaf items (.sim files, data sets) get a small round "node" icon, mirroring
+# STAR-CCM+'s tree, where leaves carry a blue node dot rather than a dash.
+_LEAF_COLOR = "#4a90d9"
 
-    _DASH = "–"
 
-    def __init__(self, view: QTreeWidget) -> None:
-        super().__init__(view)
-        self._view = view
-
-    def paint(self, painter, option, index) -> None:  # noqa: N802 (Qt override)
-        super().paint(painter, option, index)
-        # Only nested files get a dash; nested folders already read clearly
-        # thanks to their own expand/folder icon.
-        if not index.parent().isValid() or index.data(_TYPE_ROLE) == "folder":
-            return
-        opt = QStyleOptionViewItem(option)
-        self.initStyleOption(opt, index)
-        # The parent's icon sits exactly one indentation level left of this
-        # row's content; centre the dash in that icon-width column.
-        indent = self._view.indentation()
-        icon_w = self._view.iconSize().width()
-        if icon_w <= 0:
-            icon_w = indent
-        rect = QRect(option.rect.left() - indent, option.rect.top(),
-                     icon_w, option.rect.height())
-        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
-        brush = opt.palette.highlightedText() if selected else opt.palette.text()
-        painter.save()
-        painter.setFont(opt.font)
-        painter.setPen(brush.color())
-        painter.drawText(
-            rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter,
-            self._DASH,
-        )
-        painter.restore()
+def _dot_icon(color: str, size: int = 32) -> QIcon:
+    """A small filled circle icon for a tree's leaf items, like STAR-CCM+'s
+    node icons."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    margin = round(size * 0.3)  # a compact dot, ~40% of the icon box
+    painter.drawEllipse(pixmap.rect().adjusted(margin, margin, -margin, -margin))
+    painter.end()
+    return QIcon(pixmap)
 
 
 class _FileTree(QTreeWidget):
@@ -175,12 +152,11 @@ class FileListPanel(QWidget):
         )
         self._folder_color = folder_color or ""
         self._folder_icon = self._build_folder_icon()
+        self._file_icon = _dot_icon(_LEAF_COLOR)  # STAR-CCM+-style leaf node dot
 
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
         self._tree.setColumnCount(1)
-        # A dash marks nested rows (files and subfolders) for legibility.
-        self._tree.setItemDelegateForColumn(0, _NestedDashDelegate(self._tree))
         self._tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
@@ -264,6 +240,7 @@ class FileListPanel(QWidget):
         item.setData(0, _PATH_ROLE, str(path))
         item.setData(0, _TYPE_ROLE, "file")
         item.setToolTip(0, str(path))
+        item.setIcon(0, self._file_icon)
         item.setFlags(_FILE_FLAGS)
         return item
 
