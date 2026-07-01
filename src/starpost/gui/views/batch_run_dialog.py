@@ -8,6 +8,7 @@ run wiring are filled in later — this is the navigation scaffold only.
 from __future__ import annotations
 
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +25,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -396,6 +396,56 @@ class _ExtractWorker(QObject):
         self.done.emit()
 
 
+class _BatchRunWorker(QObject):
+    """Runs the whole batch off the GUI thread so the event loop stays alive (the
+    progress dialog paints/animates, the file dialog tears down). The subprocess
+    steps (extraction, scene rendering) and file I/O run here; each saved plot,
+    which needs a Qt widget, is rendered back on the GUI thread via
+    ``render_request`` while this thread waits."""
+
+    progress = Signal(float, str)                    # (fraction 0..1, message)
+    render_request = Signal(object, object, object)  # (result, plot_data, path)
+    done = Signal()                                  # result on .result / .error
+
+    def __init__(self, config, settings, runner, dest: Path) -> None:
+        super().__init__()
+        self._config = config
+        self._settings = settings
+        self._runner = runner
+        self._dest = dest
+        self.result: Path | None = None
+        self.error: str | None = None
+        # Hand-off for a single GUI-thread plot render at a time.
+        self._render_done = threading.Event()
+        self._render_result = False
+
+    def run(self) -> None:
+        from starpost.batch.run import build_batch_archive
+
+        try:
+            self.result = build_batch_archive(
+                self._config, self._settings, self._runner, self._dest,
+                progress=self.progress.emit,
+                plot_renderer=self._render_plot,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
+            self.error = str(exc)
+        self.done.emit()
+
+    def _render_plot(self, result, plot_data, path) -> bool:
+        """On the worker thread: ask the GUI thread to render, then block until it
+        signals completion via :meth:`finish_render`."""
+        self._render_done.clear()
+        self.render_request.emit(result, plot_data, path)
+        self._render_done.wait()
+        return self._render_result
+
+    def finish_render(self, rendered: bool) -> None:
+        """Called on the GUI thread once a plot has been rendered; wakes run()."""
+        self._render_result = rendered
+        self._render_done.set()
+
+
 class BatchRunDialog(QDialog):
     def __init__(
         self, parent=None, *, data_sets=None, report_names=None,
@@ -417,6 +467,9 @@ class BatchRunDialog(QDialog):
         # The .sim already extracted to set up the tabs (via "Has similar format"),
         # so re-pressing Continue doesn't re-check out a license for the same file.
         self._setup_sim_extracted: Path | None = None
+        # Live only during a batch run (worker thread + its progress dialog).
+        self._batch_worker: _BatchRunWorker | None = None
+        self._busy: QProgressDialog | None = None
 
         self._tabs = QTabWidget()
         bar = _LockedTabBar()
@@ -1504,9 +1557,8 @@ class BatchRunDialog(QDialog):
     def _run_batch(self) -> None:
         """Batch run: write each data set's reports, saved-plot images and
         saved-scene stills into a per-data-set folder, packed into one .zip in the
-        chosen output folder. Blocks behind a progress dialog (plot rendering must
-        run on the GUI thread)."""
-        from starpost.batch.run import BatchConfig, build_batch_archive
+        chosen output folder. Runs on a worker thread behind a progress dialog."""
+        from starpost.batch.run import BatchConfig
 
         sources = self._batch_sources()
         if not sources:
@@ -1540,9 +1592,6 @@ class BatchRunDialog(QDialog):
         out_dir = QFileDialog.getExistingDirectory(self, "Choose output folder")
         if not out_dir:
             return
-        # Let the file dialog fully tear down before we block the GUI thread with
-        # the run — otherwise its window lingers on screen until the run yields.
-        QApplication.processEvents()
         dest = Path(out_dir) / f"starpost_batch_{datetime.now():%Y%m%d_%H%M%S}.zip"
         config = BatchConfig(
             sources=sources,
@@ -1562,29 +1611,55 @@ class BatchRunDialog(QDialog):
         busy.setAutoClose(False)
         busy.setAutoReset(False)
         busy.setValue(0)
+        self._busy = busy
+
+        # Run on a worker thread so the GUI event loop stays alive: the progress
+        # bar paints/updates and the file dialog tears down. A local event loop
+        # waits for it while the wizard stays blocked (busy is modal). Each saved
+        # plot is rendered back on this (GUI) thread via render_request.
+        thread = QThread(self)
+        worker = _BatchRunWorker(config, self._settings, runner, dest)
+        worker.moveToThread(thread)
+        self._batch_worker = worker
+        worker.progress.connect(self._on_batch_progress)             # queued → GUI
+        worker.render_request.connect(self._render_plot_for_worker)  # queued → GUI
+        loop = QEventLoop()
+        worker.done.connect(loop.quit)                               # queued → GUI
+        thread.started.connect(worker.run)
+        thread.start()
         busy.show()
-        # Paint it fully before the first (blocking) step, so it doesn't sit as an
-        # unpainted black bar while STAR-CCM+ runs.
-        QApplication.processEvents()
-        busy.repaint()
-
-        def progress(fraction: float, message: str) -> None:
-            busy.setValue(round(fraction * 100))  # 0–100
-            busy.setLabelText(message)
-            # Synchronously repaint so the current action/percentage is on screen
-            # before the next blocking step freezes the event loop.
-            QApplication.processEvents()
-            busy.repaint()
-
-        try:
-            build_batch_archive(config, self._settings, runner, dest, progress=progress)
-        except Exception as exc:  # noqa: BLE001 - surface any failure to the user
-            busy.close()
-            QMessageBox.critical(self, "Run batch failed", str(exc))
-            return
+        loop.exec()
+        thread.quit()
+        thread.wait()
         busy.close()
+        self._busy = None
+        self._batch_worker = None
+
+        if worker.error is not None:
+            QMessageBox.critical(self, "Run batch failed", worker.error)
+            return
         QMessageBox.information(self, "Run batch", f"Batch written to:\n{dest}")
         self.accept()
+
+    def _on_batch_progress(self, fraction: float, message: str) -> None:
+        """Update the run progress dialog — runs on the GUI thread (queued from the
+        worker), so the 0–100 bar and action label stay live during the run."""
+        if self._busy is not None:
+            self._busy.setValue(round(fraction * 100))  # 0–100
+            self._busy.setLabelText(message)
+
+    def _render_plot_for_worker(self, result, plot_data, path) -> None:
+        """Render one saved plot on the GUI thread (a Qt widget can't be built off
+        it), then wake the worker — queued from the worker's render_request."""
+        from starpost.batch.run import render_saved_plot
+
+        worker = self._batch_worker
+        rendered = False
+        try:
+            rendered = render_saved_plot(result, plot_data, self._settings, path)
+        finally:
+            if worker is not None:
+                worker.finish_render(rendered)
 
     def _retreat(self) -> None:
         """Back moves to the previous tab (disabled on the first)."""

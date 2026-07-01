@@ -1040,3 +1040,43 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
     assert captured["dest"].parent == tmp_path and captured["dest"].suffix == ".zip"
     assert dlg.result() == QDialog.DialogCode.Accepted
     dlg.close()
+
+
+def test_batch_run_dialog_run_batch_threaded(app, tmp_path, monkeypatch):
+    """End to end on the worker thread: a data set with a saved plot produces a
+    zip, with the plot rendered via the GUI-thread marshalling (no deadlock)."""
+    import zipfile
+    from pathlib import Path
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDialog, QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    result = _sim_result_with_data()  # sim_name "caseA", report + a plot
+    dlg = brd.BatchRunDialog(
+        data_sets=["caseA"], report_names=["Drag"], results=[result],
+        settings=Settings(),
+    )
+    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    plot = QListWidgetItem("Drag plot")
+    plot.setData(
+        Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"}
+    )
+    dlg._saved_plots.addItem(plot)
+
+    monkeypatch.setattr(
+        brd.QFileDialog, "getExistingDirectory", lambda *a, **k: str(tmp_path)
+    )
+    monkeypatch.setattr(brd.QMessageBox, "information", lambda *a, **k: None)
+
+    dlg._run_batch()  # runs the worker thread + local event loop to completion
+
+    assert dlg.result() == QDialog.DialogCode.Accepted
+    zips = list(tmp_path.glob("*.zip"))
+    assert len(zips) == 1
+    with zipfile.ZipFile(zips[0]) as zf:
+        names = set(zf.namelist())
+    assert "caseA/reports.csv" in names
+    assert "caseA/Drag plot.png" in names
+    dlg.close()

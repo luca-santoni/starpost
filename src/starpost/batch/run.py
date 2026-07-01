@@ -185,11 +185,19 @@ def build_batch_archive(
     *,
     log: Optional[LogSink] = None,
     progress: Optional[Progress] = None,
+    plot_renderer: Optional[Callable[[SimResult, dict, Path], bool]] = None,
 ) -> Path:
     """Produce ``dest_zip`` from ``config``: one folder per data set holding its
     reports, saved-plot images and saved-scene stills. Reports a 0..1 fraction and
-    the current action to ``progress``. Returns ``dest_zip``."""
+    the current action to ``progress``. Returns ``dest_zip``.
+
+    When run off the GUI thread, ``plot_renderer`` renders a saved plot on the GUI
+    thread instead (Qt widgets can't be built off it); by default plots render on
+    the calling thread."""
     log = log or (lambda _s: None)
+    render_plot = plot_renderer or (
+        lambda result, pdata, path: render_saved_plot(result, pdata, settings, path)
+    )
     dest_zip = Path(dest_zip)
     steps = _Steps(
         sum(_source_steps(config, s) for s in config.sources) + 1,  # +1 = packaging
@@ -235,7 +243,7 @@ def build_batch_archive(
                 pdata = entry.get("data") or {}
                 fmt = (pdata.get("format") or "png").lower()
                 ppath = folder / f"{_safe_name(name)}.{fmt}"
-                if render_saved_plot(result, pdata, settings, ppath):
+                if render_plot(result, pdata, ppath):
                     log(f"  plot -> {ppath.name}")
                 steps.advance()
 
