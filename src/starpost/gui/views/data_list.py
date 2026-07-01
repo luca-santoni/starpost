@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStyle,
+    QStyledItemDelegate,
     QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
@@ -87,6 +88,24 @@ class _CheckList(QListWidget):
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
+
+
+class _IconRowHeightDelegate(QStyledItemDelegate):
+    """Reserve an icon's worth of height on every row, even icon-less ones, so the
+    Data tab's data rows (checkbox + name, no leaf icon) are the same height as
+    its folder rows and the Files tab's rows."""
+
+    def __init__(self, view: QTreeWidget) -> None:
+        super().__init__(view)
+        self._view = view
+
+    def sizeHint(self, option, index):  # noqa: N802 (Qt override)
+        size = super().sizeHint(option, index)
+        icon_h = self._view.iconSize().height()
+        if icon_h <= 0:
+            icon_h = self._view.style().pixelMetric(QStyle.PixelMetric.PM_SmallIconSize)
+        size.setHeight(max(size.height(), icon_h + 4))
+        return size
 
 
 class _DataTree(QTreeWidget):
@@ -237,6 +256,9 @@ class DataListPanel(QWidget):
         self._tree = _DataTree()
         self._tree.setHeaderHidden(True)
         self._tree.setColumnCount(1)
+        # Icon-less data rows still reserve icon height, so their spacing matches
+        # the folder rows and the Files tab.
+        self._tree.setItemDelegateForColumn(0, _IconRowHeightDelegate(self._tree))
         self._tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
