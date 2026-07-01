@@ -89,8 +89,7 @@ def _dot_icon(color: str, size: int = 32) -> QIcon:
     return QIcon(pixmap)
 
 
-# Colour of the tree connector lines (STAR-CCM+ links nested items to their
-# parent with thin dotted lines).
+# Colour of the tree connector lines that link nested items to their parent.
 _LINE_COLOR = "#6f6f6f"
 
 
@@ -115,7 +114,7 @@ def _draw_tree_lines(tree: QTreeWidget, painter, rect, index) -> None:
         return  # top-level rows get no hook (there's no parent to link to)
     painter.save()
     pen = QPen(QColor(_LINE_COLOR))
-    pen.setStyle(Qt.PenStyle.DotLine)
+    pen.setStyle(Qt.PenStyle.SolidLine)
     painter.setPen(pen)
     top, bottom, cy = rect.top(), rect.bottom(), rect.center().y()
     # The hook sits in the indent slot one level left of the item's content —
