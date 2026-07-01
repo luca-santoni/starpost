@@ -942,8 +942,12 @@ def test_build_batch_archive(app, tmp_path, monkeypatch):
         return []
     monkeypatch.setattr(run.StarRunner, "render_scenes", fake_render_scenes)
 
+    progress = []
     dest = tmp_path / "out" / "batch.zip"
-    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+    run.build_batch_archive(
+        config, Settings(), run.StarRunner(Settings()), dest,
+        progress=lambda f, m: progress.append((f, m)),
+    )
 
     assert dest.exists()
     with zipfile.ZipFile(dest) as zf:
@@ -951,6 +955,16 @@ def test_build_batch_archive(app, tmp_path, monkeypatch):
     assert "caseA/reports.csv" in names
     assert "caseA/Drag plot.png" in names
     assert "caseA/Pressure.png" in names
+
+    # Progress runs 0..1 and names each action.
+    fractions = [f for f, _ in progress]
+    messages = [m for _, m in progress]
+    assert fractions == sorted(fractions)  # monotonic
+    assert fractions[0] == 0.0 and fractions[-1] == 1.0
+    assert any("Writing reports" in m for m in messages)
+    assert any("Rendering plot" in m for m in messages)
+    assert any("Rendering scene" in m for m in messages)
+    assert any("Packaging" in m for m in messages)
 
 
 def test_build_batch_archive_extracts_sim_sources(app, tmp_path, monkeypatch):

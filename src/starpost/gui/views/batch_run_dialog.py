@@ -1551,19 +1551,19 @@ class BatchRunDialog(QDialog):
         )
         runner = StarRunner(self._settings) if self._settings else None
 
-        busy = QProgressDialog("Running batch…", "", 0, len(sources), self)
+        busy = QProgressDialog("Preparing…", "", 0, 100, self)
         busy.setWindowTitle("Run batch")
         busy.setCancelButton(None)
         busy.setWindowModality(Qt.WindowModality.WindowModal)
         busy.setMinimumDuration(0)
         busy.setAutoClose(False)
         busy.setAutoReset(False)
+        busy.setValue(0)
         busy.show()
 
-        def progress(done: int, total: int, name: str) -> None:
-            busy.setMaximum(total)
-            busy.setValue(done)
-            busy.setLabelText(f"Processing “{name}”…" if name else "Packaging…")
+        def progress(fraction: float, message: str) -> None:
+            busy.setValue(round(fraction * 100))  # 0–100
+            busy.setLabelText(message)
             QApplication.processEvents()
 
         try:

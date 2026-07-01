@@ -24,7 +24,7 @@ from starpost.data.models import SimResult
 from starpost.gui.views.plot_view import PlotView
 
 LogSink = Callable[[str], None]
-Progress = Callable[[int, int, str], None]  # (done, total, current name)
+Progress = Callable[[float, str], None]  # (fraction 0..1, current-action message)
 
 _FORBIDDEN = '/\\:*?"<>|'
 
@@ -139,6 +139,44 @@ def _zip_dir(src_dir: Path, dest_zip: Path) -> None:
                 zf.write(p, p.relative_to(src_dir).as_posix())
 
 
+def _source_steps(config: BatchConfig, source: BatchSource) -> int:
+    """How many progress steps a source contributes: an extraction (for a .sim),
+    the report table, one per saved plot, and one per saved scene (when the source
+    can render scenes)."""
+    n = 0
+    if source.result is None and source.sim_file is not None:
+        n += 1
+    if config.reports:
+        n += 1
+    n += len(config.saved_plots)
+    if source.sim_file is not None:
+        n += len(config.saved_scenes)
+    return n
+
+
+class _Steps:
+    """Tracks completed steps out of a known total and reports a 0..1 fraction
+    plus a message for the current action to a progress callback."""
+
+    def __init__(self, total: int, progress: Optional[Progress]) -> None:
+        self.total = max(total, 1)
+        self.done = 0
+        self._progress = progress
+
+    def at(self, message: str) -> None:
+        """Announce the action about to run, at the fraction done so far."""
+        if self._progress:
+            self._progress(self.done / self.total, message)
+
+    def advance(self, n: int = 1) -> None:
+        self.done += n
+
+    def finish(self, message: str) -> None:
+        self.done = self.total
+        if self._progress:
+            self._progress(1.0, message)
+
+
 def build_batch_archive(
     config: BatchConfig,
     settings,
@@ -149,58 +187,73 @@ def build_batch_archive(
     progress: Optional[Progress] = None,
 ) -> Path:
     """Produce ``dest_zip`` from ``config``: one folder per data set holding its
-    reports, saved-plot images and saved-scene stills. Returns ``dest_zip``."""
+    reports, saved-plot images and saved-scene stills. Reports a 0..1 fraction and
+    the current action to ``progress``. Returns ``dest_zip``."""
     log = log or (lambda _s: None)
     dest_zip = Path(dest_zip)
+    steps = _Steps(
+        sum(_source_steps(config, s) for s in config.sources) + 1,  # +1 = packaging
+        progress,
+    )
     total = len(config.sources)
     with tempfile.TemporaryDirectory(prefix="starpost_batch_") as tmp:
         out_root = Path(tmp) / "out"     # this gets zipped
         work_root = Path(tmp) / "work"   # extraction scratch, not zipped
         for i, source in enumerate(config.sources):
-            if progress:
-                progress(i, total, source.name)
             log(f"--- {source.name} ({i + 1}/{total}) ---")
+            planned = _source_steps(config, source)
+            done_before = steps.done
             folder = out_root / _safe_name(source.name)
             folder.mkdir(parents=True, exist_ok=True)
 
             result = source.result
             if result is None and source.sim_file is not None:
-                log(f"Extracting {source.sim_file.name}…")
+                steps.at(f"Opening {source.name}…")
                 result = runner.extract(
                     source.sim_file, work_root / _safe_name(source.name), log_sink=log
                 )
+                steps.advance()
             if result is None or result.error:
                 log(f"Skipping {source.name}: "
                     f"{result.error if result else 'no data'}")
+                steps.advance(planned - (steps.done - done_before))  # skip the rest
                 continue
 
             if config.reports:
+                steps.at(f"Writing reports for {source.name}…")
                 df = reports_wide_frame(
                     [result], config.reports, config.include_units
                 ).reset_index()
                 rpath = folder / f"reports.{config.report_format.lower()}"
                 write_report_table(df, rpath, config.report_format)
                 log(f"  reports -> {rpath.name}")
+                steps.advance()
 
             for entry in config.saved_plots:
+                name = entry.get("name", "plot")
+                steps.at(f"Rendering plot “{name}” for {source.name}…")
                 pdata = entry.get("data") or {}
                 fmt = (pdata.get("format") or "png").lower()
-                ppath = folder / f"{_safe_name(entry.get('name', 'plot'))}.{fmt}"
+                ppath = folder / f"{_safe_name(name)}.{fmt}"
                 if render_saved_plot(result, pdata, settings, ppath):
                     log(f"  plot -> {ppath.name}")
+                steps.advance()
 
             if source.sim_file is not None:
                 for entry in config.saved_scenes:
+                    name = entry.get("name", "scene")
+                    steps.at(f"Rendering scene “{name}” for {source.name}…")
                     sdata = entry.get("data") or {}
                     show = sdata.get("displayers") or {}
-                    if not show:
-                        continue
-                    _scene_runner(settings, sdata, runner).render_scenes(
-                        source.sim_file, folder, show,
-                        sdata.get("views") or [], log_sink=log,
-                    )
-        if progress:
-            progress(total, total, "")
+                    if show:
+                        _scene_runner(settings, sdata, runner).render_scenes(
+                            source.sim_file, folder, show,
+                            sdata.get("views") or [], log_sink=log,
+                        )
+                    steps.advance()
+
+        steps.at("Packaging archive…")
         _zip_dir(out_root, dest_zip)
+        steps.finish("Done")
     log(f"Wrote {dest_zip}")
     return dest_zip
