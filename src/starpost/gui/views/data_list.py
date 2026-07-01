@@ -35,12 +35,7 @@ from PySide6.QtWidgets import (
 # Reuse the Files tab's folder-icon tinting and the nested-row dash so the two
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
-from starpost.gui.views.file_list import (
-    _LEAF_COLOR,
-    _dot_icon,
-    _draw_tree_lines,
-    _tinted_icon,
-)
+from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
 from starpost.utils.paths import data_list_cache_path
 
 # Item data roles and the type tag they carry (matching file_list's layout).
@@ -238,7 +233,6 @@ class DataListPanel(QWidget):
         )
         self._folder_color = folder_color or ""
         self._folder_icon = self._build_folder_icon()
-        self._data_icon = _dot_icon(_LEAF_COLOR)  # STAR-CCM+-style leaf node dot
 
         self._tree = _DataTree()
         self._tree.setHeaderHidden(True)
@@ -357,7 +351,6 @@ class DataListPanel(QWidget):
         item = QTreeWidgetItem([name])
         item.setData(0, _NAME_ROLE, name)
         item.setData(0, _TYPE_ROLE, "data")
-        item.setIcon(0, self._data_icon)
         item.setFlags(_DATA_FLAGS)
         item.setCheckState(0, Qt.CheckState.Unchecked)
         return item
