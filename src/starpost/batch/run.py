@@ -18,6 +18,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
+
 from starpost.batch.aggregator import reports_long_frame, write_report_table
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import SimResult
@@ -105,11 +108,18 @@ def render_saved_plot(result: SimResult, plot_data: dict, settings, path) -> boo
         if plot_data.get(key) is not None:
             setter(plot_data[key])
     view.resize(*_plot_size(plot_data))
+    # Lay the widget out (off-screen) as if shown, so pyqtgraph positions the
+    # title, axes and legend and auto-ranges the data — otherwise an unshown
+    # widget exports with the title and x-axis missing and the wrong y-range.
+    view.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    view.show()
+    QApplication.processEvents()
     try:
         if not view.has_content():
             return False
         view.export(str(path), (plot_data.get("format") or "png").lower())
     finally:
+        view.close()
         view.deleteLater()
     return True
 
