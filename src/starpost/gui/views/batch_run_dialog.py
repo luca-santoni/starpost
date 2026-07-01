@@ -1540,6 +1540,9 @@ class BatchRunDialog(QDialog):
         out_dir = QFileDialog.getExistingDirectory(self, "Choose output folder")
         if not out_dir:
             return
+        # Let the file dialog fully tear down before we block the GUI thread with
+        # the run — otherwise its window lingers on screen until the run yields.
+        QApplication.processEvents()
         dest = Path(out_dir) / f"starpost_batch_{datetime.now():%Y%m%d_%H%M%S}.zip"
         config = BatchConfig(
             sources=sources,
@@ -1560,11 +1563,18 @@ class BatchRunDialog(QDialog):
         busy.setAutoReset(False)
         busy.setValue(0)
         busy.show()
+        # Paint it fully before the first (blocking) step, so it doesn't sit as an
+        # unpainted black bar while STAR-CCM+ runs.
+        QApplication.processEvents()
+        busy.repaint()
 
         def progress(fraction: float, message: str) -> None:
             busy.setValue(round(fraction * 100))  # 0–100
             busy.setLabelText(message)
+            # Synchronously repaint so the current action/percentage is on screen
+            # before the next blocking step freezes the event loop.
             QApplication.processEvents()
+            busy.repaint()
 
         try:
             build_batch_archive(config, self._settings, runner, dest, progress=progress)
