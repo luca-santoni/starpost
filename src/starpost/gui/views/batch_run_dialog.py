@@ -408,13 +408,18 @@ class _SavedScenePropertiesDialog(QDialog):
 
         displayers = data.get("displayers") or {}
         if displayers:
+            scenes_form = QFormLayout()
+            scenes_form.setHorizontalSpacing(24)
             for scene, shown in displayers.items():
-                layout.addWidget(QLabel(scene))
+                scenes_form.addRow("Scene:", QLabel(scene))
                 if shown:
                     for d in shown:
-                        layout.addWidget(QLabel(f"    • {d}"))
+                        scenes_form.addRow("Vector/Scalar name:", QLabel(d))
                 else:
-                    layout.addWidget(QLabel("    • (all displayers)"))
+                    scenes_form.addRow(
+                        "Vector/Scalar name:", QLabel("(all displayers)")
+                    )
+            layout.addLayout(scenes_form)
         else:
             layout.addWidget(QLabel("—"))
 
