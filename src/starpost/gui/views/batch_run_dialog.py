@@ -412,6 +412,14 @@ class _SavedScenePropertiesDialog(QDialog):
         def _or_dash(text: str) -> str:
             return text if text else "—"
 
+        def _wrap(text: str) -> QLabel:
+            """A value label that wraps long text onto further lines instead of
+            stretching the window wide."""
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setMaximumWidth(420)
+            return label
+
         # A single form so every label column aligns (image options, saved views
         # and the per-scene rows all share one label width).
         form = QFormLayout()
@@ -424,17 +432,17 @@ class _SavedScenePropertiesDialog(QDialog):
             QLabel((data.get("format") or "").upper() or "—"),
         )
         views = data.get("views") or []
-        form.addRow("Saved views:", QLabel(", ".join(views) if views else "—"))
+        form.addRow("Saved views:", _wrap(", ".join(views) if views else "—"))
 
         displayers = data.get("displayers") or {}
         if displayers:
             for scene, shown in displayers.items():
-                form.addRow("Scene:", QLabel(scene))
+                form.addRow("Scene:", _wrap(scene))
                 if shown:
                     for d in shown:
-                        form.addRow("Vector/Scalar name:", QLabel(d))
+                        form.addRow("Vector/Scalar name:", _wrap(d))
                 else:
-                    form.addRow("Vector/Scalar name:", QLabel("(all displayers)"))
+                    form.addRow("Vector/Scalar name:", _wrap("(all displayers)"))
         else:
             form.addRow(QLabel("—"))
 

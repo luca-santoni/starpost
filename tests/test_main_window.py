@@ -863,6 +863,10 @@ def test_saved_scene_properties_dialog_content(app):
     assert "Pressure scene" in texts
     assert any("Scalar 1" in t for t in texts)
     assert any("Vector 1" in t for t in texts)
+    # The field/scene/views value labels wrap so a long list doesn't widen the
+    # window.
+    field = next(lb for lb in dlg.findChildren(QLabel) if lb.text() == "Scalar 1")
+    assert field.wordWrap() and field.maximumWidth() < 16777215
     dlg.close()
 
 

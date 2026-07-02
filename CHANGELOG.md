@@ -30,8 +30,9 @@ dialog's saved plots/scenes.
   captured contents.
 
 ### Bug Fixes
-- **Rendered-scene Properties** — a long **Vector/Scalar name** field list now
-  wraps onto further lines instead of stretching the window ever wider.
+- **Scene Properties** — long **Vector/Scalar name** values now wrap onto
+  further lines instead of stretching the window ever wider, in both the
+  rendered-scene Properties (main UI) and the Run batch saved-scene Properties.
 - **Scene rendering** — a scene with more than one visible scalar/vector field
   no longer joins every field name into the still's file name (which could make
   the name too long); it now uses **"multiple-fields"** instead. The full field
