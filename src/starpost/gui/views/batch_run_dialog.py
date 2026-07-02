@@ -7,6 +7,7 @@ run wiring are filled in later — this is the navigation scaffold only.
 """
 from __future__ import annotations
 
+import math
 import tempfile
 import threading
 from datetime import datetime
@@ -249,6 +250,30 @@ class _MonitorTree(QTreeWidget):
                 if g.child(j).checkState(0) == Qt.CheckState.Checked
             ]
         return out
+
+    def set_selection(self, selection: dict[str, list[str]]) -> None:
+        """Check exactly the groups/monitors named in ``selection`` (raw monitor
+        names, as returned by :meth:`checked_monitors`), clearing everything
+        else, and emit ``changed`` once. Inverse of :meth:`checked_monitors`."""
+        self.blockSignals(True)
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            g = root.child(i)
+            wanted = selection.get(g.text(0))
+            g.setCheckState(
+                0, Qt.CheckState.Checked if wanted is not None
+                else Qt.CheckState.Unchecked
+            )
+            g.setExpanded(wanted is not None)
+            want = set(wanted or [])
+            for j in range(g.childCount()):
+                mi = g.child(j)
+                on = mi.data(0, Qt.ItemDataRole.UserRole) in want
+                mi.setCheckState(
+                    0, Qt.CheckState.Checked if on else Qt.CheckState.Unchecked
+                )
+        self.blockSignals(False)
+        self.changed.emit()
 
 
 class _BusyBar(QProgressBar):
@@ -1309,6 +1334,11 @@ class BatchRunDialog(QDialog):
         return 2.0 ** ((value - 50) / 50.0)
 
     @staticmethod
+    def _legend_slider(factor: float) -> int:
+        """The slider position that yields ``factor`` (inverse of _legend_factor)."""
+        return round(50 + 50 * math.log2(factor)) if factor > 0 else 50
+
+    @staticmethod
     def _line_width_for(value: int) -> float:
         """Map the slider's 0–100 position to a pen width across the thin–thick
         range."""
@@ -1413,6 +1443,53 @@ class BatchRunDialog(QDialog):
         item.setData(Qt.ItemDataRole.UserRole, self._capture_plot())
         self._saved_plots.addItem(item)
 
+    def _apply_plot(self, data: dict) -> None:
+        """Load a saved plot's captured settings back into the Plots-tab controls
+        and the live preview (the inverse of :meth:`_capture_plot`)."""
+        # Each control drives the preview through its own signal; setting them all
+        # rebuilds the preview to match the saved plot.
+        self._plot_aspect.setCurrentText(data.get("aspect") or "Custom")
+        self._plot_title.setText(data.get("title", ""))
+        self._plot_xlabel.setText(data.get("x_label", ""))
+        self._plot_ylabel.setText(data.get("y_label", ""))
+        ti = self._plot_theme.findData(data.get("theme"))
+        if ti >= 0:
+            self._plot_theme.setCurrentIndex(ti)
+        fi = self._plot_format.findText(
+            data.get("format", ""), Qt.MatchFlag.MatchFixedString
+        )
+        if fi >= 0:
+            self._plot_format.setCurrentIndex(fi)
+        self._plot_grid.setChecked(bool(data.get("grid", True)))
+        if data.get("title_size") is not None:
+            self._title_size.setValue(
+                self._text_size_slider(
+                    data["title_size"], _TITLE_PT_MIN, _TITLE_PT_MAX
+                )
+            )
+        if data.get("axis_label_size") is not None:
+            self._axis_label_size.setValue(
+                self._text_size_slider(
+                    data["axis_label_size"], _AXIS_LABEL_PT_MIN, _AXIS_LABEL_PT_MAX
+                )
+            )
+        if data.get("legend_scale") is not None:
+            self._legend_scale.setValue(self._legend_slider(data["legend_scale"]))
+        if data.get("line_width") is not None:
+            self._line_width.setValue(self._line_width_slider(data["line_width"]))
+        # Monitor selection triggers _render_preview (draws the plots + swatches).
+        self._monitor_tree.set_selection(data.get("monitors") or {})
+        # Colours and the legend position need the curves drawn first (above).
+        self._preview.set_color_overrides(
+            data.get("series_colors") or {}, data.get("pair_colors") or {}
+        )
+        if data.get("legend_offset"):
+            self._preview.set_legend_offset(data["legend_offset"])
+        self._refresh_monitor_swatches()
+        # Surface the preview window in case it's hidden or behind the dialog.
+        self._preview_window.show()
+        self._preview_window.raise_()
+
     def _checked_views(self) -> list[str]:
         """The checked saved camera views, in list order."""
         return [
@@ -1447,9 +1524,15 @@ class BatchRunDialog(QDialog):
         if item is None:
             return
         menu = QMenu(self._saved_plots)
+        menu.addAction("Preview", lambda: self._preview_saved_plot(item))
         menu.addAction("Properties", lambda: self._show_saved_plot_properties(item))
         menu.addAction("Delete", lambda: self._delete_saved_plot(item))
         menu.exec(self._saved_plots.viewport().mapToGlobal(pos))
+
+    def _preview_saved_plot(self, item) -> None:
+        """Load a saved plot's captured settings into the live preview."""
+        data = item.data(Qt.ItemDataRole.UserRole) or {}
+        self._apply_plot(data)
 
     def _show_saved_plot_properties(self, item) -> None:
         """Open the read-only properties window for a saved plot."""

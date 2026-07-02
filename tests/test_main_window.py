@@ -740,6 +740,51 @@ def test_batch_run_dialog_saved_plot_properties(app, monkeypatch):
     dlg.close()
 
 
+def test_batch_run_dialog_preview_saved_plot(app):
+    """The Preview context-menu action loads a saved plot's captured settings
+    back into the Plots-tab controls, monitor selection and live preview."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        plots=[MonitorPlot(
+            "Forces", [PlotSeries("Drag", [1, 2], [10.0, 9.0])],
+            kind=PlotKind.FORCE,
+        )],
+    )
+    dlg = brd.BatchRunDialog(monitor_groups={"Forces": ["Drag"]}, results=[result])
+
+    # Configure a plot, capture it, then reset the controls to their defaults.
+    dlg._plot_title.setText("Drag vs iteration")
+    dlg._plot_xlabel.setText("Iteration")
+    dlg._plot_theme.setCurrentIndex(dlg._plot_theme.findData("dark"))
+    dlg._monitor_tree.set_selection({"Forces": ["Drag"]})
+    dlg._preview.set_series_color("Drag", "#e6194b")
+    dlg._refresh_monitor_swatches()
+    captured = dlg._capture_plot()
+
+    dlg._plot_title.clear()
+    dlg._plot_xlabel.clear()
+    dlg._plot_theme.setCurrentIndex(dlg._plot_theme.findData("light"))
+    dlg._monitor_tree.set_selection({})
+    assert dlg._monitor_tree.checked_monitors() == {}
+
+    # Preview restores everything from the saved plot.
+    item = QListWidgetItem("p1")
+    item.setData(Qt.ItemDataRole.UserRole, captured)
+    dlg._preview_saved_plot(item)
+    assert dlg._plot_title.text() == "Drag vs iteration"
+    assert dlg._plot_xlabel.text() == "Iteration"
+    assert dlg._plot_theme.currentData() == "dark"
+    assert dlg._monitor_tree.checked_monitors() == {"Forces": ["Drag"]}
+    assert dlg._preview.series_color("Drag") == "#e6194b"
+    dlg.close()
+
+
 def test_saved_plot_properties_dialog_content(app):
     """The properties dialog shows the plot's settings and each monitor's colour."""
     from PySide6.QtWidgets import QLabel
