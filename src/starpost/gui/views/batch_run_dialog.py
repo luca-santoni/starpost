@@ -1100,12 +1100,27 @@ class BatchRunDialog(QDialog):
         reports.addWidget(self._header("Reports"))
         reports.addWidget(self._summary_reports)
 
+        # Plots / Scenes mirror the saved lists on the other tabs, and carry the
+        # same right-click menu (Properties / Delete). Deleting here removes the
+        # entry from its source list too.
         self._summary_plots = QListWidget()
+        self._summary_plots.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._summary_plots.customContextMenuRequested.connect(
+            self._on_summary_plot_menu
+        )
         plots = QVBoxLayout()
         plots.addWidget(self._header("Plots"))
         plots.addWidget(self._summary_plots)
 
         self._summary_scenes = QListWidget()
+        self._summary_scenes.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._summary_scenes.customContextMenuRequested.connect(
+            self._on_summary_scene_menu
+        )
         scenes = QVBoxLayout()
         scenes.addWidget(self._header("Scenes"))
         scenes.addWidget(self._summary_scenes)
@@ -1129,16 +1144,22 @@ class BatchRunDialog(QDialog):
             for i in range(self._reports_window.count())
             if self._reports_window.item(i).checkState() == Qt.CheckState.Checked
         ])
-        self._summary_plots.clear()
-        self._summary_plots.addItems([
-            self._saved_plots.item(i).text()
-            for i in range(self._saved_plots.count())
-        ])
-        self._summary_scenes.clear()
-        self._summary_scenes.addItems([
-            self._saved_scenes.item(i).text()
-            for i in range(self._saved_scenes.count())
-        ])
+        # Mirror the saved plots/scenes with their captured data, so the Summary
+        # tab's Properties menu can render them and rows map 1:1 to their source.
+        self._mirror_saved(self._saved_plots, self._summary_plots)
+        self._mirror_saved(self._saved_scenes, self._summary_scenes)
+
+    @staticmethod
+    def _mirror_saved(src: QListWidget, dst: QListWidget) -> None:
+        """Copy ``src``'s items (text + captured data) into ``dst``, in order."""
+        dst.clear()
+        for i in range(src.count()):
+            s = src.item(i)
+            item = QListWidgetItem(s.text())
+            item.setData(
+                Qt.ItemDataRole.UserRole, s.data(Qt.ItemDataRole.UserRole)
+            )
+            dst.addItem(item)
 
     # --- Plots tab --------------------------------------------------------
     def _build_plots_tab(self) -> QWidget:
@@ -1458,6 +1479,38 @@ class BatchRunDialog(QDialog):
     def _delete_saved_scene(self, item) -> None:
         """Remove a saved scene from the list."""
         self._saved_scenes.takeItem(self._saved_scenes.row(item))
+
+    def _on_summary_plot_menu(self, pos) -> None:
+        """Right-click a Summary-tab plot: Properties or Delete (mirrors the
+        Plots tab; deleting also removes it from Saved Plots)."""
+        item = self._summary_plots.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._summary_plots)
+        menu.addAction("Properties", lambda: self._show_saved_plot_properties(item))
+        menu.addAction("Delete", lambda: self._delete_summary_plot(item))
+        menu.exec(self._summary_plots.viewport().mapToGlobal(pos))
+
+    def _delete_summary_plot(self, item) -> None:
+        """Delete a plot from Saved Plots via the Summary tab, then refresh."""
+        self._saved_plots.takeItem(self._summary_plots.row(item))
+        self._refresh_summary()
+
+    def _on_summary_scene_menu(self, pos) -> None:
+        """Right-click a Summary-tab scene: Properties or Delete (mirrors the
+        Scenes tab; deleting also removes it from Saved Scenes)."""
+        item = self._summary_scenes.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._summary_scenes)
+        menu.addAction("Properties", lambda: self._show_saved_scene_properties(item))
+        menu.addAction("Delete", lambda: self._delete_summary_scene(item))
+        menu.exec(self._summary_scenes.viewport().mapToGlobal(pos))
+
+    def _delete_summary_scene(self, item) -> None:
+        """Delete a scene from Saved Scenes via the Summary tab, then refresh."""
+        self._saved_scenes.takeItem(self._summary_scenes.row(item))
+        self._refresh_summary()
 
     def _render_preview(self) -> None:
         """Draw the checked monitors into the preview for a SINGLE data set (the

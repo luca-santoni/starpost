@@ -821,6 +821,92 @@ def test_saved_scene_properties_dialog_content(app):
     dlg.close()
 
 
+def test_summary_mirrors_saved_plots_and_scenes_with_data(app):
+    """The Summary tab copies saved plots/scenes with their captured data so
+    Properties works and rows map 1:1 to their source."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    plot = QListWidgetItem("Drag plot")
+    plot.setData(Qt.ItemDataRole.UserRole, {"title": "T"})
+    dlg._saved_plots.addItem(plot)
+    scene = QListWidgetItem("Pressure scene")
+    scene.setData(Qt.ItemDataRole.UserRole, {"resolution": "2160p"})
+    dlg._saved_scenes.addItem(scene)
+
+    dlg._tabs.setCurrentWidget(dlg._summary_tab)
+    dlg._refresh_summary()
+    assert dlg._summary_plots.item(0).text() == "Drag plot"
+    assert dlg._summary_plots.item(0).data(Qt.ItemDataRole.UserRole) == {"title": "T"}
+    assert dlg._summary_scenes.item(0).data(
+        Qt.ItemDataRole.UserRole
+    ) == {"resolution": "2160p"}
+    dlg.close()
+
+
+def test_summary_plot_properties_and_delete(app, monkeypatch):
+    """The Summary tab's plot menu opens Properties and deletes from Saved Plots."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    item = QListWidgetItem("p1")
+    item.setData(Qt.ItemDataRole.UserRole, {"title": "T", "monitors": {}})
+    dlg._saved_plots.addItem(item)
+    dlg._tabs.setCurrentWidget(dlg._summary_tab)
+    dlg._refresh_summary()
+
+    opened = []
+    monkeypatch.setattr(
+        brd._SavedPlotPropertiesDialog, "exec",
+        lambda self: opened.append(self) or 0,
+    )
+    dlg._show_saved_plot_properties(dlg._summary_plots.item(0))
+    assert len(opened) == 1
+
+    dlg._delete_summary_plot(dlg._summary_plots.item(0))
+    assert dlg._saved_plots.count() == 0
+    assert dlg._summary_plots.count() == 0
+    dlg.close()
+
+
+def test_summary_scene_properties_and_delete(app, monkeypatch):
+    """The Summary tab's scene menu opens Properties and deletes from Saved
+    Scenes."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    item = QListWidgetItem("s1")
+    item.setData(
+        Qt.ItemDataRole.UserRole,
+        {"displayers": {"Scene 1": ["Pressure"]}, "views": []},
+    )
+    dlg._saved_scenes.addItem(item)
+    dlg._tabs.setCurrentWidget(dlg._summary_tab)
+    dlg._refresh_summary()
+
+    opened = []
+    monkeypatch.setattr(
+        brd._SavedScenePropertiesDialog, "exec",
+        lambda self: opened.append(self) or 0,
+    )
+    dlg._show_saved_scene_properties(dlg._summary_scenes.item(0))
+    assert len(opened) == 1
+
+    dlg._delete_summary_scene(dlg._summary_scenes.item(0))
+    assert dlg._saved_scenes.count() == 0
+    assert dlg._summary_scenes.count() == 0
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""
