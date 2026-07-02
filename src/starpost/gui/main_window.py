@@ -75,7 +75,10 @@ class MainWindow(QMainWindow):
 
         self.settings = settings
         self.store = ResultStore()
-        self.store.load_cache()  # restore after a crash, if any
+        # Restoring the crash-recovery cache can take a few hundred ms for a
+        # large workspace; deferred to the first event-loop pass (which runs
+        # before any user input) so it doesn't delay the window appearing.
+        QTimer.singleShot(0, self._load_cached_results)
 
         self._thread: QThread | None = None
         self._worker: BatchWorker | None = None
@@ -162,6 +165,19 @@ class MainWindow(QMainWindow):
         self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
+
+    def _load_cached_results(self) -> None:
+        """Restore results from the crash-recovery cache (deferred from
+        __init__, see there) and populate the views when it held anything. A
+        cache that fails to parse is logged and skipped rather than blocking
+        the launch — it's only recovery data; the .sim files still exist."""
+        try:
+            self.store.load_cache()
+        except Exception:
+            log.exception("failed to load the results cache; starting empty")
+            return
+        if self.store.all():
+            self._refresh_from_store()
 
     # --- layout ----------------------------------------------------------
     def _build_layout(self) -> None:
@@ -589,7 +605,7 @@ class MainWindow(QMainWindow):
             m for m in res.media if m.source not in rendered_sources
         ] + list(artifacts)
         self.store.put(res)
-        self.store.save_cache()
+        self.store.save_cache_async()  # off the GUI thread; runs on it here
 
     def _on_render_finished(self) -> None:
         self.log_console.finish_progress()
@@ -625,7 +641,8 @@ class MainWindow(QMainWindow):
             if r.media:
                 r.media = []
                 self.store.put(r)
-        self.store.save_cache()  # persist so the cleared state survives restart
+        # Persist so the cleared state survives restart (async: no GUI freeze).
+        self.store.save_cache_async()
         self._refresh_from_store()
 
     def _delete_selected_data(self) -> None:
@@ -652,7 +669,8 @@ class MainWindow(QMainWindow):
         selected = set(names)
         for r in [r for r in self.store.all() if r.sim_name in selected]:
             self.store.remove(r.sim_path)
-        self.store.save_cache()  # persist so the deletion survives restart
+        # Persist so the deletion survives restart (async: no GUI freeze).
+        self.store.save_cache_async()
         self._refresh_from_store()
 
     def _clear_data(self) -> None:
@@ -673,7 +691,8 @@ class MainWindow(QMainWindow):
         # Clear extracted results only; keep the loaded .sim files so they can be
         # re-run without re-adding them.
         self.store.clear()
-        self.store.save_cache()  # persist the empty state so it survives restart
+        # Persist the empty state so it survives restart (async: no GUI freeze).
+        self.store.save_cache_async()
         self.report_table.clear()
         self.plot_view.clear()
         self.log_console.clear()
@@ -1050,7 +1069,8 @@ class MainWindow(QMainWindow):
             imported += 1
 
         if imported:
-            self.store.save_cache()  # persist so the import survives restart
+            # Persist so the import survives restart (async: no GUI freeze).
+            self.store.save_cache_async()
             self._refresh_from_store()
             self._check_homogeneity()
 

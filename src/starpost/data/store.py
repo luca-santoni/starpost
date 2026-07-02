@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, Optional
@@ -24,6 +25,10 @@ class ResultStore:
 
     def __init__(self) -> None:
         self._results: dict[str, SimResult] = {}
+        # Cache writes: one writer at a time, and a generation counter so an
+        # older in-flight async save never overwrites a newer one's file.
+        self._save_lock = threading.Lock()
+        self._save_gen = 0
 
     # --- access ----------------------------------------------------------
     def put(self, result: SimResult) -> None:
@@ -50,13 +55,54 @@ class ResultStore:
         return len(sigs) <= 1
 
     # --- persistence -----------------------------------------------------
+    def _snapshot(self) -> tuple[dict, int]:
+        """A JSON-ready snapshot of the store plus its save generation.
+
+        The snapshot's dicts are freshly built, so later store changes can't
+        reach it; the plot x/y lists are shared by reference (copying every
+        point is what made ``dataclasses.asdict`` ~15x slower) — safe because a
+        series' data is immutable once extracted."""
+        payload = {sp: _result_to_dict(r) for sp, r in self._results.items()}
+        with self._save_lock:
+            self._save_gen += 1
+            return payload, self._save_gen
+
+    def _write_cache(self, payload: dict, path: Path, gen: int) -> None:
+        with self._save_lock:
+            if gen < self._save_gen:
+                return  # a newer save exists/is queued; don't write stale state
+            # Streamed via iterencode, not json.dumps: the C serializer holds
+            # the GIL for its whole run (~130 ms for a large workspace), which
+            # stalls the GUI even from a background thread; the streaming
+            # encoder yields between chunks, capping stalls at ~10 ms. Compact
+            # separators: this is a machine-only crash-recovery file, and the
+            # compact form is smaller, so it writes and (re)loads faster.
+            # load_cache reads any JSON form.
+            encoder = json.JSONEncoder(separators=(",", ":"))
+            with path.open("w", encoding="utf-8") as fh:
+                for chunk in encoder.iterencode(payload):
+                    fh.write(chunk)
+
     def save_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
-        payload = {sp: asdict(r) for sp, r in self._results.items()}
-        # No indentation: this is a machine-only crash-recovery file, and the
-        # compact form is roughly half the size, so it writes and (re)loads
-        # faster on startup. load_cache reads either form.
-        path.write_text(json.dumps(payload), encoding="utf-8")
+        payload, gen = self._snapshot()
+        self._write_cache(payload, path, gen)
+
+    def save_cache_async(self, path: Optional[Path] = None) -> threading.Thread:
+        """save_cache with the serialize + write (a few hundred ms for a large
+        workspace) on a background thread, for GUI-thread callers that must not
+        freeze. The snapshot is taken synchronously, so the file reflects the
+        store as of this call; the write lock keeps concurrent saves (e.g. the
+        batch worker's synchronous checkpoints) from interleaving. Returns the
+        started (non-daemon, so never killed mid-write) thread."""
+        path = path or results_cache_path()
+        payload, gen = self._snapshot()
+        thread = threading.Thread(
+            target=self._write_cache, args=(payload, path, gen),
+            name="starpost-cache-save",
+        )
+        thread.start()
+        return thread
 
     def load_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()
@@ -64,6 +110,34 @@ class ResultStore:
             return
         payload = json.loads(path.read_text(encoding="utf-8"))
         self._results = {sp: _result_from_dict(d) for sp, d in payload.items()}
+
+
+def _result_to_dict(r: SimResult) -> dict:
+    """``asdict(r)``, but with the plot series built by hand: asdict deep-copies
+    every x/y point, which dominates the save cost, while json.dumps only needs
+    to read them. The small fixed-size parts still use asdict, so new fields on
+    those dataclasses keep round-tripping without touching this. The output is
+    identical to asdict's (see the store tests)."""
+    return {
+        "sim_path": r.sim_path,
+        "reports": [asdict(rep) for rep in r.reports],
+        "plots": [
+            {
+                "name": p.name,
+                "series": [{"name": s.name, "x": s.x, "y": s.y} for s in p.series],
+                "kind": p.kind.value,
+                "x_label": p.x_label,
+                "y_log": p.y_log,
+                "error": p.error,
+            }
+            for p in r.plots
+        ],
+        "scenes": [asdict(sc) for sc in r.scenes],
+        "views": list(r.views),
+        "media": [asdict(m) for m in r.media],
+        "extracted_at": r.extracted_at,
+        "error": r.error,
+    }
 
 
 def _result_from_dict(d: dict) -> SimResult:

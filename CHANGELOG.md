@@ -60,6 +60,14 @@ dialog's saved plots/scenes.
   Reports or Scenes tab is in front (it redraws when the Plots tab is next
   opened), so report and data-set toggles respond much faster on large
   workspaces.
+- **No more freezes when the workspace saves** — the crash-recovery cache is
+  now written in the background (previously the interface stalled for a
+  fraction of a second when deleting, importing or clearing data, when scene
+  renders finished, and during each batch file's checkpoint).
+- **The window opens before the cache loads** — restoring a large workspace's
+  crash-recovery cache now happens just after the main window appears instead
+  of before it, and a cache that fails to parse is skipped (with a log entry)
+  rather than blocking the launch.
 
 ### Bug Fixes
 - **Plots tab monitor list** — clicking a monitor group or monitor **name** now

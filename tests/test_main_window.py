@@ -1239,6 +1239,34 @@ def test_startup_does_not_import_heavy_deferred_libs(tmp_path):
     )
 
 
+def test_cache_load_is_deferred_past_construction(app):
+    """The crash-recovery cache loads on the first event-loop pass, not inside
+    __init__ — the window can appear before a large cache is parsed."""
+    seed = mw.ResultStore()
+    seed.put(_sim_result_with_data())
+    seed.save_cache()  # the per-user cache path (isolated to tmp by the fixture)
+
+    win = mw.MainWindow(Settings())
+    assert win.store.all() == []  # not loaded during construction
+    app.processEvents()           # the deferred load runs on the first pass
+    names = [r.sim_name for r in win.store.all()]
+    assert names == ["caseA"]
+    # The views were populated from the loaded data too (the Data tab tree).
+    assert "caseA" in [it.text(0) for it in win.data_list._iter_data()]
+    win.close()
+
+
+def test_corrupt_cache_does_not_block_startup(app):
+    """A cache that fails to parse is skipped (and logged), not fatal."""
+    import starpost.utils.paths as paths_mod
+
+    paths_mod.results_cache_path().write_text("{not json", encoding="utf-8")
+    win = mw.MainWindow(Settings())
+    app.processEvents()  # the deferred load hits the corrupt file
+    assert win.store.all() == []
+    win.close()
+
+
 def test_checkbox_bursts_coalesce_into_one_refresh(app, monkeypatch):
     """A burst of checkbox-change signals (e.g. a Shift+click range tick, one
     signal per item) queues a single refresh, run after the burst — and a
