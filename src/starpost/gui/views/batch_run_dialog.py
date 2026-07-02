@@ -1127,15 +1127,22 @@ class BatchRunDialog(QDialog):
         Summary tab is shown (see _refresh_summary)."""
         tab = QWidget()
 
-        # Export options: the archive format for the produced output.
+        # Export options: the archive format for the produced output, and
+        # whether each data set's portable CSV goes into its folder too.
         self._export_format = QComboBox()
         self._export_format.addItem("ZIP", "zip")
         self._export_format.addItem("7Z", "7z")
         self._export_format.addItem("RAR", "rar")
+        self._include_dataset_csv = QCheckBox("Include dataset .csv")
+        self._include_dataset_csv.setToolTip(
+            "Also write each data set's portable StarPost CSV (the same file as "
+            "the Data tab's Export Data button) into its folder in the archive"
+        )
         options = QVBoxLayout()
         options.addWidget(self._header("Export options"))
         options.addWidget(QLabel("Archive format"))
         options.addWidget(self._export_format)
+        options.addWidget(self._include_dataset_csv)
         options.addStretch(1)
 
         self._summary_reports = QListWidget()
@@ -1808,7 +1815,9 @@ class BatchRunDialog(QDialog):
         }
         saved_plots = self._saved_entries(self._saved_plots)
         saved_scenes = self._saved_entries(self._saved_scenes)
-        if not reports and not saved_plots and not saved_scenes:
+        include_dataset_csv = self._include_dataset_csv.isChecked()
+        if (not reports and not saved_plots and not saved_scenes
+                and not include_dataset_csv):
             QMessageBox.warning(
                 self, "Run batch",
                 "Nothing to output — select reports or save a plot/scene first.",
@@ -1837,6 +1846,7 @@ class BatchRunDialog(QDialog):
             include_units=self._report_include_units.isChecked(),
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
+            include_dataset_csv=include_dataset_csv,
         )
         runner = StarRunner(self._settings) if self._settings else None
 

@@ -28,6 +28,10 @@ dialog's saved plots/scenes.
   and **Delete**, alongside the existing report/plot profiles. In the details
   window, right-click a saved plot or scene for **Properties** to view its
   captured contents.
+- **Run batch → Summary tab** — a new **"Include dataset .csv"** export option:
+  when ticked, each data set's portable StarPost CSV (the same file the Data
+  tab's **Export Data** button writes) is added to its folder in the output
+  archive, ready to re-import.
 - **Multi-select in lists** — selectable lists (the scene gallery, the Files /
   Data trees, and the Run-batch and Profile-details lists) now support
   **Shift+click** to select a range and **Ctrl+click** to toggle items, matching

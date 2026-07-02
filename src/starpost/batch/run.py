@@ -1,9 +1,10 @@
 """Run a configured batch export.
 
 For each selected data set / .sim the batch produces, into a folder named after
-that data set: the selected report table, an image of each saved plot, and the
-saved-scene stills. All the per-data-set folders are then packed into a single
-``.zip`` written to the user's output folder.
+that data set: the selected report table, an image of each saved plot, the
+saved-scene stills and, optionally, the data set's portable CSV (the same file
+the Data tab's Export Data button writes). All the per-data-set folders are then
+packed into a single ``.zip`` written to the user's output folder.
 
 Plots are rendered with a real :class:`PlotView`, so this runs on the GUI thread
 (Qt widgets can't be created off it). Extraction and scene rendering shell out to
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import QApplication
 from starpost.batch.aggregator import reports_long_frame, write_report_table
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import SimResult
+from starpost.data.portable import write_sim_csv
 from starpost.gui.views.plot_view import PlotView
 
 LogSink = Callable[[str], None]
@@ -51,13 +53,15 @@ class BatchSource:
 @dataclass
 class BatchConfig:
     """Everything the run needs beyond the sources: which reports to write (and
-    how), and the saved plots / scenes (each ``{"name", "data"}``)."""
+    how), the saved plots / scenes (each ``{"name", "data"}``), and whether each
+    data set's portable CSV goes into its folder too."""
     sources: list[BatchSource]
     reports: set[str] = field(default_factory=set)
     report_format: str = "csv"          # csv | tsv | xlsx | ods
     include_units: bool = True
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
+    include_dataset_csv: bool = False   # write the portable data-set CSV per folder
 
 
 def _plot_size(plot_data: dict, default=(1280, 720)) -> tuple[int, int]:
@@ -155,12 +159,14 @@ def _zip_dir(src_dir: Path, dest_zip: Path) -> None:
 
 def _source_steps(config: BatchConfig, source: BatchSource) -> int:
     """How many progress steps a source contributes: an extraction (for a .sim),
-    the report table, one per saved plot, and one per saved scene (when the source
-    can render scenes)."""
+    the report table, the data-set CSV, one per saved plot, and one per saved
+    scene (when the source can render scenes)."""
     n = 0
     if source.result is None and source.sim_file is not None:
         n += 1
     if config.reports:
+        n += 1
+    if config.include_dataset_csv:
         n += 1
     n += len(config.saved_plots)
     if source.sim_file is not None:
@@ -249,6 +255,15 @@ def build_batch_archive(
                 rpath = folder / f"reports.{config.report_format.lower()}"
                 write_report_table(df, rpath, config.report_format)
                 log(f"  reports -> {rpath.name}")
+                steps.advance()
+
+            if config.include_dataset_csv:
+                steps.at(f"Writing data set CSV for {source.name}…")
+                # The same portable CSV as the Data tab's Export Data button,
+                # named after the data set (its re-import name).
+                cpath = folder / f"{_safe_name(source.name)}.csv"
+                write_sim_csv(result, cpath)
+                log(f"  data set -> {cpath.name}")
                 steps.advance()
 
             for entry in config.saved_plots:

@@ -1290,6 +1290,32 @@ def test_build_batch_archive(app, tmp_path, monkeypatch):
     assert any("Packaging" in m for m in messages)
 
 
+def test_build_batch_archive_includes_dataset_csv(app, tmp_path):
+    """With include_dataset_csv, each data-set folder also gets the portable CSV
+    (the Data tab's Export Data file), which round-trips through read_sim_csv."""
+    import zipfile
+
+    import starpost.batch.run as run
+    from starpost.data.portable import read_sim_csv
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv",
+        include_dataset_csv=True,
+    )
+    dest = tmp_path / "batch.zip"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    with zipfile.ZipFile(dest) as zf:
+        names = set(zf.namelist())
+        zf.extract("caseA/caseA.csv", tmp_path)
+    assert {"caseA/reports.csv", "caseA/caseA.csv"} <= names
+    loaded = read_sim_csv(tmp_path / "caseA" / "caseA.csv")
+    assert [r.name for r in loaded.reports] == ["Drag"]
+    assert [p.name for p in loaded.plots] == ["Forces"]
+
+
 def test_build_batch_archive_extracts_sim_sources(app, tmp_path, monkeypatch):
     """A .sim source (no preloaded result) is extracted during the run."""
     from pathlib import Path
@@ -1337,6 +1363,7 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
     plot = QListWidgetItem("Drag plot")
     plot.setData(Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"})
     dlg._saved_plots.addItem(plot)
+    dlg._include_dataset_csv.setChecked(True)
 
     captured = {}
 
@@ -1360,6 +1387,7 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
     assert cfg.sources[0].result is result
     assert cfg.reports == {"Drag"}
     assert [e["name"] for e in cfg.saved_plots] == ["Drag plot"]
+    assert cfg.include_dataset_csv is True
     assert captured["dest"].parent == tmp_path and captured["dest"].suffix == ".zip"
     assert dlg.result() == QDialog.DialogCode.Accepted
     dlg.close()
