@@ -967,6 +967,73 @@ def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     assert cfg.list_batch_profiles() == []
 
 
+def test_settings_dialog_lists_and_deletes_batch_profiles(app, monkeypatch):
+    """The Settings Profiles page lists batch profiles, opens their details, and
+    deletes them."""
+    from PySide6.QtWidgets import QLabel
+
+    from starpost.core import settings as cfg
+    from starpost.gui.views import settings_dialog as sd
+
+    cfg.BatchProfile(
+        name="Nightly",
+        selected_reports=["Drag"],
+        saved_plots=[{"name": "Forces plot", "data": {}}],
+        saved_scenes=[{"name": "Pressure", "data": {}}],
+    ).save()
+
+    dlg = sd.SettingsDialog(cfg.Settings.from_dict({}))
+    try:
+        # The batch profile appears in the batch list.
+        labels = [
+            dlg._batch_profiles_list.itemAt(i).widget().text()
+            for i in range(dlg._batch_profiles_list.count())
+            if isinstance(dlg._batch_profiles_list.itemAt(i).widget(), QLabel)
+        ]
+        assert "Nightly" in labels
+
+        # Show Details opens the batch details dialog.
+        opened = []
+        monkeypatch.setattr(
+            sd.BatchProfileDetailsDialog, "exec",
+            lambda self: opened.append(self) or 0,
+        )
+        dlg._show_batch_profile_details("Nightly")
+        assert len(opened) == 1
+
+        # Delete (confirmed) removes it from disk and refreshes the list.
+        monkeypatch.setattr(
+            sd.QMessageBox, "question", lambda *a, **k: sd.QMessageBox.Yes
+        )
+        dlg._delete_batch_profile("Nightly")
+        assert cfg.list_batch_profiles() == []
+    finally:
+        dlg.deleteLater()
+
+
+def test_batch_profile_details_dialog_content(app):
+    """The batch-profile details dialog lists its reports, saved plots and
+    saved scenes."""
+    from PySide6.QtWidgets import QLabel
+
+    from starpost.core.settings import BatchProfile
+    from starpost.gui.views.settings_dialog import BatchProfileDetailsDialog
+
+    profile = BatchProfile(
+        name="Nightly",
+        selected_reports=["Drag", "Lift"],
+        saved_plots=[{"name": "Forces plot", "data": {}}],
+        saved_scenes=[{"name": "Pressure scene", "data": {}}],
+    )
+    dlg = BatchProfileDetailsDialog(profile)
+    try:
+        texts = [w.text() for w in dlg.findChildren(QLabel)]
+        assert "Reports" in texts and "Saved plots" in texts
+        assert "Saved scenes" in texts
+    finally:
+        dlg.deleteLater()
+
+
 def test_batch_run_dialog_save_and_load_profile(app, monkeypatch):
     """The dialog's Batch profile bar saves to / lists from the batch profiles."""
     import starpost.gui.views.batch_run_dialog as brd

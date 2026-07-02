@@ -23,6 +23,9 @@ dialog's saved plots/scenes.
   captured settings (title, axis labels, sizes, theme, legend, line width, grid,
   format, monitor selection and colours) back into the controls and the live
   preview.
+- **Settings → Profiles** — a new **Batch profiles** section lists saved
+  Run-batch selections with **Show Details** (reports, saved plots and scenes)
+  and **Delete**, alongside the existing report/plot profiles.
 
 ## [2.0.0] — 2026-06-22
 

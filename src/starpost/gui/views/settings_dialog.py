@@ -12,8 +12,9 @@ Covers everything in settings.yaml:
                 hover_show_monitor_name, hover_x_decimals, hover_y_decimals,
                 classification keywords
 
-Plus a Profiles page that lists saved selection profiles and lets the user
-delete them (these live as separate YAML files, not in settings.yaml).
+Plus a Profiles page that lists saved selection profiles and batch profiles
+and lets the user view or delete them (these live as separate YAML files, not
+in settings.yaml).
 """
 from __future__ import annotations
 
@@ -53,10 +54,13 @@ from starpost.core.settings import (
     DEFAULT_PROFILE_NAME,
     MAX_TEXT_SCALE,
     MIN_TEXT_SCALE,
+    BatchProfile,
     LicenseConfig,
     Profile,
     Settings,
+    delete_batch_profile,
     delete_profile,
+    list_batch_profiles,
     list_profiles,
 )
 from starpost.core.starccm_runner import exe_dialog_filter, exe_placeholder
@@ -158,6 +162,50 @@ class ProfileDetailsDialog(QDialog):
         col.addWidget(label)
         col.addWidget(lst, 1)
         return col
+
+
+class BatchProfileDetailsDialog(QDialog):
+    """Read-only view of one batch profile's ticked reports, saved plots and
+    saved scenes."""
+
+    def __init__(self, profile: BatchProfile, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Batch profile: {profile.name}")
+        self.resize(720, 420)
+
+        reports = QListWidget()
+        for name in sorted(profile.selected_reports):
+            reports.addItem(name)
+        if reports.count() == 0:
+            reports.addItem("(none selected)")
+
+        plots = QListWidget()
+        for entry in profile.saved_plots:
+            plots.addItem(entry.get("name", "") or "(unnamed)")
+        if plots.count() == 0:
+            plots.addItem("(none saved)")
+
+        scenes = QListWidget()
+        for entry in profile.saved_scenes:
+            scenes.addItem(entry.get("name", "") or "(unnamed)")
+        if scenes.count() == 0:
+            scenes.addItem("(none saved)")
+
+        cols = QHBoxLayout()
+        cols.addLayout(ProfileDetailsDialog._column("Reports", reports), 1)
+        cols.addLayout(ProfileDetailsDialog._column("Saved plots", plots), 1)
+        cols.addLayout(ProfileDetailsDialog._column("Saved scenes", scenes), 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(cols, 1)
+        layout.addWidget(buttons)
 
 
 class SettingsDialog(QDialog):
@@ -578,9 +626,32 @@ class SettingsDialog(QDialog):
         self._profiles_list.setVerticalSpacing(4)
         self._profiles_list.setColumnStretch(0, 1)  # name column absorbs slack
         outer.addLayout(self._profiles_list)
+
+        # Batch profiles: the Run-batch dialog's saved selections, stored
+        # separately from the report/plot profiles above.
+        batch_header = QLabel("Batch profiles")
+        batch_header.setStyleSheet("font-weight: bold;")
+        outer.addSpacing(12)
+        outer.addWidget(batch_header)
+        batch_intro = QLabel(
+            "Saved Run-batch selections (reports, plots and scenes). "
+            "Deleting a batch profile removes it permanently"
+        )
+        batch_intro.setObjectName("hint")
+        batch_intro.setWordWrap(True)
+        outer.addWidget(batch_intro)
+
+        self._batch_profiles_list = QGridLayout()
+        self._batch_profiles_list.setContentsMargins(0, 4, 0, 0)
+        self._batch_profiles_list.setHorizontalSpacing(8)
+        self._batch_profiles_list.setVerticalSpacing(4)
+        self._batch_profiles_list.setColumnStretch(0, 1)
+        outer.addLayout(self._batch_profiles_list)
+
         outer.addStretch(1)
 
         self._rebuild_profiles_list()
+        self._rebuild_batch_profiles_list()
         return page
 
     def _rebuild_profiles_list(self) -> None:
@@ -626,6 +697,54 @@ class SettingsDialog(QDialog):
         if confirm == QMessageBox.Yes:
             delete_profile(name)
             self._rebuild_profiles_list()
+
+    def _rebuild_batch_profiles_list(self) -> None:
+        # Clear existing rows.
+        while self._batch_profiles_list.count():
+            item = self._batch_profiles_list.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+
+        names = list_batch_profiles()
+        if not names:
+            self._batch_profiles_list.addWidget(
+                QLabel("(no batch profiles saved)"), 0, 0
+            )
+            return
+        for r, name in enumerate(names):
+            self._batch_profiles_list.addWidget(QLabel(name), r, 0)
+            details = QPushButton("Show Details")
+            details.setToolTip(
+                "View this batch profile's reports, plots and scenes"
+            )
+            details.clicked.connect(
+                lambda _=False, n=name: self._show_batch_profile_details(n)
+            )
+            self._batch_profiles_list.addWidget(details, r, 1)
+            btn = QPushButton("Delete")
+            btn.setObjectName("dangerButton")
+            btn.setToolTip("Delete this batch profile permanently")
+            btn.clicked.connect(
+                lambda _=False, n=name: self._delete_batch_profile(n)
+            )
+            self._batch_profiles_list.addWidget(btn, r, 2)
+
+    def _show_batch_profile_details(self, name: str) -> None:
+        BatchProfileDetailsDialog(BatchProfile.load(name), self).exec()
+
+    def _delete_batch_profile(self, name: str) -> None:
+        confirm = QMessageBox.question(
+            self,
+            "Delete batch profile",
+            f"Delete the batch profile “{name}”? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm == QMessageBox.Yes:
+            delete_batch_profile(name)
+            self._rebuild_batch_profiles_list()
 
     def _build_appearance_page(self) -> QWidget:
         # Theme mode
