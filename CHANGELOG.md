@@ -38,6 +38,9 @@ dialog's saved plots/scenes.
   ticks (or unticks) every item between them, matching the anchor's state.
 
 ### Bug Fixes
+- **Plots tab monitor list** — clicking a monitor group or monitor **name** now
+  toggles its checkbox (previously only the small checkbox itself responded),
+  matching the app's other checklists.
 - **Scene Properties** — long **Vector/Scalar name** values now wrap onto
   further lines instead of stretching the window ever wider, in both the
   rendered-scene Properties (main UI) and the Run batch saved-scene Properties.

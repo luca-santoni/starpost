@@ -1498,9 +1498,8 @@ def test_shift_click_range_within_monitor_group(app):
     tree.resize(300, 400)
     tree.show()
 
-    # The user checks m0 (via its checkbox), then clicks it to set the range
-    # anchor and Shift+clicks m2 to fill m0..m2.
-    group.child(0).setCheckState(0, Qt.CheckState.Checked)
+    # Clicking m0 checks it (and sets the range anchor); Shift+click m2 fills
+    # m0..m2 to match.
     _click(tree, tree.visualItemRect(group.child(0)))
     _click(tree, tree.visualItemRect(group.child(2)), shift=True)
     checked = [
@@ -1509,4 +1508,44 @@ def test_shift_click_range_within_monitor_group(app):
         if group.child(i).checkState(0) == Qt.CheckState.Checked
     ]
     assert checked == ["m0", "m1", "m2"]
+    tree.close()
+
+
+def test_plots_tab_name_click_toggles_monitor(app):
+    """In the Plots-tab monitor tree, clicking a group/monitor name (not just the
+    checkbox) toggles it, and it toggles exactly once."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from starpost.gui.views.selection_panel import _MonitorPlotTree
+
+    tree = _MonitorPlotTree()
+    tree.set_items({"Forces": ["m0", "m1"]})
+    group = tree.topLevelItem(0)
+    tree.resize(400, 400)
+    tree.show()
+
+    def name_point(item):
+        r = tree.visualItemRect(item)
+        return QPoint(r.left() + 30, r.center().y())
+
+    # Clicking the group name (not the indicator) checks it and reveals monitors.
+    gp = name_point(group)
+    assert not tree._on_check_indicator(group, gp)
+    QTest.mouseClick(
+        tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, gp
+    )
+    assert group.checkState(0) == Qt.CheckState.Checked
+
+    # Clicking a monitor name toggles it once (on, then off).
+    child = group.child(0)
+    cp = name_point(child)
+    QTest.mouseClick(
+        tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, cp
+    )
+    assert child.checkState(0) == Qt.CheckState.Checked
+    QTest.mouseClick(
+        tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, cp
+    )
+    assert child.checkState(0) == Qt.CheckState.Unchecked
     tree.close()
