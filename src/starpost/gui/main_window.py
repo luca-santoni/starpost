@@ -848,8 +848,6 @@ class MainWindow(QMainWindow):
             self.scene_view.clear()
 
     def _render_reports(self) -> None:
-        from starpost.batch.aggregator import reports_wide_frame
-
         results = self._active_results()
         if not results:
             self.report_table.clear()
@@ -857,6 +855,11 @@ class MainWindow(QMainWindow):
         selected = self.selection.selected_reports()
         hide_zero = self.settings.hide_empty_reports
         if self._is_comparison():
+            # Imported here, not at the top of the function: the aggregator
+            # pulls in pandas (~400 ms), which must not load during startup's
+            # empty-store call — only when a comparison is actually drawn.
+            from starpost.batch.aggregator import reports_wide_frame
+
             df = reports_wide_frame(results, selected)
             if hide_zero:
                 df = _drop_zero_report_columns(df, self.settings.zero_threshold)

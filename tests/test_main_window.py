@@ -1208,6 +1208,32 @@ def _sim_result_with_data():
     )
 
 
+def test_startup_does_not_import_pandas(tmp_path):
+    """Opening the main window with nothing loaded must not pull in pandas (a
+    ~400 ms import); it loads only when a comparison table is first drawn. Runs
+    in a subprocess so imports from other tests can't mask a regression."""
+    import subprocess
+    import sys
+
+    code = (
+        "import os, sys\n"
+        "os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')\n"
+        "from pathlib import Path\n"
+        "import starpost.data.store as store\n"
+        f"store.results_cache_path = lambda: Path({str(tmp_path)!r}) / 'none.json'\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "from starpost.core.settings import Settings\n"
+        "from starpost.gui.main_window import MainWindow\n"
+        "app = QApplication([])\n"
+        "w = MainWindow(Settings())\n"
+        "sys.exit(1 if 'pandas' in sys.modules else 0)\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
 def test_render_plot_renders_once(app, monkeypatch):
     """_render_plot draws the plot exactly once: the monitor selection is stored
     before show_plots/show_comparison, not applied with a second render after."""

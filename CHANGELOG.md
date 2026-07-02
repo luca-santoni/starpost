@@ -42,6 +42,9 @@ dialog's saved plots/scenes.
   ticks (or unticks) every item between them, matching the anchor's state.
 
 ### Changes
+- **Faster startup** — the table library behind the comparison view (a ~0.4 s
+  import) no longer loads while the main window opens; it loads the first time
+  a comparison table is actually shown.
 - **Faster plot redraws** — changing which data sets, plots or monitors are
   shown now draws the plot once instead of twice, roughly halving the delay
   after each click (also in the Export and Run batch previews and the batch
