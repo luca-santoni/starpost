@@ -858,10 +858,14 @@ class PlotView(QWidget):
             self._selection_memory[name] = sel.selected()
         return {k: sorted(v) for k, v in self._selection_memory.items()}
 
-    def set_monitor_selection(self, selection: dict[str, list[str]]) -> None:
+    def set_monitor_selection(
+        self, selection: dict[str, list[str]], *, render: bool = True
+    ) -> None:
         """Restore which series are shown per monitor group (profile loading).
 
         Groups absent from `selection` fall back to showing all their monitors.
+        ``render=False`` only stores the selection — for callers about to call a
+        ``show_*`` (which renders), so the plot isn't drawn twice.
         """
         self._selection_memory = {k: set(v) for k, v in selection.items()}
         for name, sel in self._selectors.items():
@@ -869,7 +873,7 @@ class PlotView(QWidget):
                 sel.set_selected(self._selection_memory[name])
             else:
                 sel.select_all()
-        if self._mode is not None:
+        if render and self._mode is not None:
             self._render()
 
     def show_plots(self, plots: list[MonitorPlot]) -> None:

@@ -1208,6 +1208,42 @@ def _sim_result_with_data():
     )
 
 
+def test_render_plot_renders_once(app, monkeypatch):
+    """_render_plot draws the plot exactly once: the monitor selection is stored
+    before show_plots/show_comparison, not applied with a second render after."""
+    win = mw.MainWindow(Settings())
+    result = _sim_result_with_data()
+    win.store.put(result)
+    win._refresh_from_store()
+    win.data_list.set_entries([result.sim_name])
+    monkeypatch.setattr(
+        win, "_active_results", lambda: [result], raising=False
+    )
+    monkeypatch.setattr(
+        win, "_selected_plot_names", lambda: ["Forces"], raising=False
+    )
+    monkeypatch.setattr(
+        win.selection, "selected_monitors",
+        lambda: {"Forces": ["Drag"]}, raising=False,
+    )
+
+    renders = []
+    original = win.plot_view._render
+    monkeypatch.setattr(
+        win.plot_view, "_render", lambda: renders.append(1) or original()
+    )
+
+    win._render_plot()  # single (per-file) mode
+    assert len(renders) == 1
+
+    renders.clear()
+    win._is_comparison = lambda: True
+    win._render_plot()  # comparison mode
+    assert len(renders) == 1
+    assert win.plot_view.has_content()
+    win.close()
+
+
 def test_render_saved_plot(app, tmp_path):
     """A saved plot renders to an image file; an unmatched plot writes nothing."""
     from starpost.batch.run import render_saved_plot

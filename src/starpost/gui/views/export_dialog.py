@@ -600,6 +600,9 @@ class ExportDialog(QDialog):
             self._preview.clear()
             return
 
+        # Restrict each group to the monitors ticked in the Monitors column —
+        # stored before the show_* below so the preview renders just once.
+        self._preview.set_monitor_selection(self.checked_monitors(), render=False)
         if len(active) >= 2:
             categories = []
             for group in sorted(groups, key=str.lower):
@@ -621,9 +624,6 @@ class ExportDialog(QDialog):
                 self._preview.clear()
                 return
             self._preview.show_plots(plots)
-
-        # Restrict each group to the monitors ticked in the Monitors column.
-        self._preview.set_monitor_selection(self.checked_monitors())
 
     def _build_plot_options(self, box: QGroupBox) -> None:
         """Options column for the Plots tab. Framework only — the controls are

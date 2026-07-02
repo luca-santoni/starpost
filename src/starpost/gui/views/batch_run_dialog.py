@@ -1636,8 +1636,9 @@ class BatchRunDialog(QDialog):
             if self._results and groups else []
         )
         if plots:
+            # Selection first (no render), so show_plots draws it in one pass.
+            self._preview.set_monitor_selection(selection, render=False)
             self._preview.show_plots(plots)
-            self._preview.set_monitor_selection(selection)
         else:
             self._preview.clear()
         # Keep each checked monitor's swatch in step with the colour it's drawn in.

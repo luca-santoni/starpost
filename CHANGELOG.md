@@ -41,6 +41,12 @@ dialog's saved plots/scenes.
   region-statistics list), clicking one item then Shift+clicking another now
   ticks (or unticks) every item between them, matching the anchor's state.
 
+### Changes
+- **Faster plot redraws** — changing which data sets, plots or monitors are
+  shown now draws the plot once instead of twice, roughly halving the delay
+  after each click (also in the Export and Run batch previews and the batch
+  plot rendering).
+
 ### Bug Fixes
 - **Plots tab monitor list** — clicking a monitor group or monitor **name** now
   toggles its checkbox (previously only the small checkbox itself responded),

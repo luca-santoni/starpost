@@ -878,6 +878,11 @@ class MainWindow(QMainWindow):
             # blank the view rather than leaving the previous plot on screen.
             self.plot_view.clear()
             return
+        # Store the panel's monitor selection first (without rendering), so the
+        # show_* below draws it directly — one render, not a draw-then-redraw.
+        self.plot_view.set_monitor_selection(
+            self.selection.selected_monitors(), render=False
+        )
         if self._is_comparison():
             categories = []
             for plot_name in plot_names:
@@ -890,7 +895,6 @@ class MainWindow(QMainWindow):
                     categories.append((plot_name, pairs))
             if categories:
                 self.plot_view.show_comparison(categories)
-                self.plot_view.set_monitor_selection(self.selection.selected_monitors())
             else:
                 self.plot_view.clear()
         else:
@@ -899,7 +903,6 @@ class MainWindow(QMainWindow):
             plots = [p for p in res.plots if p.name in plot_names]
             if plots:
                 self.plot_view.show_plots(plots)
-                self.plot_view.set_monitor_selection(self.selection.selected_monitors())
             else:
                 self.plot_view.clear()
 

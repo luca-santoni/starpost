@@ -94,8 +94,8 @@ def render_saved_plot(result: SimResult, plot_data: dict, settings, path) -> boo
         view.set_filter(settings.hide_empty_monitors, settings.monitor_zero_threshold)
         view.set_region_stats(settings.region_stats)
     view.apply_theme(plot_data.get("theme") or "light")
+    view.set_monitor_selection(monitors, render=False)  # show_plots renders once
     view.show_plots(plots)
-    view.set_monitor_selection(monitors)
     view.set_color_overrides(
         plot_data.get("series_colors") or {}, plot_data.get("pair_colors") or {}
     )
