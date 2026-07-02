@@ -387,6 +387,8 @@ class _SavedScenePropertiesDialog(QDialog):
         def _or_dash(text: str) -> str:
             return text if text else "—"
 
+        # A single form so every label column aligns (image options, saved views
+        # and the per-scene rows all share one label width).
         form = QFormLayout()
         form.setHorizontalSpacing(24)
         form.addRow(
@@ -399,29 +401,24 @@ class _SavedScenePropertiesDialog(QDialog):
         views = data.get("views") or []
         form.addRow("Saved views:", QLabel(", ".join(views) if views else "—"))
 
-        layout = QVBoxLayout(self)
-        layout.addLayout(form)
-
         scenes_label = QLabel("Scenes")
         scenes_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(scenes_label)
+        form.addRow(scenes_label)
 
         displayers = data.get("displayers") or {}
         if displayers:
-            scenes_form = QFormLayout()
-            scenes_form.setHorizontalSpacing(24)
             for scene, shown in displayers.items():
-                scenes_form.addRow("Scene:", QLabel(scene))
+                form.addRow("Scene:", QLabel(scene))
                 if shown:
                     for d in shown:
-                        scenes_form.addRow("Vector/Scalar name:", QLabel(d))
+                        form.addRow("Vector/Scalar name:", QLabel(d))
                 else:
-                    scenes_form.addRow(
-                        "Vector/Scalar name:", QLabel("(all displayers)")
-                    )
-            layout.addLayout(scenes_form)
+                    form.addRow("Vector/Scalar name:", QLabel("(all displayers)"))
         else:
-            layout.addWidget(QLabel("—"))
+            form.addRow(QLabel("—"))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
