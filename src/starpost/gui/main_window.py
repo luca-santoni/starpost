@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -88,6 +88,17 @@ class MainWindow(QMainWindow):
         # The media paths last drawn in the scene gallery, so it is only rebuilt
         # when the set of stills actually changes (None = stale, force a rebuild).
         self._scene_gallery_paths: list[str] | None = None
+        # Whether the plot must redraw when the Plots tab is next shown (its
+        # render is skipped while the tab is hidden — see _render_plot).
+        self._plot_stale = False
+        # Coalesces bursts of checkbox changes (e.g. a Shift+click range tick,
+        # which fires one change per item) into a single view refresh, run once
+        # the burst's events have been processed (see _schedule_refresh).
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(0)
+        self._refresh_timer.timeout.connect(self._run_scheduled_refresh)
+        self._rescope_pending = False
 
         # Panels
         self.file_list = FileListPanel(
@@ -217,6 +228,11 @@ class MainWindow(QMainWindow):
             # Build the gallery now that it's visible (deferred while hidden).
             self._render_scenes_view()
             self._maybe_warn_scenes()
+        elif widget is self.plot_view and self._plot_stale:
+            # Redraw now that it's visible (renders are skipped while hidden),
+            # and bring the panel's monitor swatches back in step with it.
+            self._render_plot()
+            self.selection.refresh_monitor_swatches()
 
     def _maybe_warn_scenes(self) -> None:
         """First time the Scenes tab is opened this session, warn that rendering
@@ -743,6 +759,10 @@ class MainWindow(QMainWindow):
         self.selection.set_available_reports(self._available_report_names(results))
 
     def _refresh_from_store(self) -> None:
+        # This full rebuild covers everything a queued coalesced refresh would
+        # do (and more), so drop any pending one rather than refreshing twice.
+        self._refresh_timer.stop()
+        self._rescope_pending = False
         results = [r for r in self.store.all() if r.error is None]
 
         # The Data tab mirrors the loaded results, named after their .sim files.
@@ -785,15 +805,32 @@ class MainWindow(QMainWindow):
     def _on_data_selection_changed(self) -> None:
         """A Data-tab checkbox toggled: checking 2+ files shows a comparison,
         one file shows it per-file. This drives both which files the views
-        render and the view mode, so re-scope the report list (which reports
-        count as empty depends on the mode) before redrawing."""
-        self._refresh_report_choices()
-        # Scenes/views are scoped to the checked sim(s), so refresh them too.
-        self._refresh_scene_choices()
-        self._refresh_views()
+        render and the view mode, so the report list is re-scoped (which reports
+        count as empty depends on the mode) before the redraw."""
+        self._schedule_refresh(rescope=True)
 
     def _on_selection_changed(self) -> None:
         # A report/plot checkbox toggled: redraw.
+        self._schedule_refresh()
+
+    def _schedule_refresh(self, *, rescope: bool = False) -> None:
+        """Queue one view refresh for after the current burst of events.
+
+        Checkbox changes arrive one signal per item (a Shift+click range tick
+        fires dozens), and a full refresh is the most expensive thing the UI
+        does — so instead of refreshing per signal, a zero-delay single-shot
+        timer collapses the whole burst into a single refresh. ``rescope`` also
+        re-derives the report/scene choice lists (needed when the checked data
+        sets — and so the view mode — changed, not for plain redraws)."""
+        self._rescope_pending = self._rescope_pending or rescope
+        self._refresh_timer.start()
+
+    def _run_scheduled_refresh(self) -> None:
+        if self._rescope_pending:
+            self._rescope_pending = False
+            self._refresh_report_choices()
+            # Scenes/views are scoped to the checked sim(s): refresh them too.
+            self._refresh_scene_choices()
         self._refresh_views()
 
     def _selected_plot_names(self) -> list[str]:
@@ -822,8 +859,11 @@ class MainWindow(QMainWindow):
         self._render_plot()
         self._render_scenes_view()
         # The plot just (re)drew, so sync the panel's monitor colour swatches to
-        # the colours actually used (and to the current data-set count).
-        self.selection.refresh_monitor_swatches()
+        # the colours actually used (and to the current data-set count). The
+        # swatches are only visible alongside the Plots tab; when its render was
+        # deferred above, the tab switch refreshes them with the redraw instead.
+        if self._center_tabs.currentWidget() is self.plot_view:
+            self.selection.refresh_monitor_swatches()
 
     def _render_scenes_view(self) -> None:
         """Rebuild the rendered-stills gallery — but only when the Scenes tab is
@@ -874,6 +914,14 @@ class MainWindow(QMainWindow):
             )
 
     def _render_plot(self) -> None:
+        # Redrawing the plot is the most expensive refresh, so skip it while the
+        # Plots tab is hidden (report/data toggles on the other tabs would pay
+        # for an invisible redraw) and defer to when the tab is next selected —
+        # the same pattern the scene gallery uses (_render_scenes_view).
+        if self._center_tabs.currentWidget() is not self.plot_view:
+            self._plot_stale = True
+            return
+        self._plot_stale = False
         results = self._active_results()
         plot_names = self._selected_plot_names()
         if not results or not plot_names:

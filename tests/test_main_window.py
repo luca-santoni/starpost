@@ -1239,6 +1239,84 @@ def test_startup_does_not_import_heavy_deferred_libs(tmp_path):
     )
 
 
+def test_checkbox_bursts_coalesce_into_one_refresh(app, monkeypatch):
+    """A burst of checkbox-change signals (e.g. a Shift+click range tick, one
+    signal per item) queues a single refresh, run after the burst — and a
+    Data-tab change in the burst re-scopes the choice lists in that one pass."""
+    win = mw.MainWindow(Settings())
+    refreshes, rescopes = [], []
+    monkeypatch.setattr(win, "_refresh_views", lambda: refreshes.append(1))
+    monkeypatch.setattr(
+        win, "_refresh_report_choices", lambda: rescopes.append(1)
+    )
+
+    for _ in range(8):
+        win._on_selection_changed()
+    win._on_data_selection_changed()
+    win._on_data_selection_changed()
+    assert refreshes == []  # queued, not run per signal
+    app.processEvents()
+    assert refreshes == [1] and rescopes == [1]
+
+    # A plain selection change must not re-scope the choice lists.
+    win._on_selection_changed()
+    app.processEvents()
+    assert refreshes == [1, 1] and rescopes == [1]
+    win.close()
+
+
+def test_full_rebuild_drops_queued_refresh(app, monkeypatch):
+    """_refresh_from_store covers everything a queued coalesced refresh does,
+    so a pending one is dropped instead of running again afterwards."""
+    win = mw.MainWindow(Settings())
+    refreshes = []
+    monkeypatch.setattr(win, "_refresh_views", lambda: refreshes.append(1))
+    win._on_selection_changed()
+    win._refresh_from_store()  # runs the (stubbed) refresh synchronously
+    assert refreshes == [1]
+    app.processEvents()  # the queued one must have been cancelled
+    assert refreshes == [1]
+    win.close()
+
+
+def test_plot_render_deferred_while_tab_hidden(app, monkeypatch):
+    """With the Reports tab in front, refreshes skip the plot redraw entirely;
+    switching to the Plots tab then draws the pending state once."""
+    win = mw.MainWindow(Settings())
+    result = _sim_result_with_data()
+    win.store.put(result)
+    win._refresh_from_store()
+    win.data_list.set_entries([result.sim_name])
+    monkeypatch.setattr(win, "_active_results", lambda: [result], raising=False)
+    monkeypatch.setattr(
+        win, "_selected_plot_names", lambda: ["Forces"], raising=False
+    )
+    monkeypatch.setattr(
+        win.selection, "selected_monitors",
+        lambda: {"Forces": ["Drag"]}, raising=False,
+    )
+
+    renders = []
+    original = win.plot_view._render
+    monkeypatch.setattr(
+        win.plot_view, "_render", lambda: renders.append(1) or original()
+    )
+
+    assert win._center_tabs.currentWidget() is win.report_table  # default tab
+    win._refresh_views()
+    assert renders == [] and win._plot_stale  # skipped while hidden
+
+    win._center_tabs.setCurrentWidget(win.plot_view)  # switch draws it once
+    assert renders == [1]
+    assert not win._plot_stale
+    assert win.plot_view.has_content()
+
+    # Once visible (and fresh), further refreshes render normally.
+    win._refresh_views()
+    assert renders == [1, 1]
+    win.close()
+
+
 def test_render_plot_renders_once(app, monkeypatch):
     """_render_plot draws the plot exactly once: the monitor selection is stored
     before show_plots/show_comparison, not applied with a second render after."""
@@ -1247,6 +1325,9 @@ def test_render_plot_renders_once(app, monkeypatch):
     win.store.put(result)
     win._refresh_from_store()
     win.data_list.set_entries([result.sim_name])
+    # Renders are skipped while the Plots tab is hidden; bring it to the front
+    # (before counting) so _render_plot actually draws.
+    win._center_tabs.setCurrentWidget(win.plot_view)
     monkeypatch.setattr(
         win, "_active_results", lambda: [result], raising=False
     )

@@ -53,6 +53,13 @@ dialog's saved plots/scenes.
 - **Faster empty-monitor filtering** — each monitor's magnitude is now scanned
   once and remembered, instead of re-checking every data point on every redraw
   and selection change (noticeable with hundreds of thousands of points).
+- **One refresh per burst of changes** — rapid checkbox changes (most notably a
+  Shift+click range tick, which used to redraw the views once per item) are now
+  collapsed into a single refresh at the end of the burst.
+- **No hidden plot redraws** — the monitor plot no longer re-renders while the
+  Reports or Scenes tab is in front (it redraws when the Plots tab is next
+  opened), so report and data-set toggles respond much faster on large
+  workspaces.
 
 ### Bug Fixes
 - **Plots tab monitor list** — clicking a monitor group or monitor **name** now
