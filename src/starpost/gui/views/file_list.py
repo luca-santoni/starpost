@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from starpost.gui.widgets import enable_range_selection
 from starpost.utils.paths import file_list_cache_path
 
 MAX_FILES = 25  # v1 expected ceiling; warn beyond this
@@ -212,7 +213,7 @@ class FileListPanel(QWidget):
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
         self._tree.setColumnCount(1)
-        self._tree.setSelectionMode(QTreeWidget.ExtendedSelection)
+        enable_range_selection(self._tree)  # Shift/Ctrl+click multi-select
         self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
         self._tree.itemDoubleClicked.connect(self._on_double_click)

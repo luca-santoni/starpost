@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.data.models import MediaArtifact
+from starpost.gui.widgets import enable_range_selection
 
 _THUMB = 220  # thumbnail edge in px
 _ART_ROLE = Qt.ItemDataRole.UserRole + 1  # the MediaArtifact behind a thumbnail
@@ -53,6 +54,7 @@ class SceneView(QWidget):
         self._gallery.setSpacing(8)
         self._gallery.setWordWrap(True)
         self._gallery.setUniformItemSizes(True)
+        enable_range_selection(self._gallery)  # Shift/Ctrl+click multi-select
         self._gallery.itemDoubleClicked.connect(self._open_item)
         self._gallery.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._gallery.customContextMenuRequested.connect(self._show_context_menu)

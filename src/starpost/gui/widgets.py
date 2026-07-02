@@ -4,6 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QHBoxLayout,
     QLineEdit,
@@ -15,6 +16,18 @@ from PySide6.QtWidgets import (
     QToolButton,
     QWidget,
 )
+
+
+def enable_range_selection(view: QAbstractItemView) -> None:
+    """Give an item view (list/tree/table) Shift+click range selection and
+    Ctrl+click toggle, matching the multi-select behaviour common to other
+    desktop apps.
+
+    A no-op for views whose selection is disabled (checkbox-driven lists use
+    ``NoSelection``), so calling it is always safe. Navigation lists that must
+    stay single-select simply don't call this."""
+    if view.selectionMode() != QAbstractItemView.SelectionMode.NoSelection:
+        view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
 
 class ToolTipResetStyle(QProxyStyle):

@@ -80,7 +80,7 @@ from starpost.gui.views.plot_view import (
     _series_is_empty,
 )
 from starpost.gui.views.selection_panel import _SceneTree
-from starpost.gui.widgets import UniformTabBar
+from starpost.gui.widgets import UniformTabBar, enable_range_selection
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
 
@@ -1052,6 +1052,7 @@ class BatchRunDialog(QDialog):
         # its scene characteristics in its data). Right-click a scene for
         # Properties / Delete.
         self._saved_scenes = QListWidget()
+        enable_range_selection(self._saved_scenes)
         self._saved_scenes.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )
@@ -1129,6 +1130,7 @@ class BatchRunDialog(QDialog):
         options.addStretch(1)
 
         self._summary_reports = QListWidget()
+        enable_range_selection(self._summary_reports)
         reports = QVBoxLayout()
         reports.addWidget(self._header("Reports"))
         reports.addWidget(self._summary_reports)
@@ -1137,6 +1139,7 @@ class BatchRunDialog(QDialog):
         # same right-click menu (Properties / Delete). Deleting here removes the
         # entry from its source list too.
         self._summary_plots = QListWidget()
+        enable_range_selection(self._summary_plots)
         self._summary_plots.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )
@@ -1148,6 +1151,7 @@ class BatchRunDialog(QDialog):
         plots.addWidget(self._summary_plots)
 
         self._summary_scenes = QListWidget()
+        enable_range_selection(self._summary_scenes)
         self._summary_scenes.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )
@@ -1218,6 +1222,7 @@ class BatchRunDialog(QDialog):
         # holds its plot characteristics in its data). Right-click a plot for
         # Properties / Delete.
         self._saved_plots = QListWidget()
+        enable_range_selection(self._saved_plots)
         self._saved_plots.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )

@@ -66,7 +66,7 @@ from starpost.core.settings import (
 )
 from starpost.core.starccm_runner import exe_dialog_filter, exe_placeholder
 from starpost.gui.icons import logo_pixmap
-from starpost.gui.widgets import SecretLineEdit
+from starpost.gui.widgets import SecretLineEdit, enable_range_selection
 from starpost.gui.theme import (
     ACCENT_PRESETS,
     apply_theme,
@@ -104,6 +104,7 @@ class ProfileDetailsDialog(QDialog):
         self.resize(720, 420)
 
         reports = QListWidget()
+        enable_range_selection(reports)
         if all_reports:
             # Built-in Default: reports are resolved from the loaded data, so
             # there are no concrete names to list here.
@@ -117,6 +118,7 @@ class ProfileDetailsDialog(QDialog):
         # Each selected plot (monitor group), with its shown monitors listed
         # beneath it. A group with no recorded monitors shows all of them.
         plots = QListWidget()
+        enable_range_selection(plots)
         for plot in sorted(profile.plots):
             plots.addItem(plot)
             monitors = profile.monitors.get(plot)
@@ -131,6 +133,7 @@ class ProfileDetailsDialog(QDialog):
         # Statistical measures saved with the profile. None means the profile
         # predates this feature, so it falls back to the current settings.
         stats = QListWidget()
+        enable_range_selection(stats)
         if profile.region_stats is None:
             stats.addItem("(default statistics)")
         else:
@@ -176,6 +179,7 @@ class BatchProfileDetailsDialog(QDialog):
         self.resize(720, 420)
 
         reports = QListWidget()
+        enable_range_selection(reports)
         for name in sorted(profile.selected_reports):
             reports.addItem(name)
         if reports.count() == 0:
@@ -184,6 +188,7 @@ class BatchProfileDetailsDialog(QDialog):
         # Saved plots/scenes carry their captured entry ({"name", "data"}) so the
         # right-click menu can render Properties from it.
         self._plots = QListWidget()
+        enable_range_selection(self._plots)
         self._plots.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._plots.customContextMenuRequested.connect(self._on_plot_menu)
         for entry in profile.saved_plots:
@@ -194,6 +199,7 @@ class BatchProfileDetailsDialog(QDialog):
             self._plots.addItem("(none saved)")
 
         self._scenes = QListWidget()
+        enable_range_selection(self._scenes)
         self._scenes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._scenes.customContextMenuRequested.connect(self._on_scene_menu)
         for entry in profile.saved_scenes:

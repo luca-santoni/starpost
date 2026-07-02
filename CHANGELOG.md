@@ -28,6 +28,10 @@ dialog's saved plots/scenes.
   and **Delete**, alongside the existing report/plot profiles. In the details
   window, right-click a saved plot or scene for **Properties** to view its
   captured contents.
+- **Multi-select in lists** — selectable lists (the scene gallery, the Files /
+  Data trees, and the Run-batch and Profile-details lists) now support
+  **Shift+click** to select a range and **Ctrl+click** to toggle items, matching
+  common desktop behaviour.
 
 ### Bug Fixes
 - **Scene Properties** — long **Vector/Scalar name** values now wrap onto

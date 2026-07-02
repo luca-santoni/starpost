@@ -182,3 +182,31 @@ def test_combo_delegate_adds_vertical_row_spacing(app):
     base = QStyledItemDelegate(combo.view()).sizeHint(opt, index).height()
     assert delegate.sizeHint(opt, index).height() == base + _COMBO_ITEM_VPAD
     combo.deleteLater()
+
+
+def test_enable_range_selection_sets_extended(app):
+    """enable_range_selection turns a default (single-select) list into an
+    extended-selection one, so Shift/Ctrl+click select multiple items."""
+    from PySide6.QtWidgets import QAbstractItemView, QListWidget
+
+    from starpost.gui.widgets import enable_range_selection
+
+    lst = QListWidget()
+    assert lst.selectionMode() == QAbstractItemView.SelectionMode.SingleSelection
+    enable_range_selection(lst)
+    assert lst.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
+    lst.deleteLater()
+
+
+def test_enable_range_selection_leaves_checkbox_lists_alone(app):
+    """Checkbox-driven lists use NoSelection; the helper must not enable
+    selection on them."""
+    from PySide6.QtWidgets import QAbstractItemView, QListWidget
+
+    from starpost.gui.widgets import enable_range_selection
+
+    lst = QListWidget()
+    lst.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+    enable_range_selection(lst)
+    assert lst.selectionMode() == QAbstractItemView.SelectionMode.NoSelection
+    lst.deleteLater()

@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
 from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
+from starpost.gui.widgets import enable_range_selection
 from starpost.utils.paths import data_list_cache_path
 
 # Item data roles and the type tag they carry (matching file_list's layout).
@@ -259,7 +260,7 @@ class DataListPanel(QWidget):
         # Icon-less data rows still reserve icon height, so their spacing matches
         # the folder rows and the Files tab.
         self._tree.setItemDelegateForColumn(0, _IconRowHeightDelegate(self._tree))
-        self._tree.setSelectionMode(QTreeWidget.ExtendedSelection)
+        enable_range_selection(self._tree)  # Shift/Ctrl+click multi-select
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
         self._tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
