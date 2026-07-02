@@ -167,6 +167,9 @@ class SettingsDialog(QDialog):
     # Emitted while previewing the Files-tab folder colour ("" == default icon),
     # so the file list can follow the live preview.
     folder_color_changed = Signal(str)
+    # Emitted while previewing the Files-tab leaf node-dot colour, so the file
+    # list can follow the live preview.
+    node_color_changed = Signal(str)
     # Emitted when the user resets settings to defaults, so the main view can
     # reload the Default profile.
     defaults_reset = Signal()
@@ -191,6 +194,10 @@ class SettingsDialog(QDialog):
         self._checkmark_color = normalize_accent(settings.appearance.checkmark_color)
         self._checkmark_match = settings.appearance.checkmark_match_theme
         self._orig_checkmark = settings.appearance.resolved_checkmark()
+        # Leaf node-dot colour (live + revert state).
+        self._node_color = normalize_accent(settings.appearance.node_color)
+        self._node_match = settings.appearance.node_match_theme
+        self._orig_node_color = settings.appearance.resolved_node()
         # Folder colour (live + revert state).
         self._folder_color = normalize_accent(settings.appearance.folder_color)
         self._folder_default = settings.appearance.folder_use_default
@@ -673,6 +680,29 @@ class SettingsDialog(QDialog):
         cm_box = QWidget()
         cm_box.setLayout(cm_row)
 
+        # Leaf node-dot colour: a "match theme" toggle plus a hex + picker + chip,
+        # mirroring the checkmark controls.
+        self._node_match_cb = QCheckBox("Match with theme")
+        self._node_match_cb.toggled.connect(self._on_node_match_toggled)
+        self._node_hex = QLineEdit()
+        self._node_hex.setMaxLength(7)
+        self._node_hex.setPlaceholderText("#rrggbb")
+        self._node_hex.setFixedWidth(110)
+        self._node_hex.textEdited.connect(self._on_node_hex_edited)
+        self._node_pick = QPushButton("Pick…")
+        self._node_pick.setToolTip("Choose a custom node-dot colour")
+        self._node_pick.clicked.connect(self._on_node_pick_color)
+        self._node_preview = QLabel()
+        self._node_preview.setFixedSize(30, 30)
+        node_row = QHBoxLayout()
+        node_row.setContentsMargins(0, 0, 0, 0)
+        node_row.addWidget(self._node_hex)
+        node_row.addWidget(self._node_pick)
+        node_row.addWidget(self._node_preview)
+        node_row.addStretch(1)
+        node_box = QWidget()
+        node_box.setLayout(node_row)
+
         # Folder colour: a "use default" toggle plus preset swatches and a custom
         # hex + picker + preview, mirroring the accent controls.
         self._folder_default_cb = QCheckBox("Use default colour")
@@ -713,6 +743,8 @@ class SettingsDialog(QDialog):
         form.addRow("Custom accent", custom_box)
         form.addRow("Checkmarks", self._cm_match)
         form.addRow("Checkmark colour", cm_box)
+        form.addRow("Node dots", self._node_match_cb)
+        form.addRow("Node colour", node_box)
         form.addRow("Folders", self._folder_default_cb)
         form.addRow("Folder colour", folder_box)
         form.addRow("Text size", self._text_scale_spin)
@@ -911,6 +943,8 @@ class SettingsDialog(QDialog):
         s.appearance.accent = d.appearance.accent
         s.appearance.checkmark_color = d.appearance.checkmark_color
         s.appearance.checkmark_match_theme = d.appearance.checkmark_match_theme
+        s.appearance.node_color = d.appearance.node_color
+        s.appearance.node_match_theme = d.appearance.node_match_theme
         s.appearance.folder_color = d.appearance.folder_color
         s.appearance.folder_use_default = d.appearance.folder_use_default
         s.appearance.text_scale = d.appearance.text_scale
@@ -946,6 +980,9 @@ class SettingsDialog(QDialog):
         self._set_checkmark_color(d.appearance.checkmark_color)
         self._cm_match.setChecked(d.appearance.checkmark_match_theme)
         self._on_cm_match_toggled(d.appearance.checkmark_match_theme)
+        self._set_node_color(d.appearance.node_color)
+        self._node_match_cb.setChecked(d.appearance.node_match_theme)
+        self._on_node_match_toggled(d.appearance.node_match_theme)
         self._set_folder_color(d.appearance.folder_color)
         self._folder_default_cb.setChecked(d.appearance.folder_use_default)
         self._on_folder_default_toggled(d.appearance.folder_use_default)
@@ -968,6 +1005,7 @@ class SettingsDialog(QDialog):
         self._orig_mode = s.appearance.mode
         self._orig_accent = normalize_accent(s.appearance.accent)
         self._orig_checkmark = s.appearance.resolved_checkmark()
+        self._orig_node_color = s.appearance.resolved_node()
         self._orig_folder_color = s.appearance.resolved_folder_color()
         self._orig_text_scale = s.appearance.text_scale
 
@@ -993,6 +1031,8 @@ class SettingsDialog(QDialog):
             f" border: 1px solid {contrast_color(self._accent)}; border-radius: 4px;"
         )
         self._update_checkmark_preview()  # follows the accent when matching
+        self._update_node_preview()       # node dot follows the accent when matching
+        self._emit_node_preview()
         self._apply_preview()
 
     def _build_swatches(self, on_pick):
@@ -1080,6 +1120,51 @@ class SettingsDialog(QDialog):
         )
         if chosen.isValid():
             self._set_checkmark_color(chosen.name())
+
+    # --- node-dot colour -------------------------------------------------
+    def _effective_node(self) -> str:
+        """The leaf node-dot colour in effect: the accent when matching, else
+        the explicit node colour."""
+        return self._accent if self._node_match else self._node_color
+
+    def _update_node_preview(self) -> None:
+        color = self._effective_node()
+        self._node_preview.setStyleSheet(
+            f"background-color: {color};"
+            f" border: 1px solid {contrast_color(color)}; border-radius: 4px;"
+        )
+
+    def _emit_node_preview(self) -> None:
+        if self._loading:
+            return
+        self.node_color_changed.emit(self._effective_node())
+
+    def _on_node_match_toggled(self, checked: bool) -> None:
+        self._node_match = checked
+        # The explicit-colour controls are irrelevant while matching the theme.
+        self._node_hex.setEnabled(not checked)
+        self._node_pick.setEnabled(not checked)
+        self._update_node_preview()
+        self._emit_node_preview()
+
+    def _set_node_color(self, color: str, *, update_field: bool = True) -> None:
+        self._node_color = normalize_accent(color)
+        if update_field:
+            self._node_hex.setText(self._node_color)
+        self._update_node_preview()
+        self._emit_node_preview()
+
+    def _on_node_hex_edited(self, text: str) -> None:
+        h = text.lstrip("#")
+        if len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h):
+            self._set_node_color(text, update_field=False)
+
+    def _on_node_pick_color(self) -> None:
+        chosen = QColorDialog.getColor(
+            QColor(self._node_color), self, "Node colour"
+        )
+        if chosen.isValid():
+            self._set_node_color(chosen.name())
 
     # --- folder colour ---------------------------------------------------
     def _effective_folder_color(self) -> str:
@@ -1240,6 +1325,11 @@ class SettingsDialog(QDialog):
         self._cm_match.setChecked(s.appearance.checkmark_match_theme)
         self._on_cm_match_toggled(s.appearance.checkmark_match_theme)
 
+        # Node-dot colour: set the explicit colour, then the match toggle.
+        self._set_node_color(s.appearance.node_color)
+        self._node_match_cb.setChecked(s.appearance.node_match_theme)
+        self._on_node_match_toggled(s.appearance.node_match_theme)
+
         # Folder colour: set the explicit colour, then the "use default" toggle.
         self._set_folder_color(s.appearance.folder_color)
         self._folder_default_cb.setChecked(s.appearance.folder_use_default)
@@ -1255,6 +1345,8 @@ class SettingsDialog(QDialog):
         s.appearance.accent = self._accent
         s.appearance.checkmark_color = self._checkmark_color
         s.appearance.checkmark_match_theme = self._checkmark_match
+        s.appearance.node_color = self._node_color
+        s.appearance.node_match_theme = self._node_match
         s.appearance.folder_color = self._folder_color
         s.appearance.folder_use_default = self._folder_default
         s.appearance.text_scale = self._text_scale
@@ -1319,4 +1411,5 @@ class SettingsDialog(QDialog):
             self._last_preview_mode = self._orig_mode
             self.preview_changed.emit(self._orig_mode)
         self.folder_color_changed.emit(self._orig_folder_color)
+        self.node_color_changed.emit(self._orig_node_color)
         super().reject()

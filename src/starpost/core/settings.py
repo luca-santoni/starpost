@@ -46,6 +46,8 @@ class AppearanceConfig:
     accent: str = "#ffc829"     # hex accent colour applied program-wide
     checkmark_color: str = "#ffc829"     # hex colour of checkmarks program-wide
     checkmark_match_theme: bool = True   # force checkmark colour to the accent
+    node_color: str = "#4a90d9"          # hex colour of Files-tab leaf node dots
+    node_match_theme: bool = True        # force node-dot colour to the accent
     folder_color: str = "#ffc829"        # hex tint for Files-tab folder icons
     folder_use_default: bool = True      # keep the standard (untinted) folder icon
     # UI text-size multiplier applied to every button/label. 1.0 is the original
@@ -56,6 +58,11 @@ class AppearanceConfig:
         """The checkmark colour actually used: the accent when matching the
         theme, otherwise the explicit checkmark colour."""
         return self.accent if self.checkmark_match_theme else self.checkmark_color
+
+    def resolved_node(self) -> str:
+        """The leaf node-dot colour actually used: the accent when matching the
+        theme, otherwise the explicit node colour."""
+        return self.accent if self.node_match_theme else self.node_color
 
     def resolved_folder_color(self) -> str:
         """The folder tint in effect: empty (the standard folder icon) when
@@ -220,6 +227,8 @@ class Settings:
                 checkmark_match_theme=bool(
                     appe.get("checkmark_match_theme", True)
                 ),
+                node_color=appe.get("node_color", "#4a90d9"),
+                node_match_theme=bool(appe.get("node_match_theme", True)),
                 folder_color=appe.get("folder_color", "#ffc829"),
                 folder_use_default=bool(appe.get("folder_use_default", True)),
                 text_scale=clamp_text_scale(appe.get("text_scale", 1.0)),
@@ -272,6 +281,8 @@ class Settings:
                 "accent": self.appearance.accent,
                 "checkmark_color": self.appearance.checkmark_color,
                 "checkmark_match_theme": self.appearance.checkmark_match_theme,
+                "node_color": self.appearance.node_color,
+                "node_match_theme": self.appearance.node_match_theme,
                 "folder_color": self.appearance.folder_color,
                 "folder_use_default": self.appearance.folder_use_default,
                 "text_scale": self.appearance.text_scale,

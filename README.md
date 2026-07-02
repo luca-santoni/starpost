@@ -115,7 +115,7 @@ A licensed STAR-CCM+ installation must be present on the machine.
     first-open warning notes that rendering is memory-heavy (≥16 GB recommended).
 - **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
   key), file/report/plot/scene display options, export defaults, profile management
-  (view details / delete), a **dark/light theme with custom accent, checkmark and
+  (view details / delete), a **dark/light theme with custom accent, checkmark, node-dot and
   folder colours** and an **adjustable text size** previewed live, a reset, and a
   *Clear all temp files* action.
 - **In-app updates** — checks GitHub releases on startup (and on demand); shows a

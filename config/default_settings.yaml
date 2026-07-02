@@ -31,6 +31,10 @@ appearance:
   # is ignored.
   checkmark_color: "#ffc829"
   checkmark_match_theme: true
+  # Colour of the Files-tab leaf node dots. When node_match_theme is true the
+  # accent colour is used and node_color is ignored.
+  node_color: "#4a90d9"
+  node_match_theme: true
 
 # Default folder for exports (CSV/JPG/PDF). Chosen per-run in the UI; this is the
 # starting location of the picker. Empty = user's home.

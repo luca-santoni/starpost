@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self.file_list = FileListPanel(
             show_full_names=settings.show_full_file_names,
             folder_color=settings.appearance.resolved_folder_color(),
+            node_color=settings.appearance.resolved_node(),
         )
         self.data_list = DataListPanel(
             folder_color=settings.appearance.resolved_folder_color()
@@ -1124,6 +1125,8 @@ class MainWindow(QMainWindow):
         # Live-preview the folder colour on the Files and Data tabs (Cancel reverts it).
         dlg.folder_color_changed.connect(self.file_list.set_folder_color)
         dlg.folder_color_changed.connect(self.data_list.set_folder_color)
+        # Live-preview the leaf node-dot colour on the Files tab (Cancel reverts it).
+        dlg.node_color_changed.connect(self.file_list.set_node_color)
         # Resetting settings is applied + saved immediately (independent of
         # Save/Cancel): push it to the views and reload the Default profile.
         dlg.defaults_reset.connect(self._on_settings_reset)
@@ -1142,6 +1145,7 @@ class MainWindow(QMainWindow):
         folder_color = self.settings.appearance.resolved_folder_color()
         self.file_list.set_folder_color(folder_color)
         self.data_list.set_folder_color(folder_color)
+        self.file_list.set_node_color(self.settings.appearance.resolved_node())
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
         self.plot_view.set_filter(

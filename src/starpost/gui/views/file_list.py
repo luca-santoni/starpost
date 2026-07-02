@@ -185,7 +185,12 @@ class FileListPanel(QWidget):
     properties_requested = Signal(object)  # a single Path to show properties for
 
     def __init__(
-        self, parent=None, *, show_full_names: bool = False, folder_color: str = ""
+        self,
+        parent=None,
+        *,
+        show_full_names: bool = False,
+        folder_color: str = "",
+        node_color: str = "",
     ) -> None:
         super().__init__(parent)
         # Each file item stores its full path; the displayed text is either that
@@ -200,7 +205,9 @@ class FileListPanel(QWidget):
         )
         self._folder_color = folder_color or ""
         self._folder_icon = self._build_folder_icon()
-        self._file_icon = _dot_icon(_LEAF_COLOR)  # STAR-CCM+-style leaf node dot
+        # Leaf node dot: coloured to a chosen colour ("" = the STAR-CCM+ blue).
+        self._node_color = node_color or _LEAF_COLOR
+        self._file_icon = _dot_icon(self._node_color)
 
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
@@ -323,6 +330,18 @@ class FileListPanel(QWidget):
         for item in self._iter_all():
             if _is_folder(item):
                 item.setIcon(0, self._folder_icon)
+
+    def set_node_color(self, color: str) -> None:
+        """Recolour every leaf node dot to ``color``; an empty string restores
+        the default STAR-CCM+ blue. Mirrors the Appearance setting."""
+        color = color or _LEAF_COLOR
+        if color == self._node_color:
+            return
+        self._node_color = color
+        self._file_icon = _dot_icon(color)
+        for item in self._iter_all():
+            if not _is_folder(item):
+                item.setIcon(0, self._file_icon)
 
     def _add_paths(self, paths: list[Path]) -> None:
         """Add new .sim files at the top level, skipping any already present
