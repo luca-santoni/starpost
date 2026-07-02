@@ -375,6 +375,57 @@ class _SavedPlotPropertiesDialog(QDialog):
         return row
 
 
+class _SavedScenePropertiesDialog(QDialog):
+    """Read-only properties for a saved scene: its image resolution and format,
+    the saved camera views it renders, and the scenes it captures shown with
+    their checked displayers."""
+
+    def __init__(self, name: str, data: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Properties — {name}")
+
+        def _or_dash(text: str) -> str:
+            return text if text else "—"
+
+        form = QFormLayout()
+        form.setHorizontalSpacing(24)
+        form.addRow(
+            "Image resolution:", QLabel(_or_dash(data.get("resolution", "")))
+        )
+        form.addRow(
+            "Image format:",
+            QLabel((data.get("format") or "").upper() or "—"),
+        )
+        views = data.get("views") or []
+        form.addRow("Saved views:", QLabel(", ".join(views) if views else "—"))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+
+        scenes_label = QLabel("Scenes")
+        scenes_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(scenes_label)
+
+        displayers = data.get("displayers") or {}
+        if displayers:
+            for scene, shown in displayers.items():
+                layout.addWidget(QLabel(scene))
+                if shown:
+                    for d in shown:
+                        layout.addWidget(QLabel(f"    • {d}"))
+                else:
+                    layout.addWidget(QLabel("    • (all displayers)"))
+        else:
+            layout.addWidget(QLabel("—"))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class _ExtractWorker(QObject):
     """Runs a single .sim extraction off the GUI thread so the setup progress
     dialog keeps painting (and its bar animating) while STAR-CCM+ works."""
@@ -967,8 +1018,15 @@ class BatchRunDialog(QDialog):
         options.addStretch(1)
 
         # Saved Scenes: scene setups captured with "Save Scene" (each item holds
-        # its scene characteristics in its data).
+        # its scene characteristics in its data). Right-click a scene for
+        # Properties / Delete.
         self._saved_scenes = QListWidget()
+        self._saved_scenes.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._saved_scenes.customContextMenuRequested.connect(
+            self._on_saved_scene_menu
+        )
         saved = QVBoxLayout()
         saved.addWidget(self._header("Saved Scenes"))
         saved.addWidget(self._saved_scenes)
@@ -1382,6 +1440,26 @@ class BatchRunDialog(QDialog):
     def _delete_saved_plot(self, item) -> None:
         """Remove a saved plot from the list."""
         self._saved_plots.takeItem(self._saved_plots.row(item))
+
+    def _on_saved_scene_menu(self, pos) -> None:
+        """Right-click a saved scene: Properties (its captured settings) or
+        Delete."""
+        item = self._saved_scenes.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._saved_scenes)
+        menu.addAction("Properties", lambda: self._show_saved_scene_properties(item))
+        menu.addAction("Delete", lambda: self._delete_saved_scene(item))
+        menu.exec(self._saved_scenes.viewport().mapToGlobal(pos))
+
+    def _show_saved_scene_properties(self, item) -> None:
+        """Open the read-only properties window for a saved scene."""
+        data = item.data(Qt.ItemDataRole.UserRole) or {}
+        _SavedScenePropertiesDialog(item.text(), data, self).exec()
+
+    def _delete_saved_scene(self, item) -> None:
+        """Remove a saved scene from the list."""
+        self._saved_scenes.takeItem(self._saved_scenes.row(item))
 
     def _render_preview(self) -> None:
         """Draw the checked monitors into the preview for a SINGLE data set (the

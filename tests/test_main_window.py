@@ -760,6 +760,67 @@ def test_saved_plot_properties_dialog_content(app):
     dlg.close()
 
 
+def test_batch_run_dialog_saved_scene_delete(app):
+    """The Delete context-menu action removes that scene from Saved Scenes."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    dlg._saved_scenes.addItem("s1")
+    dlg._saved_scenes.addItem("s2")
+    dlg._delete_saved_scene(dlg._saved_scenes.item(0))
+    assert [
+        dlg._saved_scenes.item(i).text() for i in range(dlg._saved_scenes.count())
+    ] == ["s2"]
+    dlg.close()
+
+
+def test_batch_run_dialog_saved_scene_properties(app, monkeypatch):
+    """The Properties context-menu action opens the dialog for that scene."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    dlg = brd.BatchRunDialog()
+    data = {
+        "displayers": {"Scene 1": ["Pressure"]},
+        "views": ["Front"], "resolution": "2160p", "format": "png",
+    }
+    item = QListWidgetItem("s1")
+    item.setData(Qt.ItemDataRole.UserRole, data)
+    dlg._saved_scenes.addItem(item)
+    # Capture the dialog instead of showing it modally.
+    opened = []
+    monkeypatch.setattr(
+        brd._SavedScenePropertiesDialog, "exec",
+        lambda self: opened.append(self) or 0,
+    )
+    dlg._show_saved_scene_properties(item)
+    assert len(opened) == 1
+    dlg.close()
+
+
+def test_saved_scene_properties_dialog_content(app):
+    """The properties dialog shows the scene's image options, views and each
+    scene's checked displayers."""
+    from PySide6.QtWidgets import QLabel
+
+    from starpost.gui.views.batch_run_dialog import _SavedScenePropertiesDialog
+
+    data = {
+        "displayers": {"Pressure scene": ["Scalar 1", "Vector 1"]},
+        "views": ["Front", "Iso"], "resolution": "1080p", "format": "jpg",
+    }
+    dlg = _SavedScenePropertiesDialog("Pressure", data)
+    texts = [w.text() for w in dlg.findChildren(QLabel)]
+    assert "1080p" in texts and "JPG" in texts
+    assert any("Front" in t and "Iso" in t for t in texts)
+    assert "Pressure scene" in texts
+    assert any("Scalar 1" in t for t in texts)
+    assert any("Vector 1" in t for t in texts)
+    dlg.close()
+
+
 def test_batch_profiles_are_separate_from_profiles(app, monkeypatch):
     """Saving a batch profile writes to the batch-profiles dir and is independent
     of the regular report/plot profiles."""
