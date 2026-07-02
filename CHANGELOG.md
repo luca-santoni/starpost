@@ -64,6 +64,8 @@ dialog's saved plots/scenes.
   now written in the background (previously the interface stalled for a
   fraction of a second when deleting, importing or clearing data, when scene
   renders finished, and during each batch file's checkpoint).
+- **Less work per plot redraw** — each monitor's data points are converted for
+  drawing once and reused, instead of being re-converted on every redraw.
 - **The window opens before the cache loads** — restoring a large workspace's
   crash-recovery cache now happens just after the main window appears instead
   of before it, and a cache that fails to parse is skipped (with a log entry)

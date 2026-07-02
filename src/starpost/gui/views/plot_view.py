@@ -202,6 +202,21 @@ def _series_is_empty(series, zero_threshold: float) -> bool:
     return not series.y or _series_max_abs(series) < zero_threshold
 
 
+def _series_arrays(series) -> tuple:
+    """The series' (x, y) as float ndarrays, converted once and cached on the
+    series object (its data is immutable once extracted). Rendering, smoothing
+    and the hover search all want arrays; without the cache each redraw paid to
+    re-convert every point from the stored Python lists."""
+    cached = getattr(series, "_np_cache", None)
+    if cached is None:
+        cached = (
+            np.asarray(series.x, dtype=float),
+            np.asarray(series.y, dtype=float),
+        )
+        series._np_cache = cached
+    return cached
+
+
 def _moving_average(y, width: int):
     """A centred moving average of ``y`` with a window of ``width`` points.
 
@@ -1059,7 +1074,8 @@ class PlotView(QWidget):
                 color = self._series_colors.get(s.name, default)
                 self._drawn_colors[s.name] = color
                 drawn.append(s.name)
-                specs.append((s.x, self._smoothed(s.y), s.name, color))
+                x, y = _series_arrays(s)
+                specs.append((x, self._smoothed(y), s.name, color))
         title = ", ".join(p.name for p in plots)
         self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
         for x, y, name, color in specs:
@@ -1107,7 +1123,8 @@ class PlotView(QWidget):
                     drawn.append(s.name)
                     disp = _display_name(s.name)
                     label = f"{sim_name}: {disp}" if multi else sim_name
-                    specs.append((s.x, self._smoothed(s.y), label, color))
+                    x, y = _series_arrays(s)
+                    specs.append((x, self._smoothed(y), label, color))
         title = ", ".join(name for name, _ in categories) + " (comparison)"
         self._reset(title, y_log, _y_label_for(drawn))
         for x, y, label, color in specs:
