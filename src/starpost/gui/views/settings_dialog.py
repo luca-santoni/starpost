@@ -66,7 +66,11 @@ from starpost.core.settings import (
 )
 from starpost.core.starccm_runner import exe_dialog_filter, exe_placeholder
 from starpost.gui.icons import logo_pixmap
-from starpost.gui.widgets import SecretLineEdit, enable_range_selection
+from starpost.gui.widgets import (
+    SecretLineEdit,
+    enable_check_range,
+    enable_range_selection,
+)
 from starpost.gui.theme import (
     ACCENT_PRESETS,
     apply_theme,
@@ -553,6 +557,7 @@ class SettingsDialog(QDialog):
         # Statistics shown in the Shift+drag region table — a checkable list of
         # the available statistics.
         self._region_stats = QListWidget()
+        enable_check_range(self._region_stats)  # Shift+click ticks a range
         self._region_stats.setMaximumHeight(160)
         for label in REGION_STAT_LABELS:
             item = QListWidgetItem(label)

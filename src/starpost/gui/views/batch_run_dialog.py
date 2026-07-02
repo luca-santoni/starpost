@@ -80,7 +80,11 @@ from starpost.gui.views.plot_view import (
     _series_is_empty,
 )
 from starpost.gui.views.selection_panel import _SceneTree
-from starpost.gui.widgets import UniformTabBar, enable_range_selection
+from starpost.gui.widgets import (
+    UniformTabBar,
+    enable_check_range,
+    enable_range_selection,
+)
 
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
 
@@ -107,6 +111,10 @@ class _CheckableList(QListWidget):
     """A checkable list where clicking anywhere on a row toggles its checkbox
     (not just the small indicator), and clicking empty space clears the
     selection — matching the app's other checklists."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        enable_check_range(self)  # Shift+click ticks a range
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         pos = event.position().toPoint()
@@ -156,6 +164,7 @@ class _MonitorTree(QTreeWidget):
         self.setItemsExpandable(False)
         self.setExpandsOnDoubleClick(False)
         self.setSelectionMode(self.SelectionMode.NoSelection)
+        enable_check_range(self)  # Shift+click ticks a range (per tree level)
         # Groups whose monitors are all checked when the group is ticked
         # (residual plots), so the whole set plots together.
         self._auto_select_groups: set[str] = set()

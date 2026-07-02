@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
 from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
-from starpost.gui.widgets import enable_range_selection
+from starpost.gui.widgets import enable_check_range, enable_range_selection
 from starpost.utils.paths import data_list_cache_path
 
 # Item data roles and the type tag they carry (matching file_list's layout).
@@ -72,6 +72,10 @@ class _CheckList(QListWidget):
     (``export_dialog`` and ``data_export_dialog``) build their Data/Reports
     columns from it. The Data tab itself now uses the folder tree below.
     """
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        enable_check_range(self)  # Shift+click ticks a range
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         # Only the left button toggles; right-click falls through so a context
@@ -261,6 +265,7 @@ class DataListPanel(QWidget):
         # the folder rows and the Files tab.
         self._tree.setItemDelegateForColumn(0, _IconRowHeightDelegate(self._tree))
         enable_range_selection(self._tree)  # Shift/Ctrl+click multi-select
+        enable_check_range(self._tree)  # Shift+click ticks a range of checkboxes
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
         self._tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)

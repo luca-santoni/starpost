@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
 from starpost.gui.views.plot_view import _COLORS, _display_name
+from starpost.gui.widgets import enable_check_range
 
 # A monitor's colour swatches (one per plotted data set) sit between its checkbox
 # and name, mirroring the export menu's Monitors column. The size/gap are shared
@@ -72,6 +73,7 @@ class _CheckList(QListWidget):
         # Connect once. User-driven check toggles emit `changed`; programmatic
         # updates below block signals to avoid storms and emit explicitly.
         self.itemChanged.connect(lambda _: self.changed.emit())
+        enable_check_range(self)  # Shift+click ticks a range
         # Active name sort, A–Z by default. Toggled via the group title's
         # right-click menu and re-applied whenever the list is rebuilt.
         self.sort_mode = "az"  # "az" | "za"
@@ -189,6 +191,7 @@ class _MonitorPlotTree(QTreeWidget):
         self.setItemsExpandable(False)
         self.setExpandsOnDoubleClick(False)
         self.setSelectionMode(self.SelectionMode.NoSelection)
+        enable_check_range(self)  # Shift+click ticks a range (per tree level)
         # Show full monitor names: scroll horizontally rather than eliding.
         self.setTextElideMode(Qt.ElideNone)
         self.header().setStretchLastSection(False)
@@ -404,6 +407,7 @@ class _SceneTree(QTreeWidget):
         self.setItemsExpandable(False)
         self.setExpandsOnDoubleClick(False)
         self.setSelectionMode(self.SelectionMode.NoSelection)
+        enable_check_range(self)  # Shift+click ticks a range (per tree level)
         self.setTextElideMode(Qt.ElideNone)
         self.header().setStretchLastSection(False)
         self.header().setSectionResizeMode(QHeaderView.ResizeToContents)

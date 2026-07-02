@@ -1427,3 +1427,86 @@ def test_scene_properties_wraps_long_field_list(app):
         assert label.maximumWidth() < 16777215  # bounded, so it wraps
     finally:
         dlg.deleteLater()
+
+
+def _click(view, rect, shift=False):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    mod = Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, mod, rect.center())
+
+
+def test_shift_click_checks_range_in_data_tab(app):
+    """On the Data tab, click one row then Shift+click another ticks every data
+    set between them (inclusive)."""
+    from starpost.gui.views.data_list import DataListPanel
+
+    dp = DataListPanel()
+    dp.set_entries([f"d{i}" for i in range(5)])
+    dp.resize(300, 400)
+    dp.show()
+    tree = dp._tree
+    rows = [tree.topLevelItem(i) for i in range(tree.topLevelItemCount())]
+    _click(tree, tree.visualItemRect(rows[0]))
+    _click(tree, tree.visualItemRect(rows[3]), shift=True)
+    assert sorted(dp.checked_names()) == ["d0", "d1", "d2", "d3"]
+    dp.close()
+
+
+def test_shift_click_checks_range_in_checklist(app):
+    """A report/view checklist ticks the range between a click and a Shift+click."""
+    from starpost.gui.views.selection_panel import _CheckList
+
+    lst = _CheckList()
+    lst.set_items(["a", "b", "c", "d", "e"], checked=False)
+    lst.resize(200, 300)
+    lst.show()
+    _click(lst, lst.visualItemRect(lst.item(1)))
+    _click(lst, lst.visualItemRect(lst.item(4)), shift=True)
+    assert sorted(lst.checked()) == ["b", "c", "d", "e"]
+    lst.close()
+
+
+def test_shift_click_range_unchecks_when_anchor_unchecked(app):
+    """Shift+click fills the range with the anchor's state, so an unchecked
+    anchor clears the range."""
+    from starpost.gui.views.selection_panel import _CheckList
+
+    lst = _CheckList()
+    lst.set_items(["a", "b", "c", "d"], checked=True)  # all checked
+    lst.resize(200, 300)
+    lst.show()
+    _click(lst, lst.visualItemRect(lst.item(0)))          # uncheck a (anchor)
+    _click(lst, lst.visualItemRect(lst.item(2)), shift=True)  # a..c -> unchecked
+    assert sorted(lst.checked()) == ["d"]
+    lst.close()
+
+
+def test_shift_click_range_within_monitor_group(app):
+    """In the monitor-plot tree, Shift+click ticks a range of monitors within
+    the same group (siblings), not across tree levels."""
+    from PySide6.QtCore import Qt
+
+    from starpost.gui.views.selection_panel import _MonitorPlotTree
+
+    tree = _MonitorPlotTree()
+    tree.set_items({"Forces": ["m0", "m1", "m2", "m3"]})
+    group = tree.topLevelItem(0)
+    group.setCheckState(0, Qt.CheckState.Checked)
+    group.setExpanded(True)
+    tree.resize(300, 400)
+    tree.show()
+
+    # The user checks m0 (via its checkbox), then clicks it to set the range
+    # anchor and Shift+clicks m2 to fill m0..m2.
+    group.child(0).setCheckState(0, Qt.CheckState.Checked)
+    _click(tree, tree.visualItemRect(group.child(0)))
+    _click(tree, tree.visualItemRect(group.child(2)), shift=True)
+    checked = [
+        group.child(i).text(0)
+        for i in range(group.childCount())
+        if group.child(i).checkState(0) == Qt.CheckState.Checked
+    ]
+    assert checked == ["m0", "m1", "m2"]
+    tree.close()

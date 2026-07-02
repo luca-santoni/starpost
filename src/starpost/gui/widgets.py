@@ -1,7 +1,7 @@
 """Small shared Qt widgets reused across the GUI."""
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -28,6 +28,80 @@ def enable_range_selection(view: QAbstractItemView) -> None:
     stay single-select simply don't call this."""
     if view.selectionMode() != QAbstractItemView.SelectionMode.NoSelection:
         view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+
+
+def _apply_check_range(view, anchor: QPersistentModelIndex, target: QModelIndex) -> bool:
+    """Set the check state of every checkable item between ``anchor`` and
+    ``target`` (inclusive), in row order at their shared tree level, to the
+    anchor's check state. Returns False (doing nothing) when the two sit under
+    different parents (mixed tree levels)."""
+    model = view.model()
+    parent = anchor.parent()
+    if parent != target.parent():
+        return False
+    col = target.column()
+    lo, hi = sorted((anchor.row(), target.row()))
+    state = model.data(
+        model.index(anchor.row(), col, parent), Qt.ItemDataRole.CheckStateRole
+    )
+    if state is None:
+        return False
+    for r in range(lo, hi + 1):
+        idx = model.index(r, col, parent)
+        if bool(model.flags(idx) & Qt.ItemFlag.ItemIsUserCheckable):
+            model.setData(idx, state, Qt.ItemDataRole.CheckStateRole)
+    return True
+
+
+class _CheckRangeFilter(QObject):
+    """Viewport event filter adding Shift+click range check-toggling to a
+    checkable list/tree.
+
+    A plain left click on a checkable item records the range anchor; a Shift+left
+    click sets every checkable item between the anchor and the clicked item
+    (inclusive, at the same tree level) to the anchor's check state — the common
+    "click one, Shift+click another" behaviour. The Shift press and its release
+    are consumed so the view's own click-to-toggle doesn't also fire."""
+
+    def __init__(self, view: QAbstractItemView) -> None:
+        super().__init__(view)
+        self._view = view
+        self._anchor: QPersistentModelIndex | None = None
+        self._suppress_release = False
+        view.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
+        et = event.type()
+        if (
+            et == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._suppress_release = False
+            idx = self._view.indexAt(event.position().toPoint())
+            if idx.isValid() and bool(
+                self._view.model().flags(idx) & Qt.ItemFlag.ItemIsUserCheckable
+            ):
+                shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                if shift and self._anchor is not None and self._anchor.isValid():
+                    if _apply_check_range(self._view, self._anchor, idx):
+                        self._suppress_release = True
+                        return True  # consume: skip the view's own toggle
+                self._anchor = QPersistentModelIndex(idx)
+            return False
+        if (
+            et == QEvent.Type.MouseButtonRelease
+            and self._suppress_release
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._suppress_release = False
+            return True  # swallow the release paired with a consumed Shift press
+        return False
+
+
+def enable_check_range(view: QAbstractItemView) -> None:
+    """Give a checkable list/tree Shift+click range check-toggling (see
+    :class:`_CheckRangeFilter`). Call once per view."""
+    _CheckRangeFilter(view)
 
 
 class ToolTipResetStyle(QProxyStyle):

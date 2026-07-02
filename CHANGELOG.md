@@ -32,6 +32,10 @@ dialog's saved plots/scenes.
   Data trees, and the Run-batch and Profile-details lists) now support
   **Shift+click** to select a range and **Ctrl+click** to toggle items, matching
   common desktop behaviour.
+- **Shift+click to tick a range** — in the checkbox lists (Data tab, the
+  report / monitor / plot / scene selection lists, the export dialogs and the
+  region-statistics list), clicking one item then Shift+clicking another now
+  ticks (or unticks) every item between them, matching the anchor's state.
 
 ### Bug Fixes
 - **Scene Properties** — long **Vector/Scalar name** values now wrap onto
