@@ -121,7 +121,12 @@ class ScenePropertiesDialog(QDialog):
         form.addRow("Parent .sim file:", QLabel(sim_file))
         form.addRow("Data set:", QLabel(data_set))
         form.addRow("Report group:", QLabel(scene))
-        form.addRow("Vector/Scalar name:", QLabel(displayers))
+        # Wrap the (possibly long) field list onto further lines instead of
+        # stretching the window ever wider.
+        displayers_label = QLabel(displayers)
+        displayers_label.setWordWrap(True)
+        displayers_label.setMaximumWidth(420)
+        form.addRow("Vector/Scalar name:", displayers_label)
         form.addRow("Saved View:", QLabel(view))
 
         layout = QVBoxLayout(self)

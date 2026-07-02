@@ -1399,3 +1399,27 @@ def test_batch_run_dialog_run_batch_threaded(app, tmp_path, monkeypatch):
     assert "caseA/reports.csv" in names
     assert "caseA/Drag plot.png" in names
     dlg.close()
+
+
+def test_scene_properties_wraps_long_field_list(app):
+    """The rendered-scene Properties dialog wraps its (possibly long) Vector/
+    Scalar field list instead of stretching the window wide."""
+    from starpost.data.models import MediaArtifact
+    from starpost.gui.views.properties_dialog import ScenePropertiesDialog
+
+    fields = ", ".join(f"field {i}" for i in range(15))
+    art = MediaArtifact(
+        name="Scene 1", path="", source="Scene 1",
+        sim_path="/c/a.sim", displayers=fields, view="View 1",
+    )
+    dlg = ScenePropertiesDialog(art)
+    try:
+        from PySide6.QtWidgets import QLabel
+
+        label = next(
+            lb for lb in dlg.findChildren(QLabel) if lb.text() == fields
+        )
+        assert label.wordWrap()
+        assert label.maximumWidth() < 16777215  # bounded, so it wraps
+    finally:
+        dlg.deleteLater()
