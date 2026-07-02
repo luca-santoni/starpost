@@ -181,13 +181,25 @@ def _y_label_for(names: list[str]) -> str:
     return f"{quantity} ({unit})" if quantity else unit
 
 
+def _series_max_abs(series) -> float:
+    """The series' largest |y|, cached on the series object. A series' data is
+    immutable once extracted, but this scan is over every point and used to run
+    on every redraw and selection-list rebuild — for a large workspace that was
+    most of the per-click delay."""
+    cached = getattr(series, "_max_abs_cache", None)
+    if cached is None:
+        cached = max(map(abs, series.y), default=0.0)
+        series._max_abs_cache = cached
+    return cached
+
+
 def _series_is_empty(series, zero_threshold: float) -> bool:
     """True when every value lies within (-threshold, +threshold).
 
     The threshold is an absolute magnitude, so monitors that are strongly
     negative still count as non-empty.
     """
-    return not series.y or max(abs(v) for v in series.y) < zero_threshold
+    return not series.y or _series_max_abs(series) < zero_threshold
 
 
 def _moving_average(y, width: int):

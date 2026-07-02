@@ -49,6 +49,9 @@ dialog's saved plots/scenes.
   shown now draws the plot once instead of twice, roughly halving the delay
   after each click (also in the Export and Run batch previews and the batch
   plot rendering).
+- **Faster empty-monitor filtering** — each monitor's magnitude is now scanned
+  once and remembered, instead of re-checking every data point on every redraw
+  and selection change (noticeable with hundreds of thousands of points).
 
 ### Bug Fixes
 - **Plots tab monitor list** — clicking a monitor group or monitor **name** now

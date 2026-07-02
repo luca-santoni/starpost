@@ -45,6 +45,24 @@ def test_series_with_no_data_is_empty():
     assert _series_is_empty(PlotSeries(name="None", x=[], y=[]), 1e-5) is True
 
 
+def test_emptiness_scan_is_cached_and_stays_off_the_cache_file():
+    """The max-|y| scan runs once per series (its data is immutable once
+    extracted) and works across thresholds; the cache attribute must not leak
+    into the persisted dataclass dict (the JSON crash-recovery cache)."""
+    from dataclasses import asdict
+
+    from starpost.gui.views.plot_view import _series_max_abs
+
+    s = PlotSeries(name="Force", x=[1, 2, 3], y=[0.1, -0.7, 0.3])
+    assert _series_is_empty(s, 1e-5) is False
+    assert _series_max_abs(s) == 0.7
+    # Different thresholds reuse the cached magnitude, not a fresh scan.
+    assert _series_is_empty(s, 0.7) is False   # boundary: 0.7 < 0.7 is False
+    assert _series_is_empty(s, 0.71) is True
+    assert _series_is_empty(s, 0.5) is False
+    assert asdict(s) == {"name": "Force", "x": [1, 2, 3], "y": [0.1, -0.7, 0.3]}
+
+
 # --- Y-axis label (physical quantity from unit + unit) ---------------------
 def test_y_label_maps_unit_to_physical_quantity():
     # The unit drives the quantity, not the monitor's own name.
