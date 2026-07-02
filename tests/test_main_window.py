@@ -1035,8 +1035,8 @@ def test_batch_profile_details_dialog_content(app):
 
 
 def test_batch_profile_details_plot_menu(app, monkeypatch):
-    """Saved plots in the batch-profile details window offer Properties and
-    Preview (and no Delete)."""
+    """Saved plots in the batch-profile details window offer Properties (and no
+    Delete)."""
     from starpost.core.settings import BatchProfile
     from starpost.gui.views import batch_run_dialog as brd
     from starpost.gui.views import settings_dialog as sd
@@ -1057,13 +1057,8 @@ def test_batch_profile_details_plot_menu(app, monkeypatch):
             brd._SavedPlotPropertiesDialog, "exec",
             lambda self: opened.append("props") or 0,
         )
-        monkeypatch.setattr(
-            sd._BatchPlotPreviewDialog, "exec",
-            lambda self: opened.append("preview") or 0,
-        )
         dlg._plot_properties(entry)
-        dlg._plot_preview(entry)
-        assert opened == ["props", "preview"]
+        assert opened == ["props"]
     finally:
         dlg.deleteLater()
 
@@ -1090,30 +1085,6 @@ def test_batch_profile_details_scene_menu(app, monkeypatch):
         )
         dlg._scene_properties(entry)
         assert opened == ["props"]
-    finally:
-        dlg.deleteLater()
-
-
-def test_batch_plot_preview_dialog_draws_sample_curves(app):
-    """The plot Preview builds representative curves for the saved plot's
-    monitors so it renders without measured data."""
-    from starpost.gui.views.settings_dialog import _BatchPlotPreviewDialog
-
-    data = {
-        "title": "Drag", "x_label": "Iteration", "theme": "dark",
-        "monitors": {"Forces": ["Drag", "Lift"]},
-        "series_colors": {"Drag": "#e6194b"}, "grid": True,
-        "legend_scale": 1.0, "line_width": 2.0,
-    }
-    # Sample data covers every monitor in the selection.
-    plots = _BatchPlotPreviewDialog._sample_plots(data["monitors"])
-    assert len(plots) == 1
-    assert [s.name for s in plots[0].series] == ["Drag", "Lift"]
-    assert all(len(s.x) == len(s.y) > 0 for s in plots[0].series)
-
-    dlg = _BatchPlotPreviewDialog("Forces plot", data)
-    try:
-        assert dlg.windowTitle() == "Plot preview — Forces plot"
     finally:
         dlg.deleteLater()
 
