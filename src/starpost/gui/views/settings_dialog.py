@@ -18,6 +18,7 @@ in settings.yaml).
 """
 from __future__ import annotations
 
+import math
 import os
 import shlex
 
@@ -40,6 +41,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -166,7 +168,8 @@ class ProfileDetailsDialog(QDialog):
 
 class BatchProfileDetailsDialog(QDialog):
     """Read-only view of one batch profile's ticked reports, saved plots and
-    saved scenes."""
+    saved scenes. Saved plots/scenes can be right-clicked to inspect their
+    contents (Properties, plus Preview for plots) — but not deleted."""
 
     def __init__(self, profile: BatchProfile, parent=None) -> None:
         super().__init__(parent)
@@ -179,22 +182,40 @@ class BatchProfileDetailsDialog(QDialog):
         if reports.count() == 0:
             reports.addItem("(none selected)")
 
-        plots = QListWidget()
+        # Saved plots/scenes carry their captured entry ({"name", "data"}) so the
+        # right-click menu can render Properties/Preview from it.
+        self._plots = QListWidget()
+        self._plots.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._plots.customContextMenuRequested.connect(self._on_plot_menu)
         for entry in profile.saved_plots:
-            plots.addItem(entry.get("name", "") or "(unnamed)")
-        if plots.count() == 0:
-            plots.addItem("(none saved)")
+            item = QListWidgetItem(entry.get("name", "") or "(unnamed)")
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            self._plots.addItem(item)
+        if self._plots.count() == 0:
+            self._plots.addItem("(none saved)")
 
-        scenes = QListWidget()
+        self._scenes = QListWidget()
+        self._scenes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._scenes.customContextMenuRequested.connect(self._on_scene_menu)
         for entry in profile.saved_scenes:
-            scenes.addItem(entry.get("name", "") or "(unnamed)")
-        if scenes.count() == 0:
-            scenes.addItem("(none saved)")
+            item = QListWidgetItem(entry.get("name", "") or "(unnamed)")
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            self._scenes.addItem(item)
+        if self._scenes.count() == 0:
+            self._scenes.addItem("(none saved)")
 
         cols = QHBoxLayout()
         cols.addLayout(ProfileDetailsDialog._column("Reports", reports), 1)
-        cols.addLayout(ProfileDetailsDialog._column("Saved plots", plots), 1)
-        cols.addLayout(ProfileDetailsDialog._column("Saved scenes", scenes), 1)
+        cols.addLayout(ProfileDetailsDialog._column("Saved plots", self._plots), 1)
+        cols.addLayout(
+            ProfileDetailsDialog._column("Saved scenes", self._scenes), 1
+        )
+
+        hint = QLabel(
+            "Right-click a saved plot or scene to view its contents."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
@@ -205,7 +226,126 @@ class BatchProfileDetailsDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addLayout(cols, 1)
+        layout.addWidget(hint)
         layout.addWidget(buttons)
+
+    @staticmethod
+    def _entry(item) -> dict | None:
+        """The captured entry on a list item, or None for placeholder rows."""
+        return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+
+    def _on_plot_menu(self, pos) -> None:
+        """Right-click a saved plot: Properties or Preview (no delete)."""
+        item = self._plots.itemAt(pos)
+        entry = self._entry(item)
+        if entry is None:
+            return
+        menu = QMenu(self._plots)
+        menu.addAction("Properties", lambda: self._plot_properties(entry))
+        menu.addAction("Preview", lambda: self._plot_preview(entry))
+        menu.exec(self._plots.viewport().mapToGlobal(pos))
+
+    def _plot_properties(self, entry: dict) -> None:
+        from starpost.gui.views.batch_run_dialog import _SavedPlotPropertiesDialog
+
+        _SavedPlotPropertiesDialog(
+            entry.get("name", ""), entry.get("data") or {}, self
+        ).exec()
+
+    def _plot_preview(self, entry: dict) -> None:
+        _BatchPlotPreviewDialog(
+            entry.get("name", ""), entry.get("data") or {}, self
+        ).exec()
+
+    def _on_scene_menu(self, pos) -> None:
+        """Right-click a saved scene: Properties only (no delete)."""
+        item = self._scenes.itemAt(pos)
+        entry = self._entry(item)
+        if entry is None:
+            return
+        menu = QMenu(self._scenes)
+        menu.addAction("Properties", lambda: self._scene_properties(entry))
+        menu.exec(self._scenes.viewport().mapToGlobal(pos))
+
+    def _scene_properties(self, entry: dict) -> None:
+        from starpost.gui.views.batch_run_dialog import _SavedScenePropertiesDialog
+
+        _SavedScenePropertiesDialog(
+            entry.get("name", ""), entry.get("data") or {}, self
+        ).exec()
+
+
+class _BatchPlotPreviewDialog(QDialog):
+    """A sample-data preview of a saved batch plot. A batch profile stores the
+    plot's appearance (title, labels, theme, colours, legend, line width, grid),
+    not measured values, so representative placeholder curves are drawn for the
+    plot's monitors to show how it will look."""
+
+    def __init__(self, name: str, data: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Plot preview — {name}")
+        self.resize(720, 520)
+
+        from starpost.gui.views.plot_view import PlotView
+
+        view = PlotView()
+        view.set_category_controls_visible(False)
+        view.apply_theme(data.get("theme") or "light")
+        monitors = data.get("monitors") or {}
+        plots = self._sample_plots(monitors)
+        if plots:
+            view.show_plots(plots)
+            view.set_monitor_selection(monitors)
+        view.set_color_overrides(
+            data.get("series_colors") or {}, data.get("pair_colors") or {}
+        )
+        view.set_title_override(data.get("title", ""))
+        view.set_x_label_override(data.get("x_label", ""))
+        view.set_y_label_override(data.get("y_label", ""))
+        view.set_grid_visible(bool(data.get("grid", True)))
+        for key, attr in (
+            ("legend_scale", "set_legend_scale"),
+            ("line_width", "set_line_width"),
+            ("title_size", "set_title_size"),
+            ("axis_label_size", "set_axis_label_size"),
+        ):
+            if data.get(key) is not None:
+                getattr(view, attr)(data[key])
+
+        note = QLabel(
+            "Sample data — a batch profile stores the plot's settings, not "
+            "measured values, so representative curves are shown."
+        )
+        note.setObjectName("hint")
+        note.setWordWrap(True)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(note)
+        layout.addWidget(view, 1)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _sample_plots(monitors: dict) -> list:
+        """Representative placeholder curves for each monitor in ``monitors``
+        (``{group: [series names]}``), so the preview has something to draw."""
+        from starpost.data.models import MonitorPlot, PlotKind, PlotSeries
+
+        plots = []
+        for group, names in monitors.items():
+            series = []
+            for k, nm in enumerate(names):
+                xs = list(range(1, 21))
+                ys = [math.sin((x + k * 3) * 0.4) + k * 0.6 for x in xs]
+                series.append(PlotSeries(nm, xs, ys))
+            if series:
+                plots.append(MonitorPlot(group, series, kind=PlotKind.FORCE))
+        return plots
 
 
 class SettingsDialog(QDialog):

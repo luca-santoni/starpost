@@ -25,7 +25,10 @@ dialog's saved plots/scenes.
   preview.
 - **Settings → Profiles** — a new **Batch profiles** section lists saved
   Run-batch selections with **Show Details** (reports, saved plots and scenes)
-  and **Delete**, alongside the existing report/plot profiles.
+  and **Delete**, alongside the existing report/plot profiles. In the details
+  window, right-click a saved plot for **Properties / Preview** or a saved scene
+  for **Properties** (the preview draws representative sample curves, since a
+  batch profile stores the plot's appearance but no measured data).
 
 ## [2.0.0] — 2026-06-22
 

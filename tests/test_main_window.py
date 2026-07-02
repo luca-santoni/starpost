@@ -1034,6 +1034,90 @@ def test_batch_profile_details_dialog_content(app):
         dlg.deleteLater()
 
 
+def test_batch_profile_details_plot_menu(app, monkeypatch):
+    """Saved plots in the batch-profile details window offer Properties and
+    Preview (and no Delete)."""
+    from starpost.core.settings import BatchProfile
+    from starpost.gui.views import batch_run_dialog as brd
+    from starpost.gui.views import settings_dialog as sd
+
+    entry = {"name": "Forces plot", "data": {
+        "title": "Drag", "monitors": {"Forces": ["Drag", "Lift"]},
+        "series_colors": {"Drag": "#e6194b"}, "theme": "dark",
+    }}
+    dlg = sd.BatchProfileDetailsDialog(
+        BatchProfile(name="N", saved_plots=[entry])
+    )
+    try:
+        # The item carries its captured entry for the menu to read.
+        assert dlg._plots.item(0).data(sd.Qt.ItemDataRole.UserRole) == entry
+
+        opened = []
+        monkeypatch.setattr(
+            brd._SavedPlotPropertiesDialog, "exec",
+            lambda self: opened.append("props") or 0,
+        )
+        monkeypatch.setattr(
+            sd._BatchPlotPreviewDialog, "exec",
+            lambda self: opened.append("preview") or 0,
+        )
+        dlg._plot_properties(entry)
+        dlg._plot_preview(entry)
+        assert opened == ["props", "preview"]
+    finally:
+        dlg.deleteLater()
+
+
+def test_batch_profile_details_scene_menu(app, monkeypatch):
+    """Saved scenes in the batch-profile details window offer Properties only."""
+    from starpost.core.settings import BatchProfile
+    from starpost.gui.views import batch_run_dialog as brd
+    from starpost.gui.views import settings_dialog as sd
+
+    entry = {"name": "Pressure", "data": {
+        "displayers": {"Scene 1": ["Pressure"]}, "views": [],
+        "resolution": "1080p", "format": "png",
+    }}
+    dlg = sd.BatchProfileDetailsDialog(
+        BatchProfile(name="N", saved_scenes=[entry])
+    )
+    try:
+        assert dlg._scenes.item(0).data(sd.Qt.ItemDataRole.UserRole) == entry
+        opened = []
+        monkeypatch.setattr(
+            brd._SavedScenePropertiesDialog, "exec",
+            lambda self: opened.append("props") or 0,
+        )
+        dlg._scene_properties(entry)
+        assert opened == ["props"]
+    finally:
+        dlg.deleteLater()
+
+
+def test_batch_plot_preview_dialog_draws_sample_curves(app):
+    """The plot Preview builds representative curves for the saved plot's
+    monitors so it renders without measured data."""
+    from starpost.gui.views.settings_dialog import _BatchPlotPreviewDialog
+
+    data = {
+        "title": "Drag", "x_label": "Iteration", "theme": "dark",
+        "monitors": {"Forces": ["Drag", "Lift"]},
+        "series_colors": {"Drag": "#e6194b"}, "grid": True,
+        "legend_scale": 1.0, "line_width": 2.0,
+    }
+    # Sample data covers every monitor in the selection.
+    plots = _BatchPlotPreviewDialog._sample_plots(data["monitors"])
+    assert len(plots) == 1
+    assert [s.name for s in plots[0].series] == ["Drag", "Lift"]
+    assert all(len(s.x) == len(s.y) > 0 for s in plots[0].series)
+
+    dlg = _BatchPlotPreviewDialog("Forces plot", data)
+    try:
+        assert dlg.windowTitle() == "Plot preview — Forces plot"
+    finally:
+        dlg.deleteLater()
+
+
 def test_batch_run_dialog_save_and_load_profile(app, monkeypatch):
     """The dialog's Batch profile bar saves to / lists from the batch profiles."""
     import starpost.gui.views.batch_run_dialog as brd
