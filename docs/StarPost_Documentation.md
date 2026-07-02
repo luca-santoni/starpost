@@ -8,14 +8,15 @@
 > interactive plot viewer (per-monitor colours, optional moving-average
 > smoothing), **on-demand scene-still rendering** (the Scenes tab: scene →
 > scalar/vector displayer selection, saved-view rendering, parallel/`-np`
-> rendering, a thumbnail gallery with Properties), the full in-app settings
-> dialog, a heavily customizable report/plot export, an in-app update check, and
-> packaged builds (Linux AppImage + Windows Inno Setup installer). The Java
-> extraction macro has been run against a live STAR-CCM+ 2310 install (reports,
-> plots, and scene/view discovery); the scene-render *apply-saved-view* call is
-> the one remaining version-specific operation still being validated (see
-> [Limitations](#4-limitations)).
-> Document last updated: 2026-06-22
+> rendering, a thumbnail gallery with Properties), a **guided Run batch dialog**
+> (a Source → Reports → Plots → Scenes → Summary wizard producing a single
+> archive), the full in-app settings dialog, a heavily customizable report/plot
+> export, an in-app update check, and packaged builds (Linux AppImage + Windows
+> Inno Setup installer). The Java extraction macro has been run against a live
+> STAR-CCM+ 2310 install (reports, plots, and scene/view discovery); the
+> scene-render *apply-saved-view* call is the one remaining version-specific
+> operation still being validated (see [Limitations](#4-limitations)).
+> Document last updated: 2026-07-02
 
 ---
 
@@ -34,6 +35,7 @@
    - [3.7 Selection panel (right)](#37-selection-panel-right)
    - [3.8 Log console](#38-log-console)
    - [3.9 Export dialog](#39-export-dialog)
+   - [3.9a Run batch dialog](#39a-run-batch-dialog)
    - [3.10 Settings dialog](#310-settings-dialog)
    - [3.11 Welcome / setup wizard](#311-welcome--setup-wizard)
    - [3.12 Updates](#312-updates)
@@ -249,7 +251,7 @@ A single toolbar at the top with three actions:
 
 | Action | Behaviour |
 |---|---|
-| **Run batch** | Extracts **every** `.sim` in the Files list. Prompts for an output folder (defaults to the configured output dir, else home). Warns if the Files list is empty or the STAR-CCM+ path isn't set. Disabled while a run is in progress. |
+| **Run batch** | Opens the [Run batch dialog](#39a-run-batch-dialog) — a guided wizard for picking a source (`.sim` files or loaded data sets), the reports/plots/scenes to include, and packaging them into a single archive. (To extract straight to the workspace without the wizard, right-click → **Open** a file in the Files panel instead.) Disabled while a run is in progress. |
 | **Export…** | Opens the [Export dialog](#39-export-dialog). |
 | **Settings…** | Opens the [Settings dialog](#310-settings-dialog). |
 
@@ -285,7 +287,8 @@ the filesystem.
   danger button.
 
 **Interactions:**
-- **Multi-select** with Ctrl/Shift (extended selection).
+- **Multi-select** — **Shift+click** selects a contiguous range and **Ctrl+click**
+  toggles individual rows (standard extended selection).
 - **Double-click a file** → *Open* just that file (extract + view it).
 - **Drag and drop** files/folders to **re-parent** them (move into a folder, out
   to the top level, or between folders); a folder can't be dropped into its own
@@ -309,6 +312,8 @@ the filesystem.
 - Folders sort their contents **folders first, then files**; nested files are
   marked with a small dash for legibility, and folder icons can be **tinted** to
   a chosen colour (Settings → Appearance → Folders).
+- Each leaf (file) row carries a small **node dot**; by default it follows the
+  theme accent, or a chosen colour set in Settings → Appearance → **Node dots**.
 - Each row shows the file name by default, or the full path if *Show file path*
   is enabled in Settings → Files; the full path is always in the tooltip.
 - *Opening* a file that is already loaded prompts to load only the new files,
@@ -326,7 +331,11 @@ come and go with what's loaded.
 
 **Interactions:**
 - Each data set has a **checkbox**; **clicking anywhere on a row toggles it**
-  (drag a row instead to move it between folders).
+  (drag a row instead to move it between folders). Click one row then
+  **Shift+click** another to set every checkbox between them to the first row's
+  new state — the same range-tick shortcut used across the app's checkbox lists
+  (the report / monitor / plot / scene selection lists, the export dialogs, and
+  the region-statistics list).
 - **No** entry checked or **one** checked → **per-file** view; **two or more**
   checked → **comparison** view.
 - **Right-click a data set** → **Properties** (its portable-CSV size plus report,
@@ -583,6 +592,63 @@ monitor selections to the dialog.
 - **Export** captures the preview to a high-resolution image and saves it (named
   after the single data set, or "plot" for several).
 
+### 3.9a Run batch dialog
+
+Opened from the toolbar **Run batch**. Unlike the [Export dialog](#39-export-dialog)
+(which writes the current view), this is a **guided wizard** that assembles a
+self-contained **archive** of extracted data. It steps through **five tabs** in
+order — **Source → Reports → Plots → Scenes → Summary** — advanced with the
+bottom-right **Continue** button (which becomes **Batch run** on the Summary
+tab); **Back** returns to the previous tab. The tab bar itself is locked, so the
+wizard is always driven by these buttons.
+
+**Batch profile bar (top).** A **Batch profile** selector with **Load** and
+**Save as…** stores a whole Run-batch setup — the chosen reports, and the saved
+plots and scenes — under a name for reuse. These batch profiles are **separate**
+from the report/plot profiles used by the main view, and are also listed under
+Settings → Profiles → **Batch profiles**.
+
+**The tabs:**
+
+- **Source** — pick what to process: **`.sim files`** or **`Loaded data sets`**.
+  Load the candidates (**Load Files** / **Load Data Set**), tick which to
+  include, and use **Select All** / **Clear**. For `.sim` sources, **Has similar
+  format** extracts the *first* selected file up front to populate the Reports /
+  Plots / Scenes choices (assuming every file shares the same reports, plots and
+  scenes), so you can configure the run without extracting all of them first.
+- **Reports** — a checklist of every report (all ticked by default), plus
+  **File format** (CSV / TSV / XLSX / ODS) and **Include units**.
+- **Plots** — the same monitor tree, per-monitor colour swatches, live preview
+  window and plot options as the Export dialog's Plots tab. **Add Plot** captures
+  the current setup as a named entry in the **Saved Plots** list (each remembers
+  its title, axis labels, sizes, theme, legend, line width, grid, format, and
+  monitor selection + colours). Right-click a saved plot for **Preview** (loads
+  its captured settings back into the controls and preview), **Properties** (a
+  read-only view of what it captured), or **Delete**.
+- **Scenes** — the same scene → displayer tree and **Saved views** list as the
+  main Scenes view, plus **Image resolution** and **Image format**. **Save Scene**
+  captures the current selection as a named entry in the **Saved Scenes** list;
+  right-click one for **Properties** (its resolution/format, saved views, and each
+  captured scene with its scalar/vector displayers) or **Delete**.
+- **Summary** — a final review before the run. **Export options**: the **Archive
+  format** selector (ZIP / 7Z / RAR; the run currently always writes a **`.zip`**
+  regardless) and **Include dataset .csv** — when ticked, each data set's portable
+  StarPost CSV (identical to the Data tab's **Export Data** file) is written into
+  its folder in the archive, ready to re-import. Alongside sit read-only
+  **Reports**, **Plots** and **Scenes** lists mirroring the other tabs; right-click
+  a plot or scene here for **Properties** or **Delete** (deleting also removes it
+  from its source Saved list).
+
+**Batch run** then extracts/renders as needed and writes a **single archive**
+containing **one folder per data set**, each holding its report table, an image
+of every saved plot, the saved-scene stills, and (if enabled) the data set's CSV.
+A progress dialog tracks the run; STAR-CCM+ is only invoked when a `.sim` source
+must be extracted or a scene rendered.
+
+> **Multi-select** in the wizard's lists uses **Shift+click** (range) and
+> **Ctrl+click** (toggle); the checkbox lists also support **Shift+click to tick
+> a range** (see the [Data panel](#34-data-panel)).
+
 ### 3.10 Settings dialog
 
 Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
@@ -598,13 +664,13 @@ The pages, in nav order:
 |---|---|
 | **STAR-CCM+** | **Executable path** (+ Browse…, platform-aware filter), **Default output folder** (+ Browse…), **Extra arguments** (appended verbatim to every call, space-separated), **Parallel cores** (spinbox 1…N machine cores; the `-np` count for scene rendering — 1 = serial; numeric extraction always runs serially), **Scenes per license** (how many scenes render per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
 | **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked as `••••` with a **Show/Hide** toggle) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
-| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons); **Text size** (1.0×–1.5× multiplier scaling every button/label, and the main view's plot title/axis labels; 1.0× is the original size). All changes **preview live** across the whole UI. |
+| **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Node dots → Match with theme** toggle + **Node colour** (the Files-tab leaf-row dots; follow the accent when matching, mirroring the checkmark controls); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons); **Text size** (1.0×–1.5× multiplier scaling every button/label, and the main view's plot title/axis labels; 1.0× is the original size). All changes **preview live** across the whole UI. |
 | **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
 | **Scenes** | Scene-rendering output options: **Image resolution** (1080p / 2160p) and **Image format** (JPG / PNG). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
-| **Profiles** | One row per profile (Default first). **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**. **Delete** (not shown for Default) removes the profile after confirmation, immediately. |
+| **Profiles** | Two sections. **Report/plot profiles** — one row per profile (Default first); **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**; **Delete** (not shown for Default) removes the profile after confirmation, immediately. **Batch profiles** — the saved [Run batch dialog](#39a-run-batch-dialog) selections, each with **Show Details** (its reports, saved plots and saved scenes — right-click a saved plot or scene there for **Properties**) and **Delete**. |
 | **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
 | **About** | The StarPost logo, a short description, the author, a link to the GitHub repository, and the current **version**. |
 
@@ -763,8 +829,10 @@ sits on top of an installed STAR-CCM+ engine.
 ## 6. Data Flow, End to End
 
 1. **User adds `.sim` files** to the Files list (individually or by folder) and
-   clicks **Run batch** (or right-click → **Open** / double-click a file),
-   choosing an output folder.
+   extracts them into the workspace — **double-click** a file, or select some and
+   **right-click → Open**. (The toolbar **Run batch** follows the same extraction
+   steps below, but assembles the results into an archive instead of loading them
+   into the Data tab — see the [Run batch dialog](#39a-run-batch-dialog).)
 2. For **each file, sequentially**, `StarRunner`:
    - renders the Java macro `extract_all.java` from its template (pointing it at
      the output folder),
@@ -970,6 +1038,7 @@ starpost/                           (repo; app/package = "starpost")
     │       ├── data_export_dialog.py  Export Data: pick data sets → portable CSVs
     │       ├── log_console.py      Live log + progress counter/bar
     │       ├── export_dialog.py    Tabbed export (Reports/Plots) + live plot preview
+    │       ├── batch_run_dialog.py  Run batch wizard (Source→Reports→Plots→Scenes→Summary) → archive
     │       └── welcome_dialog.py   First-run setup wizard
     │
     └── utils/
@@ -1011,10 +1080,12 @@ python scripts\dev_run.py
 1. Complete the **setup wizard** (or set the STAR-CCM+ path and licensing in
    Settings).
 2. Add `.sim` files (or a folder of them) in the **Files** tab.
-3. **Run batch** and choose an output folder.
+3. Extract them into the workspace: **double-click** a file, or select some and
+   **right-click → Open** (progress shows in the log console).
 4. Tick the extracted **Data** sets to view (two or more → comparison); filter
    reports/plots in the Selection panel, or load a **Profile**.
-5. **Export…** the report tables and/or plot images.
+5. **Export…** the report tables and/or plot images — or use **Run batch** to
+   package the reports, saved plots and saved scenes into a single archive.
 
 ### Build a standalone bundle
 ```bash
