@@ -401,10 +401,6 @@ class _SavedScenePropertiesDialog(QDialog):
         views = data.get("views") or []
         form.addRow("Saved views:", QLabel(", ".join(views) if views else "—"))
 
-        scenes_label = QLabel("Scenes")
-        scenes_label.setStyleSheet("font-weight: bold;")
-        form.addRow(scenes_label)
-
         displayers = data.get("displayers") or {}
         if displayers:
             for scene, shown in displayers.items():
