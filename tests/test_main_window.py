@@ -1208,10 +1208,11 @@ def _sim_result_with_data():
     )
 
 
-def test_startup_does_not_import_pandas(tmp_path):
+def test_startup_does_not_import_heavy_deferred_libs(tmp_path):
     """Opening the main window with nothing loaded must not pull in pandas (a
-    ~400 ms import); it loads only when a comparison table is first drawn. Runs
-    in a subprocess so imports from other tests can't mask a regression."""
+    ~400 ms import, deferred to the first comparison table) or jinja2 (~40 ms,
+    deferred to the first macro render). Runs in a subprocess so imports from
+    other tests can't mask a regression."""
     import subprocess
     import sys
 
@@ -1226,12 +1227,16 @@ def test_startup_does_not_import_pandas(tmp_path):
         "from starpost.gui.main_window import MainWindow\n"
         "app = QApplication([])\n"
         "w = MainWindow(Settings())\n"
-        "sys.exit(1 if 'pandas' in sys.modules else 0)\n"
+        "leaked = [m for m in ('pandas', 'jinja2') if m in sys.modules]\n"
+        "print(','.join(leaked))\n"
+        "sys.exit(1 if leaked else 0)\n"
     )
     proc = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True
     )
-    assert proc.returncode == 0, proc.stderr
+    assert proc.returncode == 0, (
+        f"imported at startup: {proc.stdout.strip()}\n{proc.stderr}"
+    )
 
 
 def test_render_plot_renders_once(app, monkeypatch):
