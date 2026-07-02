@@ -42,7 +42,6 @@ from starpost.gui.widgets import UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
-from starpost.gui.views.plot_view import PlotView, _series_is_empty
 from starpost.gui.views.report_table import ReportTable
 from starpost.gui.views.scene_view import SceneView
 from starpost.gui.views.selection_panel import SelectionPanel
@@ -118,26 +117,16 @@ class MainWindow(QMainWindow):
             zero_threshold=settings.zero_threshold,
         )
         self.scene_view = SceneView()
-        self.plot_view = PlotView()
-        self.plot_view.set_filter(
-            settings.hide_empty_monitors, settings.monitor_zero_threshold
-        )
-        self.plot_view.set_hover_options(
-            settings.hover_show_monitor_name,
-            settings.hover_x_decimals,
-            settings.hover_y_decimals,
-        )
-        self.plot_view.set_region_stats(settings.region_stats)
-        self.plot_view.set_smooth_width(settings.moving_average_width)
-        self.plot_view.set_text_scale(settings.appearance.text_scale)
-        self.plot_view.apply_theme(settings.appearance.mode)
-        # The per-monitor selection now lives in the selection panel's plot tree,
-        # so the plot view's own under-plot category dropdowns are hidden; the
-        # panel drives which monitors are drawn (applied in _render_plot).
-        self.plot_view.set_category_controls_visible(False)
-        # Let profiles persist which region statistics are shown.
+        # The plot view is built lazily (see the plot_view property): it drags
+        # in pyqtgraph + numpy (~0.3 s of imports), which shouldn't sit between
+        # launch and the window appearing. Until then its tab holds a bare
+        # placeholder; the warm-up timer below builds the real view right after
+        # the window first paints, long before a human can reach the Plots tab.
+        self._plot_view = None
+        # Let profiles persist which region statistics are shown. (A lambda, so
+        # merely wiring the provider doesn't build the plot view.)
         self.selection.set_region_stats_provider(
-            self.plot_view.region_stats, self._apply_region_stats
+            lambda: self.plot_view.region_stats(), self._apply_region_stats
         )
         # Let the panel's monitor swatches reflect/edit the plot's line colours.
         self.selection.set_plot_color_provider(
@@ -165,6 +154,36 @@ class MainWindow(QMainWindow):
         self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
+        # Warm up the plot view during the first idle moment after the window
+        # paints (and after the deferred cache load above, scheduled earlier),
+        # so its heavy imports never show up as a hitch on first use.
+        QTimer.singleShot(0, lambda: self.plot_view)
+
+    @property
+    def plot_view(self):
+        """The monitor-plot view, created on first use (see __init__) and slotted
+        into the Plots tab's placeholder. Configured from the current settings at
+        build time, exactly as the eager construction used to."""
+        if self._plot_view is None:
+            from starpost.gui.views.plot_view import PlotView
+
+            s = self.settings
+            pv = PlotView()
+            pv.set_filter(s.hide_empty_monitors, s.monitor_zero_threshold)
+            pv.set_hover_options(
+                s.hover_show_monitor_name, s.hover_x_decimals, s.hover_y_decimals
+            )
+            pv.set_region_stats(s.region_stats)
+            pv.set_smooth_width(s.moving_average_width)
+            pv.set_text_scale(s.appearance.text_scale)
+            pv.apply_theme(s.appearance.mode)
+            # The per-monitor selection lives in the selection panel's plot
+            # tree, so the plot view's own under-plot category dropdowns are
+            # hidden; the panel drives what's drawn (applied in _render_plot).
+            pv.set_category_controls_visible(False)
+            self._plot_view = pv
+            self._plot_tab_layout.addWidget(pv)
+        return self._plot_view
 
     def _load_cached_results(self) -> None:
         """Restore results from the crash-recovery cache (deferred from
@@ -184,7 +203,12 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.setTabBar(UniformTabBar())
         tabs.addTab(self.report_table, "Reports")
-        tabs.addTab(self.plot_view, "Plots")
+        # The Plots page is a bare container the lazily-built plot view lands
+        # in (see the plot_view property) — tab checks compare against this.
+        self._plot_tab = QWidget()
+        self._plot_tab_layout = QVBoxLayout(self._plot_tab)
+        self._plot_tab_layout.setContentsMargins(0, 0, 0, 0)
+        tabs.addTab(self._plot_tab, "Plots")
         tabs.addTab(self.scene_view, "Scenes")
         # The selection panel shows only the checklist for the active centre tab:
         # Reports list on Reports, Monitor plots on Plots, Scenes on Scenes.
@@ -244,7 +268,7 @@ class MainWindow(QMainWindow):
             # Build the gallery now that it's visible (deferred while hidden).
             self._render_scenes_view()
             self._maybe_warn_scenes()
-        elif widget is self.plot_view and self._plot_stale:
+        elif widget is self._plot_tab and self._plot_stale:
             # Redraw now that it's visible (renders are skipped while hidden),
             # and bring the panel's monitor swatches back in step with it.
             self._render_plot()
@@ -758,7 +782,7 @@ class MainWindow(QMainWindow):
             for p in r.plots:
                 names = groups.setdefault(p.name, [])
                 for s in p.series:
-                    if hide and _series_is_empty(s, threshold):
+                    if hide and s.is_empty(threshold):
                         continue
                     if s.name not in names:
                         names.append(s.name)
@@ -881,7 +905,7 @@ class MainWindow(QMainWindow):
         # the colours actually used (and to the current data-set count). The
         # swatches are only visible alongside the Plots tab; when its render was
         # deferred above, the tab switch refreshes them with the redraw instead.
-        if self._center_tabs.currentWidget() is self.plot_view:
+        if self._center_tabs.currentWidget() is self._plot_tab:
             self.selection.refresh_monitor_swatches()
 
     def _render_scenes_view(self) -> None:
@@ -937,7 +961,7 @@ class MainWindow(QMainWindow):
         # Plots tab is hidden (report/data toggles on the other tabs would pay
         # for an invisible redraw) and defer to when the tab is next selected —
         # the same pattern the scene gallery uses (_render_scenes_view).
-        if self._center_tabs.currentWidget() is not self.plot_view:
+        if self._center_tabs.currentWidget() is not self._plot_tab:
             self._plot_stale = True
             return
         self._plot_stale = False

@@ -28,6 +28,23 @@ class PlotSeries:
     x: list[float] = field(default_factory=list)
     y: list[float] = field(default_factory=list)
 
+    def max_abs(self) -> float:
+        """The largest |y|, cached on the instance: the data is immutable once
+        extracted, and this scan over every point is hit on redraws and
+        selection-list rebuilds — too hot to repeat for large workspaces."""
+        cached = getattr(self, "_max_abs_cache", None)
+        if cached is None:
+            cached = max(map(abs, self.y), default=0.0)
+            self._max_abs_cache = cached
+        return cached
+
+    def is_empty(self, zero_threshold: float) -> bool:
+        """True when every value lies within (-threshold, +threshold).
+
+        The threshold is an absolute magnitude, so monitors that are strongly
+        negative still count as non-empty."""
+        return not self.y or self.max_abs() < zero_threshold
+
 
 @dataclass
 class MonitorPlot:

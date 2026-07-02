@@ -12,7 +12,6 @@ or when several categories are overlaid at once.
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -32,6 +31,12 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.data.models import MonitorPlot
+from starpost.gui.plot_style import (  # noqa: F401 (re-exported for importers)
+    _COLORS,
+    _UNIT_RE,
+    _display_name,
+    _series_unit,
+)
 
 
 class _StayOpenMenu(QMenu):
@@ -56,12 +61,6 @@ class _StayOpenMenu(QMenu):
             return  # swallow the release so the base class doesn't close the menu
         super().mouseReleaseEvent(event)
 
-
-# A simple distinct-color cycle for series/sims.
-_COLORS = [
-    "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
-    "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
-]
 
 # How close (in pixels) the cursor must be to a data point for its hover
 # readout to appear — keeps the tooltip from showing when nowhere near a line.
@@ -97,27 +96,9 @@ REGION_STATS: list[RegionStat] = [
 # The catalog's labels, in order — the choices offered by the Statistics setting.
 REGION_STAT_LABELS: list[str] = [s.label for s in REGION_STATS]
 
-# Series names from STAR-CCM+ exports carry their unit as a trailing
-# parenthetical, e.g. "Mass Flow (kg/s)". Pull it out so the Y axis can label it.
-_UNIT_RE = re.compile(r"\(([^()]*)\)\s*$")
-
-
-def _series_unit(name: str) -> str:
-    m = _UNIT_RE.search(name.strip())
-    return m.group(1).strip() if m else ""
-
-
-def _display_name(name: str) -> str:
-    """Collapse STAR-CCM+'s doubled monitor labels for display only.
-
-    A single-monitor series is exported as "<Plot>: <Plot> (unit)"; show just
-    "<Plot> (unit)" when the prefix merely repeats the rest of the label. Other
-    "A: B" names (genuinely different parts) are left untouched. The stored
-    series name is never changed — it stays the lookup key everywhere."""
-    prefix, sep, rest = name.partition(": ")
-    if sep and prefix.strip() and prefix.strip() == _UNIT_RE.sub("", rest).strip():
-        return rest.strip()
-    return name
+# Unit/display-name helpers live in plot_style (kept pyqtgraph-free for the
+# selection panel); imported above and re-exported here for this module's
+# importers (e.g. the export dialog).
 
 
 # Physical quantity each unit measures, so the Y axis reads "Force (lbf)" rather
@@ -182,24 +163,15 @@ def _y_label_for(names: list[str]) -> str:
 
 
 def _series_max_abs(series) -> float:
-    """The series' largest |y|, cached on the series object. A series' data is
-    immutable once extracted, but this scan is over every point and used to run
-    on every redraw and selection-list rebuild — for a large workspace that was
-    most of the per-click delay."""
-    cached = getattr(series, "_max_abs_cache", None)
-    if cached is None:
-        cached = max(map(abs, series.y), default=0.0)
-        series._max_abs_cache = cached
-    return cached
+    """The series' largest |y| (see PlotSeries.max_abs, where the cached scan
+    lives so that pyqtgraph-free callers don't need this module)."""
+    return series.max_abs()
 
 
 def _series_is_empty(series, zero_threshold: float) -> bool:
-    """True when every value lies within (-threshold, +threshold).
-
-    The threshold is an absolute magnitude, so monitors that are strongly
-    negative still count as non-empty.
-    """
-    return not series.y or _series_max_abs(series) < zero_threshold
+    """True when every value lies within (-threshold, +threshold) — see
+    PlotSeries.is_empty; kept here as the name this module's callers use."""
+    return series.is_empty(zero_threshold)
 
 
 def _series_arrays(series) -> tuple:

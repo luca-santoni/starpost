@@ -1210,9 +1210,10 @@ def _sim_result_with_data():
 
 def test_startup_does_not_import_heavy_deferred_libs(tmp_path):
     """Opening the main window with nothing loaded must not pull in pandas (a
-    ~400 ms import, deferred to the first comparison table) or jinja2 (~40 ms,
-    deferred to the first macro render). Runs in a subprocess so imports from
-    other tests can't mask a regression."""
+    ~400 ms import, deferred to the first comparison table), jinja2 (~40 ms,
+    deferred to the first macro render), or pyqtgraph/numpy (~300 ms, deferred
+    with the plot view until the post-paint warm-up). Runs in a subprocess so
+    imports from other tests can't mask a regression."""
     import subprocess
     import sys
 
@@ -1227,7 +1228,8 @@ def test_startup_does_not_import_heavy_deferred_libs(tmp_path):
         "from starpost.gui.main_window import MainWindow\n"
         "app = QApplication([])\n"
         "w = MainWindow(Settings())\n"
-        "leaked = [m for m in ('pandas', 'jinja2') if m in sys.modules]\n"
+        "heavy = ('pandas', 'jinja2', 'pyqtgraph', 'numpy')\n"
+        "leaked = [m for m in heavy if m in sys.modules]\n"
         "print(','.join(leaked))\n"
         "sys.exit(1 if leaked else 0)\n"
     )
@@ -1334,7 +1336,7 @@ def test_plot_render_deferred_while_tab_hidden(app, monkeypatch):
     win._refresh_views()
     assert renders == [] and win._plot_stale  # skipped while hidden
 
-    win._center_tabs.setCurrentWidget(win.plot_view)  # switch draws it once
+    win._center_tabs.setCurrentWidget(win._plot_tab)  # switch draws it once
     assert renders == [1]
     assert not win._plot_stale
     assert win.plot_view.has_content()
@@ -1355,7 +1357,7 @@ def test_render_plot_renders_once(app, monkeypatch):
     win.data_list.set_entries([result.sim_name])
     # Renders are skipped while the Plots tab is hidden; bring it to the front
     # (before counting) so _render_plot actually draws.
-    win._center_tabs.setCurrentWidget(win.plot_view)
+    win._center_tabs.setCurrentWidget(win._plot_tab)
     monkeypatch.setattr(
         win, "_active_results", lambda: [result], raising=False
     )

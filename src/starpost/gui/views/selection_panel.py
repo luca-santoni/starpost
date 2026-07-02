@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
-from starpost.gui.views.plot_view import _COLORS, _display_name
+from starpost.gui.plot_style import _COLORS, _display_name
 from starpost.gui.widgets import enable_check_range
 
 # A monitor's colour swatches (one per plotted data set) sit between its checkbox

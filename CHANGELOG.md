@@ -45,7 +45,10 @@ dialog's saved plots/scenes.
 - **Faster startup** — the table library behind the comparison view (a ~0.4 s
   import) no longer loads while the main window opens; it loads the first time
   a comparison table is actually shown. The Java-macro templating engine is
-  likewise deferred until a run actually starts.
+  likewise deferred until a run actually starts, and the plot view (whose
+  graphics libraries are another ~0.3 s of imports) is now built in the
+  background right after the window first appears. Altogether the window shows
+  in roughly a fifth of the time it previously took.
 - **Faster plot redraws** — changing which data sets, plots or monitors are
   shown now draws the plot once instead of twice, roughly halving the delay
   after each click (also in the Export and Run batch previews and the batch
