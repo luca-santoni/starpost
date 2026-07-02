@@ -169,3 +169,9 @@ def test_render_scenes_macro_embeds_selection_and_resolution():
         assert "MAGNIFICATION = 2" in text
         # Each scene is closed after its hardcopy to free graphics memory.
         assert "s.close()" in text
+        # The file-name displayer component collapses to "multiple-fields" when
+        # more than one field is visible, keeping the file name short.
+        assert (
+            'String disp = (visible.size() > 1) ? "multiple-fields" '
+            ': joinNames(visible);'
+        ) in text

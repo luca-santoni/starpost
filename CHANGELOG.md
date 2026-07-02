@@ -29,6 +29,12 @@ dialog's saved plots/scenes.
   window, right-click a saved plot or scene for **Properties** to view its
   captured contents.
 
+### Bug Fixes
+- **Scene rendering** — a scene with more than one visible scalar/vector field
+  no longer joins every field name into the still's file name (which could make
+  the name too long); it now uses **"multiple-fields"** instead. The full field
+  list is still recorded and shown in the still's Properties.
+
 ## [2.0.0] — 2026-06-22
 
 A major release adding **scene-still rendering**: StarPost can now render images

@@ -9,9 +9,10 @@
 // Outputs (in {{ output_dir }}):
 //   <dataset>-<scene>[-<displayers>][-<view>].<ext>  one per scene (per chosen view)
 //   <simname>__media_index.csv                      kind,source,name,file,error
-// where <displayers> is the visible scalar/vector displayers joined by "_" and
-// <view> the saved view (both omitted when absent). The media "name" (shown in
-// the gallery) is the same minus the dataset: <scene>[-<displayers>][-<view>].
+// where <displayers> is the single visible scalar/vector displayer's name (or
+// "multiple-fields" when more than one is visible, to keep the file name short)
+// and <view> the saved view (both omitted when absent). The media "name" (shown
+// in the gallery) is the same minus the dataset: <scene>[-<displayers>][-<view>].
 //
 // SHOW maps each scene to render -> the scalar/vector displayers to keep visible
 // (the user's checked ones). Any OTHER scalar/vector displayer in that scene is
@@ -98,7 +99,10 @@ public class render_scenes extends StarMacro {
     private void renderOne(Simulation sim, PrintWriter idx, Scene s, String simName,
                            String dir, String name, String viewName,
                            Set<String> visible) {
-        String disp = joinNames(visible);            // "_"-joined, for the file name
+        // File-name component: a single field's name, or "multiple-fields" when
+        // more than one is visible (joining every name blows up the file name
+        // length). The full list is still recorded in dispReadable below.
+        String disp = (visible.size() > 1) ? "multiple-fields" : joinNames(visible);
         String dispReadable = String.join(", ", visible);  // for the Properties window
         String viewStr = (viewName == null) ? "" : viewName;
         String label = name;
