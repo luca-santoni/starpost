@@ -3,6 +3,27 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [2.1.0] — 2026-07-01
+
+A refinement release polishing the Files-tab appearance and the Run batch
+dialog's saved plots/scenes.
+
+### New Features
+- **Node-dot colour** — the Files-tab leaf node dots now follow the theme
+  accent by default, with a new **Settings → Appearance** option ("Node dots"
+  match-theme toggle + "Node colour" picker) to set them independently, mirroring
+  the checkmark-colour controls.
+- **Run batch → Scenes tab** — saved scenes gain a right-click **Properties**
+  (image resolution/format, saved views, and each captured scene with its
+  scalar/vector displayers) and **Delete**, matching the Saved Plots menu.
+- **Run batch → Summary tab** — the plots and scenes lists carry the same
+  right-click **Properties / Delete** menu; deleting there also removes the entry
+  from its source Saved list.
+- **Run batch → Plots tab** — a new **Preview** action on saved plots loads the
+  captured settings (title, axis labels, sizes, theme, legend, line width, grid,
+  format, monitor selection and colours) back into the controls and the live
+  preview.
+
 ## [2.0.0] — 2026-06-22
 
 A major release adding **scene-still rendering**: StarPost can now render images
