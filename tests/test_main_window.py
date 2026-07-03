@@ -88,7 +88,8 @@ def test_batch_run_dialog_tabs_not_mouse_clickable(app):
     bar = dlg._tabs.tabBar()
     target = bar.tabRect(3).center()  # the "Scenes" tab
     press = QMouseEvent(
-        QEvent.Type.MouseButtonPress, target, Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseButtonPress, target, bar.mapToGlobal(target),
+        Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
     )
     bar.mousePressEvent(press)
@@ -258,7 +259,8 @@ def test_batch_run_dialog_source_row_click_toggles(app):
     # Click in the row's text area (well right of the checkbox indicator).
     point = QPointF(rect.right() - 4, rect.center().y())
     press = QMouseEvent(
-        QEvent.Type.MouseButtonPress, point, Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseButtonPress, point, win.mapToGlobal(point.toPoint()),
+        Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
     )
     win.mousePressEvent(press)
@@ -267,8 +269,10 @@ def test_batch_run_dialog_source_row_click_toggles(app):
     # Selecting a row then clicking empty space clears the selection.
     win.setCurrentRow(0)
     assert win.selectedItems()
+    off_screen = QPointF(5000, 5000)
     empty = QMouseEvent(
-        QEvent.Type.MouseButtonPress, QPointF(5000, 5000), Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseButtonPress, off_screen, win.mapToGlobal(off_screen.toPoint()),
+        Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
     )
     win.mousePressEvent(empty)
