@@ -100,6 +100,12 @@ A licensed STAR-CCM+ installation must be present on the machine.
     and axis labels, per-monitor colours (mirrored from the main view), legend
     scale, line thickness, title/axis-label text sizes, a grid toggle, theme, and
     aspect ratio.
+- **Run batch** (toolbar → *Run batch*) — a guided wizard (**Source → Reports →
+  Plots → Scenes → Summary**) that bundles the chosen report tables, saved plot
+  images and saved scene stills — and, optionally, each data set's portable CSV —
+  into a **single archive** (a `.zip`, one folder per data set). Whole setups can
+  be saved and reloaded as **batch profiles**. *(The format selector also lists
+  7Z and RAR; these are not produced yet — planned for a future release.)*
 - **Scene rendering** (the **Scenes** tab) — render scene stills from a `.sim`:
   - A **scene → displayer tree** (like the monitor-plot groups): tick a scene,
     then tick which of its **scalar/vector displayers** to show; a **Saved views**
@@ -182,12 +188,14 @@ Windows `%LOCALAPPDATA%\starpost\`).
    licensing, and theme. (Re-open it any time; it's also editable in Settings.)
 2. **Files** tab → *Add files…* to add individual `.sim` files, or *Add folder…*
    to import a folder's `.sim` files into a new internal folder named after it.
-3. **Run batch** (toolbar) and choose an output folder. STAR-CCM+ runs once per
-   file and the extracted data appears in the **Data** tab.
+3. Extract the files into the workspace — **double-click** one, or select several
+   and **right-click → Open**. STAR-CCM+ runs once per file and the results appear
+   in the **Data** tab.
 4. Tick **Data** sets to view (two or more → comparison), then use the
    **Reports** and **Plots** tabs plus the right-hand selection panel to filter.
    Save a selection as a **Profile** to reuse it later.
-5. **Export…** (toolbar) writes report tables and/or plot images.
+5. **Export…** (toolbar) writes report tables and/or plot images — or use **Run
+   batch** (toolbar) to bundle reports, plots and scenes into a single archive.
 6. *(Optional)* On the **Scenes** tab, tick one **Data** set, pick scenes (and
    their displayers / a saved view), and click **Run** to render image stills.
 

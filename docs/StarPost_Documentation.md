@@ -631,8 +631,9 @@ Settings → Profiles → **Batch profiles**.
   right-click one for **Properties** (its resolution/format, saved views, and each
   captured scene with its scalar/vector displayers) or **Delete**.
 - **Summary** — a final review before the run. **Export options**: the **Archive
-  format** selector (ZIP / 7Z / RAR; the run currently always writes a **`.zip`**
-  regardless) and **Include dataset .csv** — when ticked, each data set's portable
+  format** selector (ZIP / 7Z / RAR — **7Z and RAR are not currently supported;
+  the run always writes a `.zip`**, with the other formats planned for a future
+  release) and **Include dataset .csv** — when ticked, each data set's portable
   StarPost CSV (identical to the Data tab's **Export Data** file) is written into
   its folder in the archive, ready to re-import. Alongside sit read-only
   **Reports**, **Plots** and **Scenes** lists mirroring the other tabs; right-click
