@@ -282,7 +282,7 @@ def test_batch_run_dialog_source_row_click_toggles(app):
 
 def test_batch_run_dialog_reports_tab(app):
     """Reports tab: the window lists every report (all checked); options offer the
-    same file formats as export plus Include units / Separate files."""
+    same file formats as export plus Include units."""
     from PySide6.QtCore import Qt
 
     from starpost.gui.views.batch_run_dialog import BatchRunDialog
@@ -298,7 +298,7 @@ def test_batch_run_dialog_reports_tab(app):
     fmts = [dlg._report_format.itemText(i) for i in range(dlg._report_format.count())]
     assert fmts == ["CSV", "TSV", "XLSX", "ODS"]
     assert dlg._report_include_units.isChecked()
-    assert not dlg._report_separate_files.isChecked()
+    assert not hasattr(dlg, "_report_separate_files")  # removed: archive folders separate them
     # Select All / Clear flip every report's checkbox.
     dlg._set_all_reports(False)
     assert all(

@@ -975,9 +975,8 @@ class BatchRunDialog(QDialog):
 
     # --- Reports tab ------------------------------------------------------
     def _build_reports_tab(self) -> QWidget:
-        """Options on the left (file format, Include units, Separate files); a
-        window on the right listing every report across the sims (checkable, all
-        checked by default)."""
+        """Options on the left (file format, Include units); a window on the right
+        listing every report across the sims (checkable, all checked by default)."""
         tab = QWidget()
 
         self._reports_window = _CheckableList()
@@ -991,14 +990,14 @@ class BatchRunDialog(QDialog):
         self._report_format.addItems(["CSV", "TSV", "XLSX", "ODS"])
         self._report_include_units = QCheckBox("Include units")
         self._report_include_units.setChecked(True)
-        self._report_separate_files = QCheckBox("Separate files")  # no logic yet
+        # No "Separate files" option here (unlike the Export dialog): the batch
+        # archive already keeps each data set's report in its own folder.
 
         options = QVBoxLayout()
         options.addWidget(self._header("Options"))
         options.addWidget(QLabel("File format"))
         options.addWidget(self._report_format)
         options.addWidget(self._report_include_units)
-        options.addWidget(self._report_separate_files)
         options.addStretch(1)
 
         # Select All / Clear for the reports window, right-aligned beneath it.
