@@ -1412,6 +1412,45 @@ def test_render_saved_plot(app, tmp_path):
     assert not missing.exists()
 
 
+def test_render_saved_plot_honours_legend_offset(app, tmp_path):
+    """A saved plot's legend position (a fraction of the plot area) is applied
+    when the batch renders it — the legend lands at the saved offset, not back at
+    its default corner."""
+    from starpost.batch.run import render_saved_plot
+    from starpost.gui.views.plot_view import PlotView
+
+    result = _sim_result_with_data()
+
+    # Capture where the legend actually sits (as a fraction of the plot area) at
+    # export time, without depending on decoding the written image.
+    seen = {}
+    original = PlotView.export
+
+    def spy(self, path, fmt, scale=3.0):
+        vb = self._vb.sceneBoundingRect()
+        lg = self._legend.sceneBoundingRect()
+        seen["frac"] = (
+            (lg.left() - vb.left()) / vb.width(),
+            (lg.top() - vb.top()) / vb.height(),
+        )
+        return original(self, path, fmt, scale)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(PlotView, "export", spy)
+    try:
+        assert render_saved_plot(
+            result,
+            {"monitors": {"Forces": ["Drag"]}, "legend_offset": [0.7, 0.3],
+             "format": "png"},
+            Settings(), tmp_path / "p.png",
+        )
+    finally:
+        monkeypatch.undo()
+
+    fx, fy = seen["frac"]
+    assert abs(fx - 0.7) < 0.02 and abs(fy - 0.3) < 0.02
+
+
 def test_build_batch_archive(app, tmp_path, monkeypatch):
     """The batch archive holds one folder per data set with its report, saved-plot
     image and saved-scene still."""

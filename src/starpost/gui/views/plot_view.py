@@ -642,23 +642,35 @@ class PlotView(QWidget):
         """The legend's position as a fraction (fx, fy) of the plot area, so a
         saved/exported plot can restore it at any render size. None until the plot
         area has a size (nothing laid out yet)."""
-        rect = self._vb.boundingRect()
-        if rect.width() <= 0 or rect.height() <= 0:
+        rect = self._plot_area_rect()
+        if rect is None:
             return None
         p = self._legend.pos()
         return (p.x() / rect.width(), p.y() / rect.height())
 
     def set_legend_offset(self, frac) -> None:
-        """Move the legend to a fractional position from :meth:`legend_offset`
-        (the plot area must already be laid out)."""
+        """Move the legend to a fractional position from :meth:`legend_offset`."""
         if not frac:
             return
-        rect = self._vb.boundingRect()
-        if rect.width() <= 0 or rect.height() <= 0:
+        rect = self._plot_area_rect()
+        if rect is None:
             return
         self._legend.autoAnchor(
             pg.Point(frac[0] * rect.width(), frac[1] * rect.height())
         )
+
+    def _plot_area_rect(self):
+        """The plot (viewbox) rect, or None if it has no size yet. Activates the
+        plot's pending layout first: the legend offset is a fraction of this rect,
+        and callers save/restore it right after a resize or show(), when the
+        layout can still be pending — reading a stale/zero rect then would drop or
+        misplace the legend (e.g. a saved batch plot rendering with the legend
+        back at its default corner)."""
+        self._plot.getPlotItem().layout.activate()
+        rect = self._vb.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return None
+        return rect
 
     def set_line_width(self, width: float) -> None:
         """Set the pen width used for every plotted line and redraw. Applies

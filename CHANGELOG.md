@@ -78,6 +78,11 @@ dialog's saved plots/scenes.
   rather than blocking the launch.
 
 ### Bug Fixes
+- **Run batch saved-plot legend position** — a saved plot's legend position is
+  now applied reliably when the batch renders it (and when a saved plot is
+  reloaded via **Preview**), instead of occasionally snapping back to the
+  default corner: the position is read/restored only once the plot area has its
+  final size, rather than while its layout may still be pending.
 - **Plots tab monitor list** — clicking a monitor group or monitor **name** now
   toggles its checkbox (previously only the small checkbox itself responded),
   matching the app's other checklists.

@@ -1515,16 +1515,18 @@ class BatchRunDialog(QDialog):
             self._line_width.setValue(self._line_width_slider(data["line_width"]))
         # Monitor selection triggers _render_preview (draws the plots + swatches).
         self._monitor_tree.set_selection(data.get("monitors") or {})
-        # Colours and the legend position need the curves drawn first (above).
+        # Colours need the curves drawn first (above).
         self._preview.set_color_overrides(
             data.get("series_colors") or {}, data.get("pair_colors") or {}
         )
-        if data.get("legend_offset"):
-            self._preview.set_legend_offset(data["legend_offset"])
         self._refresh_monitor_swatches()
         # Surface the preview window in case it's hidden or behind the dialog.
         self._preview_window.show()
         self._preview_window.raise_()
+        # Restore the legend position last — once the preview window is shown and
+        # its plot area has its final size (the offset is a fraction of it).
+        if data.get("legend_offset"):
+            self._preview.set_legend_offset(data["legend_offset"])
 
     def _checked_views(self) -> list[str]:
         """The checked saved camera views, in list order."""
