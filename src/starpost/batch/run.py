@@ -3,8 +3,9 @@
 For each selected data set / .sim the batch produces, into a folder named after
 that data set: the selected report table, an image of each saved plot, the
 saved-scene stills and, optionally, the data set's portable CSV (the same file
-the Data tab's Export Data button writes). All the per-data-set folders are then
-packed into a single ``.zip`` written to the user's output folder.
+the Data tab's Export Data button writes). A single report combining every data
+set is also written at the archive root (optional). All the per-data-set folders
+are then packed into a single ``.zip`` written to the user's output folder.
 
 Plots are rendered with a real :class:`PlotView`, so this runs on the GUI thread
 (Qt widgets can't be created off it). Extraction and scene rendering shell out to
@@ -62,6 +63,7 @@ class BatchConfig:
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
     include_dataset_csv: bool = False   # write the portable data-set CSV per folder
+    combined_report: bool = True        # also write one all-sims report at the root
 
 
 def _plot_size(plot_data: dict, default=(1280, 720)) -> tuple[int, int]:
@@ -208,8 +210,10 @@ def build_batch_archive(
     plot_renderer: Optional[Callable[[SimResult, dict, Path], bool]] = None,
 ) -> Path:
     """Produce ``dest_zip`` from ``config``: one folder per data set holding its
-    reports, saved-plot images and saved-scene stills. Reports a 0..1 fraction and
-    the current action to ``progress``. Returns ``dest_zip``.
+    reports, saved-plot images and saved-scene stills, plus (when
+    ``config.combined_report``) a single all-sims report at the archive root.
+    Reports a 0..1 fraction and the current action to ``progress``. Returns
+    ``dest_zip``.
 
     When run off the GUI thread, ``plot_renderer`` renders a saved plot on the GUI
     thread instead (Qt widgets can't be built off it); by default plots render on
@@ -219,14 +223,18 @@ def build_batch_archive(
         lambda result, pdata, path: render_saved_plot(result, pdata, settings, path)
     )
     dest_zip = Path(dest_zip)
+    combined = bool(config.reports and config.combined_report)
     steps = _Steps(
-        sum(_source_steps(config, s) for s in config.sources) + 1,  # +1 = packaging
+        sum(_source_steps(config, s) for s in config.sources)
+        + (1 if combined else 0)   # the combined all-sims report
+        + 1,                       # packaging
         progress,
     )
     total = len(config.sources)
     with tempfile.TemporaryDirectory(prefix="starpost_batch_") as tmp:
         out_root = Path(tmp) / "out"     # this gets zipped
         work_root = Path(tmp) / "work"   # extraction scratch, not zipped
+        combined_results: list[SimResult] = []  # the valid ones, for the root report
         for i, source in enumerate(config.sources):
             log(f"--- {source.name} ({i + 1}/{total}) ---")
             planned = _source_steps(config, source)
@@ -246,6 +254,7 @@ def build_batch_archive(
                     f"{result.error if result else 'no data'}")
                 steps.advance(planned - (steps.done - done_before))  # skip the rest
                 continue
+            combined_results.append(result)
 
             if config.reports:
                 steps.at(f"Writing reports for {source.name}…")
@@ -288,6 +297,18 @@ def build_batch_archive(
                             sdata.get("views") or [], log_sink=log,
                         )
                     steps.advance()
+
+        # One report at the archive root combining every data set (columns are
+        # the sims), alongside the per-folder individual reports written above.
+        if combined and combined_results:
+            steps.at("Writing combined report…")
+            df = reports_long_frame(
+                combined_results, config.reports, config.include_units
+            )
+            cpath = out_root / f"reports_combined.{config.report_format.lower()}"
+            write_report_table(df, cpath, config.report_format)
+            log(f"combined report -> {cpath.name}")
+            steps.advance()
 
         steps.at("Packaging archive…")
         _zip_dir(out_root, dest_zip)

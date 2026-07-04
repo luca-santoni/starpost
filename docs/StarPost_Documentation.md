@@ -617,7 +617,10 @@ Settings → Profiles → **Batch profiles**.
   Plots / Scenes choices (assuming every file shares the same reports, plots and
   scenes), so you can configure the run without extracting all of them first.
 - **Reports** — a checklist of every report (all ticked by default), plus
-  **File format** (CSV / TSV / XLSX / ODS) and **Include units**.
+  **File format** (CSV / TSV / XLSX / ODS), **Include units**, and **Combined
+  report** (on by default) — which also writes one report combining every data
+  set (one column per sim) at the archive root, alongside the per-data-set report
+  files in their folders.
 - **Plots** — the same monitor tree, per-monitor colour swatches, live preview
   window and plot options as the Export dialog's Plots tab. **Add Plot** captures
   the current setup as a named entry in the **Saved Plots** list (each remembers
@@ -642,7 +645,8 @@ Settings → Profiles → **Batch profiles**.
 
 **Batch run** then extracts/renders as needed and writes a **single archive**
 containing **one folder per data set**, each holding its report table, an image
-of every saved plot, the saved-scene stills, and (if enabled) the data set's CSV.
+of every saved plot, the saved-scene stills, and (if enabled) the data set's CSV
+— plus, when **Combined report** is on, one all-sims report at the archive root.
 A progress dialog tracks the run; STAR-CCM+ is only invoked when a `.sim` source
 must be extracted or a scene rendered.
 

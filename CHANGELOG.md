@@ -32,6 +32,9 @@ dialog's saved plots/scenes.
   when ticked, each data set's portable StarPost CSV (the same file the Data
   tab's **Export Data** button writes) is added to its folder in the output
   archive, ready to re-import.
+- **Run batch → Reports tab** — a new **"Combined report"** option (on by
+  default): as well as each data set's own report in its folder, one report
+  combining every data set (a column per sim) is written at the archive root.
 - **Multi-select in lists** — selectable lists (the scene gallery, the Files /
   Data trees, and the Run-batch and Profile-details lists) now support
   **Shift+click** to select a range and **Ctrl+click** to toggle items, matching

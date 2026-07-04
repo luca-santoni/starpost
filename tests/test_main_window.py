@@ -299,6 +299,7 @@ def test_batch_run_dialog_reports_tab(app):
     assert fmts == ["CSV", "TSV", "XLSX", "ODS"]
     assert dlg._report_include_units.isChecked()
     assert not hasattr(dlg, "_report_separate_files")  # removed: archive folders separate them
+    assert dlg._report_combined.isChecked()  # Combined report on by default
     # Select All / Clear flip every report's checkbox.
     dlg._set_all_reports(False)
     assert all(
@@ -1498,6 +1499,56 @@ def test_build_batch_archive_includes_dataset_csv(app, tmp_path):
     assert [p.name for p in loaded.plots] == ["Forces"]
 
 
+def test_build_batch_archive_combined_report(app, tmp_path):
+    """With combined_report (the default), one all-sims report is written at the
+    archive root (one column per sim), alongside each data set's own report."""
+    import zipfile
+
+    from starpost.data.models import Report, SimResult
+    import starpost.batch.run as run
+
+    a = SimResult(sim_path="/c/caseA.sim", reports=[Report("Drag", 1.5, units="N")])
+    b = SimResult(sim_path="/c/caseB.sim", reports=[Report("Drag", 2.5, units="N")])
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=a),
+                 run.BatchSource(name="caseB", result=b)],
+        reports={"Drag"}, report_format="csv", include_units=True,
+    )
+    dest = tmp_path / "batch.zip"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    with zipfile.ZipFile(dest) as zf:
+        names = set(zf.namelist())
+        combined = zf.read("reports_combined.csv").decode().strip().splitlines()
+    # The combined report sits at the root (no folder prefix); the per-data-set
+    # reports still live in their own folders.
+    assert "reports_combined.csv" in names
+    assert {"caseA/reports.csv", "caseB/reports.csv"} <= names
+    # One "Report" column then one column per sim; one row per report.
+    assert combined[0] == "Report,caseA,caseB"
+    assert combined[1] == "Drag [N],1.5,2.5"
+
+
+def test_build_batch_archive_combined_report_off(app, tmp_path):
+    """combined_report=False writes no root report; per-folder ones stay."""
+    import zipfile
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv", combined_report=False,
+    )
+    dest = tmp_path / "batch.zip"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    with zipfile.ZipFile(dest) as zf:
+        names = set(zf.namelist())
+    assert "caseA/reports.csv" in names
+    assert not any(n.startswith("reports_combined") for n in names)
+
+
 def test_build_batch_archive_extracts_sim_sources(app, tmp_path, monkeypatch):
     """A .sim source (no preloaded result) is extracted during the run."""
     from pathlib import Path
@@ -1546,6 +1597,7 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
     plot.setData(Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"})
     dlg._saved_plots.addItem(plot)
     dlg._include_dataset_csv.setChecked(True)
+    dlg._report_combined.setChecked(False)  # verify the checkbox is read, not defaulted
 
     captured = {}
 
@@ -1570,6 +1622,7 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
     assert cfg.reports == {"Drag"}
     assert [e["name"] for e in cfg.saved_plots] == ["Drag plot"]
     assert cfg.include_dataset_csv is True
+    assert cfg.combined_report is False
     assert captured["dest"].parent == tmp_path and captured["dest"].suffix == ".zip"
     assert dlg.result() == QDialog.DialogCode.Accepted
     dlg.close()

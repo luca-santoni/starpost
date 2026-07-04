@@ -975,8 +975,9 @@ class BatchRunDialog(QDialog):
 
     # --- Reports tab ------------------------------------------------------
     def _build_reports_tab(self) -> QWidget:
-        """Options on the left (file format, Include units); a window on the right
-        listing every report across the sims (checkable, all checked by default)."""
+        """Options on the left (file format, Include units, Combined report); a
+        window on the right listing every report across the sims (checkable, all
+        checked by default)."""
         tab = QWidget()
 
         self._reports_window = _CheckableList()
@@ -992,12 +993,19 @@ class BatchRunDialog(QDialog):
         self._report_include_units.setChecked(True)
         # No "Separate files" option here (unlike the Export dialog): the batch
         # archive already keeps each data set's report in its own folder.
+        self._report_combined = QCheckBox("Combined report")
+        self._report_combined.setToolTip(
+            "Also write one report combining every data set (one column per sim) "
+            "at the archive root, alongside the per-data-set report files"
+        )
+        self._report_combined.setChecked(True)  # on by default
 
         options = QVBoxLayout()
         options.addWidget(self._header("Options"))
         options.addWidget(QLabel("File format"))
         options.addWidget(self._report_format)
         options.addWidget(self._report_include_units)
+        options.addWidget(self._report_combined)
         options.addStretch(1)
 
         # Select All / Clear for the reports window, right-aligned beneath it.
@@ -1847,6 +1855,7 @@ class BatchRunDialog(QDialog):
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
             include_dataset_csv=include_dataset_csv,
+            combined_report=self._report_combined.isChecked(),
         )
         runner = StarRunner(self._settings) if self._settings else None
 
