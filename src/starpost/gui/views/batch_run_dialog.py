@@ -537,6 +537,72 @@ class _BatchRunWorker(QObject):
         self._render_done.set()
 
 
+class _BatchProgressReceiver(QObject):
+    """Hosts the progress/render slots on a QObject constructed on the GUI
+    thread (and never moved), so Qt's auto connection type resolves
+    ``worker.progress``/``worker.render_request`` to queued connections —
+    connecting to a context-less plain function instead would make Qt pick a
+    direct connection, running the slot on the worker thread. That matters
+    for the render slot: ``render_saved_plot`` builds a ``PlotView`` (a Qt
+    widget), which must be constructed on the GUI thread."""
+
+    def __init__(
+        self, busy: QProgressDialog, settings, worker: "_BatchRunWorker"
+    ) -> None:
+        super().__init__()
+        self._busy = busy
+        self._settings = settings
+        self._worker = worker
+
+    def on_progress(self, fraction: float, message: str) -> None:
+        self._busy.setValue(round(fraction * 100))
+        self._busy.setLabelText(message)
+
+    def on_render(self, result, plot_data, path) -> None:
+        from starpost.batch.run import render_saved_plot
+
+        rendered = False
+        try:
+            rendered = render_saved_plot(result, plot_data, self._settings, path)
+        finally:
+            self._worker.finish_render(rendered)
+
+
+def execute_batch(parent, config, settings, runner, dest) -> str | None:
+    """Run ``config`` behind a modal progress dialog on a worker thread, rendering
+    saved plots back on the GUI thread (Qt widgets can't be built off it). Returns
+    the worker's error string, or None on success. Blocks (a local event loop)
+    while the modal progress dialog stays painted."""
+    busy = QProgressDialog("Preparing…", "", 0, 100, parent)
+    busy.setWindowTitle("Run batch")
+    busy.setCancelButton(None)
+    busy.setWindowModality(Qt.WindowModality.WindowModal)
+    busy.setMinimumDuration(0)
+    busy.setAutoClose(False)
+    busy.setAutoReset(False)
+    busy.setValue(0)
+
+    thread = QThread(parent)
+    worker = _BatchRunWorker(config, settings, runner, dest)
+    worker.moveToThread(thread)
+
+    # Constructed here (GUI thread) and never moved, so its bound-method slots
+    # connect queued and run back on the GUI thread — see the class docstring.
+    receiver = _BatchProgressReceiver(busy, settings, worker)
+    worker.progress.connect(receiver.on_progress)     # queued → GUI
+    worker.render_request.connect(receiver.on_render) # queued → GUI
+    loop = QEventLoop()
+    worker.done.connect(loop.quit)                   # queued → GUI
+    thread.started.connect(worker.run)
+    thread.start()
+    busy.show()
+    loop.exec()
+    thread.quit()
+    thread.wait()
+    busy.close()
+    return worker.error
+
+
 class SourcePanel(QWidget):
     """Source tab content: the source-mode dropdown, load buttons, a checkable
     source list, select/clear, and source-resolution helpers. Standalone so it
@@ -738,9 +804,6 @@ class BatchRunDialog(QDialog):
         # The .sim already extracted to set up the tabs (via "Has similar format"),
         # so re-pressing Continue doesn't re-check out a license for the same file.
         self._setup_sim_extracted: Path | None = None
-        # Live only during a batch run (worker thread + its progress dialog).
-        self._batch_worker: _BatchRunWorker | None = None
-        self._busy: QProgressDialog | None = None
 
         self._tabs = QTabWidget()
         bar = _LockedTabBar()
@@ -1896,64 +1959,12 @@ class BatchRunDialog(QDialog):
             archive_format=fmt,
         )
         runner = StarRunner(self._settings) if self._settings else None
-
-        busy = QProgressDialog("Preparing…", "", 0, 100, self)
-        busy.setWindowTitle("Run batch")
-        busy.setCancelButton(None)
-        busy.setWindowModality(Qt.WindowModality.WindowModal)
-        busy.setMinimumDuration(0)
-        busy.setAutoClose(False)
-        busy.setAutoReset(False)
-        busy.setValue(0)
-        self._busy = busy
-
-        # Run on a worker thread so the GUI event loop stays alive: the progress
-        # bar paints/updates and the file dialog tears down. A local event loop
-        # waits for it while the wizard stays blocked (busy is modal). Each saved
-        # plot is rendered back on this (GUI) thread via render_request.
-        thread = QThread(self)
-        worker = _BatchRunWorker(config, self._settings, runner, dest)
-        worker.moveToThread(thread)
-        self._batch_worker = worker
-        worker.progress.connect(self._on_batch_progress)             # queued → GUI
-        worker.render_request.connect(self._render_plot_for_worker)  # queued → GUI
-        loop = QEventLoop()
-        worker.done.connect(loop.quit)                               # queued → GUI
-        thread.started.connect(worker.run)
-        thread.start()
-        busy.show()
-        loop.exec()
-        thread.quit()
-        thread.wait()
-        busy.close()
-        self._busy = None
-        self._batch_worker = None
-
-        if worker.error is not None:
-            QMessageBox.critical(self, "Run batch failed", worker.error)
+        error = execute_batch(self, config, self._settings, runner, dest)
+        if error is not None:
+            QMessageBox.critical(self, "Run batch failed", error)
             return
         QMessageBox.information(self, "Run batch", f"Batch written to:\n{dest}")
         self.accept()
-
-    def _on_batch_progress(self, fraction: float, message: str) -> None:
-        """Update the run progress dialog — runs on the GUI thread (queued from the
-        worker), so the 0–100 bar and action label stay live during the run."""
-        if self._busy is not None:
-            self._busy.setValue(round(fraction * 100))  # 0–100
-            self._busy.setLabelText(message)
-
-    def _render_plot_for_worker(self, result, plot_data, path) -> None:
-        """Render one saved plot on the GUI thread (a Qt widget can't be built off
-        it), then wake the worker — queued from the worker's render_request."""
-        from starpost.batch.run import render_saved_plot
-
-        worker = self._batch_worker
-        rendered = False
-        try:
-            rendered = render_saved_plot(result, plot_data, self._settings, path)
-        finally:
-            if worker is not None:
-                worker.finish_render(rendered)
 
     def _retreat(self) -> None:
         """Back moves to the previous tab (disabled on the first)."""
