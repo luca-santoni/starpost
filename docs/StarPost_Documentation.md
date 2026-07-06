@@ -657,6 +657,42 @@ must be extracted or a scene rendered.
 > **Ctrl+click** (toggle); the checkbox lists also support **Shift+click to tick
 > a range** (see the [Data panel](#34-data-panel)).
 
+### 3.9b Express batch dialog
+
+Opened from the toolbar **Run batch → Express batch**. This is the fast path for
+users who already have a saved **batch profile**: rather than stepping through the
+five-tab wizard, you pick a profile and sources, set the archive options, and run.
+The profile supplies everything about the output — the reports (with their
+**report format**, **Include units** and **Combined report** settings), the saved
+plots, and the saved scenes.
+
+**Layout (top to bottom):**
+
+- **Batch profile** — a selector listing the saved batch profiles (the same ones
+  used by the [Run batch dialog](#39a-run-batch-dialog) and Settings → Profiles →
+  **Batch profiles**). Choosing a profile is **required**: the **Batch run** button
+  stays disabled until one is selected. If no batch profiles exist yet, a note
+  directs you to create one in **Full Batch**.
+- **Sources** — the same source picker as the wizard's **Source** tab: choose
+  **`.sim files`** or **`Loaded data sets`**, load candidates (**Load Files** /
+  **Load Data Set**), tick which to include, and use **Select All** / **Clear**.
+  There is **no "Has similar format"** step here — the profile already defines the
+  outputs, so no file needs to be extracted up front to configure the run.
+- **Export options** (in the Options column, beneath the source input) — the
+  **Archive format** selector (**ZIP** or **7Z**) and **Include dataset .csv**
+  (each data set's portable StarPost CSV, added to its folder in the archive),
+  matching the wizard's Summary tab.
+- **Batch run** — starts the run.
+
+**Batch run** produces the **same output** as the wizard: a **single archive**
+(ZIP or 7Z, as chosen) with **one folder per data set**, each holding its report
+table, an image of every saved plot, the saved-scene stills, and (if enabled) the
+data set's CSV — plus, when the profile's **Combined report** is on, one all-sims
+report at the archive root. As in the wizard, STAR-CCM+ is invoked only when a
+`.sim` source must be extracted or a scene rendered (its executable path must be
+set in Settings), and the run warns on **No data selected** or when the chosen
+profile yields **nothing to output**.
+
 ### 3.10 Settings dialog
 
 Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
