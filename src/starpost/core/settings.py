@@ -400,6 +400,9 @@ class BatchProfile:
     selected_reports: list[str] = field(default_factory=list)
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
+    report_format: str = "CSV"       # CSV | TSV | XLSX | ODS
+    include_units: bool = True
+    combined_report: bool = True
 
     def path(self) -> Path:
         return batch_profiles_dir() / f"{self.name}.yaml"
@@ -410,6 +413,9 @@ class BatchProfile:
             "selected_reports": list(self.selected_reports),
             "saved_plots": [_plot_entry_to_yaml(e) for e in self.saved_plots],
             "saved_scenes": list(self.saved_scenes),
+            "report_format": self.report_format,
+            "include_units": self.include_units,
+            "combined_report": self.combined_report,
         }
         self.path().write_text(
             yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
@@ -427,6 +433,9 @@ class BatchProfile:
                 _plot_entry_from_yaml(e) for e in data.get("saved_plots", [])
             ],
             saved_scenes=list(data.get("saved_scenes", [])),
+            report_format=str(data.get("report_format", "CSV")),
+            include_units=bool(data.get("include_units", True)),
+            combined_report=bool(data.get("combined_report", True)),
         )
 
 

@@ -120,3 +120,29 @@ def test_profile_without_region_stats_is_none(isolated_profiles):
     )
 
     assert Profile.load("legacy").region_stats is None
+
+
+def test_batch_profile_round_trips_report_settings():
+    import starpost.core.settings as cfg
+
+    cfg.BatchProfile(
+        name="Nightly", selected_reports=["Drag"],
+        report_format="XLSX", include_units=False, combined_report=False,
+    ).save()
+    loaded = cfg.BatchProfile.load("Nightly")
+    assert loaded.report_format == "XLSX"
+    assert loaded.include_units is False
+    assert loaded.combined_report is False
+
+
+def test_batch_profile_defaults_when_keys_absent():
+    import starpost.core.settings as cfg
+    from starpost.utils.paths import batch_profiles_dir
+
+    d = batch_profiles_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "Old.yaml").write_text("name: Old\nselected_reports:\n- A\n", encoding="utf-8")
+    loaded = cfg.BatchProfile.load("Old")
+    assert loaded.report_format == "CSV"
+    assert loaded.include_units is True
+    assert loaded.combined_report is True
