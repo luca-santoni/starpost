@@ -2138,6 +2138,43 @@ def test_clear_item_view_hover_delivers_leave_conditionally(app, monkeypatch):
     assert seen == []
 
 
+def test_tree_empty_space_click_clears_selection(app):
+    """Clicking blank space in the Files/Data trees deselects the last-clicked
+    item, so its highlight doesn't linger (the view otherwise keeps it selected)."""
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QTreeWidgetItem
+
+    import starpost.gui.views.data_list as dl
+    import starpost.gui.views.file_list as fl
+
+    def click(tree, pt):
+        for kind in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+            ev = QMouseEvent(
+                kind, QPointF(pt), Qt.MouseButton.LeftButton,
+                Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+            )
+            QApplication.sendEvent(tree.viewport(), ev)
+
+    for make in (fl._FileTree, dl._DataTree):
+        tree = make()
+        tree.setColumnCount(1)
+        for name in ("a", "b", "c"):
+            tree.addTopLevelItem(QTreeWidgetItem([name]))
+        tree.resize(200, 300)
+        tree.show()
+        item0 = tree.topLevelItem(0)
+        item0.setSelected(True)
+        tree.setCurrentItem(item0)
+        assert len(tree.selectedItems()) == 1
+
+        click(tree, QPoint(20, 260))  # blank space below the three rows
+
+        assert tree.selectedItems() == []
+        assert tree.currentIndex().isValid() is False
+        tree.close()
+
+
 def test_file_and_data_panels_clear_hover_after_context_menu(app, monkeypatch):
     """The Files and Data context-menu slots clear the tree's leftover hover once
     the menu returns — via the wrapper's finally, so every branch is covered."""

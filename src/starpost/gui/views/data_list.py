@@ -203,6 +203,11 @@ class _DataTree(QTreeWidget):
             and self._on_check_indicator(self._press_item, pos)
         )
         super().mousePressEvent(event)  # selection + (on move) drag start
+        # A click in empty space clears the selection and current row, so no
+        # highlight lingers on the previously clicked item.
+        if self._press_item is None:
+            self.clearSelection()
+            self.setCurrentItem(None)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().mouseReleaseEvent(event)

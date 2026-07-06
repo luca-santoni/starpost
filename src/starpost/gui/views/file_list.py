@@ -153,6 +153,16 @@ class _FileTree(QTreeWidget):
         super().dropEvent(event)
         self.dropped.emit()
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().mousePressEvent(event)
+        # A click in empty space clears the selection and current row: the view
+        # otherwise leaves the last-clicked item selected, so its highlight
+        # lingers (fading only while the window is inactive) until another item
+        # is clicked.
+        if self.itemAt(event.position().toPoint()) is None:
+            self.clearSelection()
+            self.setCurrentItem(None)
+
     def _drop_parent(self, event) -> QTreeWidgetItem | None:
         """The folder a drop would land in (None = top level), from the drop
         indicator: onto a folder nests into it; onto a file, or between rows,
