@@ -308,6 +308,8 @@ class HoverMenuToolButton(QToolButton):
 
     def enterEvent(self, event):
         super().enterEvent(event)
+        if not self.isEnabled():
+            return
         menu = self.menu()
         if menu is not None and not menu.isVisible():
             self.showMenu()

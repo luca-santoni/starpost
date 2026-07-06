@@ -686,6 +686,10 @@ class SourcePanel(QWidget):
         """The selected source mode: ``"sim"`` or ``"data"``."""
         return self._source_input.currentData()
 
+    def similar_format_checked(self) -> bool:
+        """Whether the 'Has similar format' box is ticked (always False when hidden)."""
+        return self._has_similar_format.isChecked()
+
     def _refresh_source_window(self) -> None:
         """Rebuild the right-hand window for the selected source — the loaded .sim
         files in '.sim files' mode, the data sets in 'Loaded data sets' mode —
@@ -1895,7 +1899,7 @@ class BatchRunDialog(QDialog):
                 )
                 return
             sim_mode = self._source_panel.current_mode() == "sim"
-            if sim_mode and self._source_panel._has_similar_format.isChecked():
+            if sim_mode and self._source_panel.similar_format_checked():
                 if not self._extract_setup_sim():
                     return  # extraction failed or was unavailable; stay put
         if self._on_summary():
