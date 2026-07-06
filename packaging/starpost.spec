@@ -28,7 +28,20 @@ a = Analysis(
         (str(root / "src" / "starpost" / "gui" / "resources"), "starpost/gui/resources"),
         (str(root / "config" / "default_settings.yaml"), "config"),
     ],
-    hiddenimports=["pyqtgraph"],
+    # pyqtgraph, plus py7zr's compression backends. py7zr resolves its codec
+    # modules dynamically (compressor.py does `import bcj` / `inflate64` /
+    # `pyppmd` at import time, `brotli` behind a try/except), which PyInstaller's
+    # static analysis can miss — without these the 7Z "Run batch" export fails in
+    # the bundle with ModuleNotFoundError even though it works from source.
+    hiddenimports=[
+        "pyqtgraph",
+        "py7zr",
+        "bcj",
+        "inflate64",
+        "pyppmd",
+        "multivolumefile",
+        "brotli",
+    ],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
