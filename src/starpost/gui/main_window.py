@@ -20,12 +20,14 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSizePolicy,
     QSplitter,
     QStyle,
     QTabWidget,
     QToolBar,
+    QToolButton,
     QWidget,
     QVBoxLayout,
 )
@@ -38,7 +40,7 @@ from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon
-from starpost.gui.widgets import UniformTabBar
+from starpost.gui.widgets import HoverMenuToolButton, UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
@@ -315,10 +317,20 @@ class MainWindow(QMainWindow):
         tb = QToolBar("Main")
         self.addToolBar(tb)
 
-        self._run_action = tb.addAction("Run batch", self._run_batch)
-        self._run_action.setToolTip(
-            "Extract reports and plots from every .sim file in the list"
+        self._run_button = HoverMenuToolButton()
+        self._run_button.setText("Run batch")
+        self._run_button.setAutoRaise(True)
+        self._run_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._run_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._run_button.setToolTip(
+            "Run a batch export: Full Batch (full wizard) or Express batch "
+            "(run a saved profile)"
         )
+        run_menu = QMenu(self._run_button)
+        run_menu.addAction("Full Batch", self._run_batch)
+        run_menu.addAction("Express batch", self._run_express_batch)
+        self._run_button.setMenu(run_menu)
+        tb.addWidget(self._run_button)
         tb.addSeparator()
         export_action = tb.addAction("Export…", self._export)
         export_action.setToolTip("Export the selected reports and plots to files")
@@ -385,6 +397,16 @@ class MainWindow(QMainWindow):
             self, data_sets=data_sets, report_names=report_names,
             monitor_groups=monitor_groups, residual_groups=residual_groups,
             results=results, settings=self.settings,
+        ).exec()
+
+    def _run_express_batch(self) -> None:
+        """Open the Express batch dialog — run a saved batch profile quickly."""
+        from starpost.gui.views.express_batch_dialog import ExpressBatchDialog
+
+        results = [r for r in self.store.all() if r.error is None]
+        data_sets = [r.sim_name for r in results]
+        ExpressBatchDialog(
+            self, data_sets=data_sets, results=results, settings=self.settings,
         ).exec()
 
     def _open_files(self, paths: list[Path]) -> None:
@@ -491,7 +513,7 @@ class MainWindow(QMainWindow):
         # Show the counter (0/N) and a sliver of progress right away, before the
         # first file finishes extracting.
         self.log_console.start_progress(len(jobs))
-        self._run_action.setEnabled(False)
+        self._run_button.setEnabled(False)
         self._thread.start()
 
     def _on_sim_done(self, _result=None) -> None:
@@ -499,7 +521,7 @@ class MainWindow(QMainWindow):
         self._refresh_from_store()
 
     def _on_batch_finished(self) -> None:
-        self._run_action.setEnabled(True)
+        self._run_button.setEnabled(True)
         self._check_homogeneity()
         self._refresh_from_store()
         self.log_console.finish_progress()  # fade the counter/bar out shortly

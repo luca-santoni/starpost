@@ -2010,3 +2010,22 @@ def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
     assert cfg.archive_format == "7z"
     assert cfg.include_dataset_csv is True
     assert [s.name for s in cfg.sources] == ["caseA"]
+
+
+def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):
+    import starpost.gui.main_window as mw
+
+    win = mw.MainWindow(Settings())
+    labels = [a.text() for a in win._run_button.menu().actions()]
+    assert labels == ["Full Batch", "Express batch"]
+
+    opened = {}
+    import starpost.gui.views.express_batch_dialog as ebd
+
+    class _Fake:
+        def __init__(self, *a, **k): opened["express"] = True
+        def exec(self): return 0
+
+    monkeypatch.setattr(ebd, "ExpressBatchDialog", _Fake)
+    win._run_express_batch()
+    assert opened.get("express") is True
