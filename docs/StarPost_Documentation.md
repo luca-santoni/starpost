@@ -595,7 +595,7 @@ monitor selections to the dialog.
 
 ### 3.9a Run batch dialog
 
-Opened from the toolbar **Run batch**. Unlike the [Export dialog](#39-export-dialog)
+Opened from the toolbar **Run batch → Full Batch**. Unlike the [Export dialog](#39-export-dialog)
 (which writes the current view), this is a **guided wizard** that assembles a
 self-contained **archive** of extracted data. It steps through **five tabs** in
 order — **Source → Reports → Plots → Scenes → Summary** — advanced with the
@@ -604,10 +604,12 @@ tab); **Back** returns to the previous tab. The tab bar itself is locked, so the
 wizard is always driven by these buttons.
 
 **Batch profile bar (top).** A **Batch profile** selector with **Load** and
-**Save as…** stores a whole Run-batch setup — the chosen reports, and the saved
-plots and scenes — under a name for reuse. These batch profiles are **separate**
-from the report/plot profiles used by the main view, and are also listed under
-Settings → Profiles → **Batch profiles**.
+**Save as…** stores a whole Run-batch setup — the chosen reports (along with the
+**report format**, **Include units** and **Combined report** settings), and the
+saved plots and scenes — under a name for reuse, so loading a profile restores all
+of them. These batch profiles are **separate** from the report/plot profiles used
+by the main view, and are also listed under Settings → Profiles →
+**Batch profiles**.
 
 **The tabs:**
 
@@ -635,9 +637,8 @@ Settings → Profiles → **Batch profiles**.
   right-click one for **Properties** (its resolution/format, saved views, and each
   captured scene with its scalar/vector displayers) or **Delete**.
 - **Summary** — a final review before the run. **Export options**: the **Archive
-  format** selector (ZIP / 7Z / RAR — **7Z and RAR are not currently supported;
-  the run always writes a `.zip`**, with the other formats planned for a future
-  release) and **Include dataset .csv** — when ticked, each data set's portable
+  format** selector (**ZIP** or **7Z**) — the run writes the chosen format (a
+  `.zip` or a `.7z`) — and **Include dataset .csv** — when ticked, each data set's portable
   StarPost CSV (identical to the Data tab's **Export Data** file) is written into
   its folder in the archive, ready to re-import. Alongside sit read-only
   **Reports**, **Plots** and **Scenes** lists mirroring the other tabs; right-click
@@ -645,7 +646,8 @@ Settings → Profiles → **Batch profiles**.
   from its source Saved list).
 
 **Batch run** then extracts/renders as needed and writes a **single archive**
-containing **one folder per data set**, each holding its report table, an image
+(ZIP or 7Z, as chosen on the Summary tab) containing **one folder per data set**,
+each holding its report table, an image
 of every saved plot, the saved-scene stills, and (if enabled) the data set's CSV
 — plus, when **Combined report** is on, one all-sims report at the archive root.
 A progress dialog tracks the run; STAR-CCM+ is only invoked when a `.sim` source
