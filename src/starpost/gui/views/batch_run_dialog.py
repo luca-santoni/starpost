@@ -537,6 +537,187 @@ class _BatchRunWorker(QObject):
         self._render_done.set()
 
 
+class SourcePanel(QWidget):
+    """Source tab content: the source-mode dropdown, load buttons, a checkable
+    source list, select/clear, and source-resolution helpers. Standalone so it
+    can be embedded by both the full Run-batch dialog and (later) the Express
+    batch dialog."""
+
+    def __init__(
+        self, parent=None, *, data_sets=None, results=None, show_similar_format=True,
+    ) -> None:
+        super().__init__(parent)
+        self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
+        self._sim_files: list[Path] = []          # .sim files added via Load File
+        self._results = list(results or [])       # SimResults, for source resolution
+        self._show_similar_format = show_similar_format
+
+        self._source_input = QComboBox()
+        self._source_input.addItem(".sim files", "sim")
+        self._source_input.addItem("Loaded data sets", "data")
+        self._source_input.currentIndexChanged.connect(self._refresh_source_window)
+        # When checked, the batch is set up from a single representative .sim file
+        # (reports/monitors/scenes/views come from it, since the rest share its
+        # format). Only meaningful for .sim sources, so it's disabled in data mode.
+        self._has_similar_format = QCheckBox("Has similar format")
+        self._has_similar_format.setToolTip(
+            "Set the batch up from the first .sim file; the other files share its "
+            "reports, monitors, scenes and saved views."
+        )
+
+        options = QVBoxLayout()
+        options.addWidget(self._header("Options"))
+        options.addWidget(QLabel("Source input"))
+        options.addWidget(self._source_input)
+        if show_similar_format:
+            options.addWidget(self._has_similar_format)
+        else:
+            # Still exists (callers may still reference it), just never shown.
+            self._has_similar_format.setVisible(False)
+        options.addStretch(1)
+
+        self._source_window = _CheckableList()
+
+        # Load File / Load Data Set are mutually exclusive (one per source mode);
+        # Select All / Clear act on the window's checkboxes.
+        self._load_file_btn = QPushButton("Load Files")
+        self._load_file_btn.setToolTip("Add .sim files to the source list")
+        self._load_file_btn.clicked.connect(self._load_files)
+        self._load_dataset_btn = QPushButton("Load Data Set")
+        self._load_dataset_btn.setToolTip("Add StarPost data CSVs to the source list")
+        self._load_dataset_btn.clicked.connect(self._load_data_sets)
+        select_all = QPushButton("Select All")
+        select_all.clicked.connect(lambda: self._set_all_source(True))
+        clear = QPushButton("Clear")
+        clear.clicked.connect(lambda: self._set_all_source(False))
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(self._load_file_btn)
+        buttons.addWidget(self._load_dataset_btn)
+        buttons.addStretch(1)
+        buttons.addWidget(select_all)
+        buttons.addWidget(clear)
+
+        right = QVBoxLayout()
+        right.addWidget(self._header("Sources"))
+        right.addWidget(self._source_window)
+        right.addLayout(buttons)
+
+        row = QHBoxLayout(self)
+        row.addLayout(options, 1)
+        row.addLayout(right, 2)
+
+        self._refresh_source_window()
+
+    @staticmethod
+    def _header(text: str) -> QLabel:
+        """A bold section header label."""
+        label = QLabel(text)
+        label.setStyleSheet("font-weight: bold;")
+        return label
+
+    def current_mode(self) -> str:
+        """The selected source mode: ``"sim"`` or ``"data"``."""
+        return self._source_input.currentData()
+
+    def _refresh_source_window(self) -> None:
+        """Rebuild the right-hand window for the selected source — the loaded .sim
+        files in '.sim files' mode, the data sets in 'Loaded data sets' mode —
+        preserving each entry's check state, and show the matching Load button."""
+        mode = self._source_input.currentData()
+        self._load_file_btn.setVisible(mode == "sim")
+        self._load_dataset_btn.setVisible(mode == "data")
+        # "Has similar format" only applies to .sim sources; gray it out otherwise.
+        self._has_similar_format.setEnabled(mode == "sim")
+
+        prev = {
+            self._source_window.item(i).text(): self._source_window.item(i).checkState()
+            for i in range(self._source_window.count())
+        }
+        self._source_window.clear()
+        names = (
+            [p.name for p in self._sim_files] if mode == "sim" else list(self._data_sets)
+        )
+        for name in names:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(prev.get(name, Qt.CheckState.Checked))
+            self._source_window.addItem(item)
+
+    def _set_all_source(self, checked: bool) -> None:
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for i in range(self._source_window.count()):
+            self._source_window.item(i).setCheckState(state)
+
+    def has_checked(self) -> bool:
+        """Whether at least one source entry is checked in the current window."""
+        return any(
+            self._source_window.item(i).checkState() == Qt.CheckState.Checked
+            for i in range(self._source_window.count())
+        )
+
+    def checked_sim_files(self) -> list[Path]:
+        """The loaded .sim files whose source-window rows are checked, in order."""
+        checked = {
+            self._source_window.item(i).text()
+            for i in range(self._source_window.count())
+            if self._source_window.item(i).checkState() == Qt.CheckState.Checked
+        }
+        return [p for p in self._sim_files if p.name in checked]
+
+    def _load_files(self) -> None:
+        """Load File: add .sim files to the source list (visible in '.sim files')."""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Load .sim files", "", "STAR-CCM+ sim (*.sim)"
+        )
+        existing = {str(p) for p in self._sim_files}
+        for p in paths:
+            if p not in existing:
+                self._sim_files.append(Path(p))
+                existing.add(p)
+        self._refresh_source_window()
+
+    def _load_data_sets(self) -> None:
+        """Load Data Set: add StarPost data CSVs to the source list (visible in
+        'Loaded data sets')."""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Load StarPost data CSVs", "", "CSV file (*.csv)"
+        )
+        for p in paths:
+            name = Path(p).stem
+            if name not in self._data_sets:
+                self._data_sets.append(name)
+        self._refresh_source_window()
+
+    def sources(self) -> list:
+        """The checked sources resolved for the run: loaded data sets carry their
+        already-extracted result; .sim files are extracted during the run. A data
+        set's .sim path (when it exists) lets its scenes render."""
+        from starpost.batch.run import BatchSource
+
+        if self._source_input.currentData() == "sim":
+            return [BatchSource(name=p.stem, sim_file=p)
+                    for p in self.checked_sim_files()]
+        by_name = {r.sim_name: r for r in self._results}
+        sources = []
+        for i in range(self._source_window.count()):
+            item = self._source_window.item(i)
+            if item.checkState() != Qt.CheckState.Checked:
+                continue
+            result = by_name.get(item.text())
+            if result is None:
+                continue
+            sim_path = Path(result.sim_path) if result.sim_path else None
+            sim_file = (
+                sim_path
+                if sim_path and sim_path.suffix == ".sim" and sim_path.exists()
+                else None
+            )
+            sources.append(BatchSource(name=item.text(), result=result,
+                                       sim_file=sim_file))
+        return sources
+
+
 class BatchRunDialog(QDialog):
     def __init__(
         self, parent=None, *, data_sets=None, report_names=None,
@@ -546,7 +727,6 @@ class BatchRunDialog(QDialog):
         self.setWindowTitle("Run batch")
         self.resize(820, 460)  # room for the Plots tab's three columns
         self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
-        self._sim_files: list[Path] = []          # .sim files added via Load File
         self._report_names = list(report_names or [])  # all reports across the sims
         self._monitor_groups = dict(monitor_groups or {})  # group -> [monitor names]
         self._residual_groups = set(residual_groups or [])  # auto-select groups
@@ -566,7 +746,11 @@ class BatchRunDialog(QDialog):
         bar = _LockedTabBar()
         bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # no keyboard focus either
         self._tabs.setTabBar(bar)
-        self._tabs.addTab(self._build_source_tab(), "Source")
+        self._source_panel = SourcePanel(
+            data_sets=self._data_sets, results=self._results,
+            show_similar_format=True,
+        )
+        self._tabs.addTab(self._source_panel, "Source")
         self._tabs.addTab(self._build_reports_tab(), "Reports")
         self._plots_tab = self._build_plots_tab()
         self._tabs.addTab(self._plots_tab, "Plots")
@@ -722,112 +906,6 @@ class BatchRunDialog(QDialog):
         label.setStyleSheet("font-weight: bold;")
         return label
 
-    # --- Source tab -------------------------------------------------------
-    def _build_source_tab(self) -> QWidget:
-        """Options on the left (the source-input dropdown + a 'Has similar format'
-        checkbox); on the right a window listing the source entries (checkable),
-        with Load / Select All / Clear buttons beneath it."""
-        tab = QWidget()
-
-        self._source_input = QComboBox()
-        self._source_input.addItem(".sim files", "sim")
-        self._source_input.addItem("Loaded data sets", "data")
-        self._source_input.currentIndexChanged.connect(self._refresh_source_window)
-        # When checked, the batch is set up from a single representative .sim file
-        # (reports/monitors/scenes/views come from it, since the rest share its
-        # format). Only meaningful for .sim sources, so it's disabled in data mode.
-        self._has_similar_format = QCheckBox("Has similar format")
-        self._has_similar_format.setToolTip(
-            "Set the batch up from the first .sim file; the other files share its "
-            "reports, monitors, scenes and saved views."
-        )
-
-        options = QVBoxLayout()
-        options.addWidget(self._header("Options"))
-        options.addWidget(QLabel("Source input"))
-        options.addWidget(self._source_input)
-        options.addWidget(self._has_similar_format)
-        options.addStretch(1)
-
-        self._source_window = _CheckableList()
-
-        # Load File / Load Data Set are mutually exclusive (one per source mode);
-        # Select All / Clear act on the window's checkboxes.
-        self._load_file_btn = QPushButton("Load Files")
-        self._load_file_btn.setToolTip("Add .sim files to the source list")
-        self._load_file_btn.clicked.connect(self._load_files)
-        self._load_dataset_btn = QPushButton("Load Data Set")
-        self._load_dataset_btn.setToolTip("Add StarPost data CSVs to the source list")
-        self._load_dataset_btn.clicked.connect(self._load_data_sets)
-        select_all = QPushButton("Select All")
-        select_all.clicked.connect(lambda: self._set_all_source(True))
-        clear = QPushButton("Clear")
-        clear.clicked.connect(lambda: self._set_all_source(False))
-
-        buttons = QHBoxLayout()
-        buttons.addWidget(self._load_file_btn)
-        buttons.addWidget(self._load_dataset_btn)
-        buttons.addStretch(1)
-        buttons.addWidget(select_all)
-        buttons.addWidget(clear)
-
-        right = QVBoxLayout()
-        right.addWidget(self._header("Sources"))
-        right.addWidget(self._source_window)
-        right.addLayout(buttons)
-
-        row = QHBoxLayout(tab)
-        row.addLayout(options, 1)
-        row.addLayout(right, 2)
-
-        self._refresh_source_window()
-        return tab
-
-    def _refresh_source_window(self) -> None:
-        """Rebuild the right-hand window for the selected source — the loaded .sim
-        files in '.sim files' mode, the data sets in 'Loaded data sets' mode —
-        preserving each entry's check state, and show the matching Load button."""
-        mode = self._source_input.currentData()
-        self._load_file_btn.setVisible(mode == "sim")
-        self._load_dataset_btn.setVisible(mode == "data")
-        # "Has similar format" only applies to .sim sources; gray it out otherwise.
-        self._has_similar_format.setEnabled(mode == "sim")
-
-        prev = {
-            self._source_window.item(i).text(): self._source_window.item(i).checkState()
-            for i in range(self._source_window.count())
-        }
-        self._source_window.clear()
-        names = (
-            [p.name for p in self._sim_files] if mode == "sim" else list(self._data_sets)
-        )
-        for name in names:
-            item = QListWidgetItem(name)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(prev.get(name, Qt.CheckState.Checked))
-            self._source_window.addItem(item)
-
-    def _set_all_source(self, checked: bool) -> None:
-        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
-        for i in range(self._source_window.count()):
-            self._source_window.item(i).setCheckState(state)
-
-    def _has_checked_source(self) -> bool:
-        """Whether at least one source entry is checked in the current window."""
-        return any(
-            self._source_window.item(i).checkState() == Qt.CheckState.Checked
-            for i in range(self._source_window.count())
-        )
-
-    def _checked_sim_files(self) -> list[Path]:
-        """The loaded .sim files whose source-window rows are checked, in order."""
-        checked = {
-            self._source_window.item(i).text()
-            for i in range(self._source_window.count())
-            if self._source_window.item(i).checkState() == Qt.CheckState.Checked
-        }
-        return [p for p in self._sim_files if p.name in checked]
-
     def _extract_setup_sim(self) -> bool:
         """Extract the first selected .sim and repopulate the Reports/Plots/Scenes
         tabs from it — the "Has similar format" setup step. Returns True to
@@ -837,7 +915,7 @@ class BatchRunDialog(QDialog):
         shows an animated (accent-coloured) bar, so the wizard is blocked but the
         dialog stays painted. Skips re-extraction when the first selected file is
         the one already extracted, so Back/Continue doesn't burn a license."""
-        sims = self._checked_sim_files()
+        sims = self._source_panel.checked_sim_files()
         if not sims:
             return True  # nothing loaded to set up from; let the user continue
         sim = sims[0]
@@ -956,30 +1034,6 @@ class BatchRunDialog(QDialog):
         return {
             p.name for r in results for p in r.plots if p.kind == PlotKind.RESIDUAL
         }
-
-    def _load_files(self) -> None:
-        """Load File: add .sim files to the source list (visible in '.sim files')."""
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "Load .sim files", "", "STAR-CCM+ sim (*.sim)"
-        )
-        existing = {str(p) for p in self._sim_files}
-        for p in paths:
-            if p not in existing:
-                self._sim_files.append(Path(p))
-                existing.add(p)
-        self._refresh_source_window()
-
-    def _load_data_sets(self) -> None:
-        """Load Data Set: add StarPost data CSVs to the source list (visible in
-        'Loaded data sets')."""
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "Load StarPost data CSVs", "", "CSV file (*.csv)"
-        )
-        for p in paths:
-            name = Path(p).stem
-            if name not in self._data_sets:
-                self._data_sets.append(name)
-        self._refresh_source_window()
 
     # --- Reports tab ------------------------------------------------------
     def _build_reports_tab(self) -> QWidget:
@@ -1771,14 +1825,14 @@ class BatchRunDialog(QDialog):
         "Has similar format" — extracts the first selected .sim to set up the
         downstream tabs."""
         if self._tabs.currentIndex() == 0:
-            if not self._has_checked_source():
+            if not self._source_panel.has_checked():
                 QMessageBox.warning(
                     self, "Run batch",
                     "No data selected. Select at least one source to continue.",
                 )
                 return
-            sim_mode = self._source_input.currentData() == "sim"
-            if sim_mode and self._has_similar_format.isChecked():
+            sim_mode = self._source_panel.current_mode() == "sim"
+            if sim_mode and self._source_panel._has_similar_format.isChecked():
                 if not self._extract_setup_sim():
                     return  # extraction failed or was unavailable; stay put
         if self._on_summary():
@@ -1787,34 +1841,6 @@ class BatchRunDialog(QDialog):
             self._tabs.setCurrentIndex(self._tabs.currentIndex() + 1)
 
     # --- the run ----------------------------------------------------------
-    def _batch_sources(self) -> list:
-        """The checked sources resolved for the run: loaded data sets carry their
-        already-extracted result; .sim files are extracted during the run. A data
-        set's .sim path (when it exists) lets its scenes render."""
-        from starpost.batch.run import BatchSource
-
-        if self._source_input.currentData() == "sim":
-            return [BatchSource(name=p.stem, sim_file=p)
-                    for p in self._checked_sim_files()]
-        by_name = {r.sim_name: r for r in self._results}
-        sources = []
-        for i in range(self._source_window.count()):
-            item = self._source_window.item(i)
-            if item.checkState() != Qt.CheckState.Checked:
-                continue
-            result = by_name.get(item.text())
-            if result is None:
-                continue
-            sim_path = Path(result.sim_path) if result.sim_path else None
-            sim_file = (
-                sim_path
-                if sim_path and sim_path.suffix == ".sim" and sim_path.exists()
-                else None
-            )
-            sources.append(BatchSource(name=item.text(), result=result,
-                                       sim_file=sim_file))
-        return sources
-
     def _run_batch(self) -> None:
         """Batch run: write each data set's reports, saved-plot images and
         saved-scene stills into a per-data-set folder, packed into one archive
@@ -1822,7 +1848,7 @@ class BatchRunDialog(QDialog):
         progress dialog."""
         from starpost.batch.run import BatchConfig
 
-        sources = self._batch_sources()
+        sources = self._source_panel.sources()
         if not sources:
             QMessageBox.warning(self, "Run batch", "No data selected.")
             return
