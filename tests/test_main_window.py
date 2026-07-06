@@ -536,7 +536,7 @@ def test_batch_run_dialog_summary_tab(app):
     # Export options offer the archive formats.
     assert [
         dlg._export_format.itemData(i) for i in range(dlg._export_format.count())
-    ] == ["zip", "7z", "rar"]
+    ] == ["zip", "7z"]
     # Reports column lists only the checked reports.
     assert [
         dlg._summary_reports.item(i).text()
@@ -1536,6 +1536,42 @@ def test_build_batch_archive_includes_dataset_csv(app, tmp_path):
     loaded = read_sim_csv(tmp_path / "caseA" / "caseA.csv")
     assert [r.name for r in loaded.reports] == ["Drag"]
     assert [p.name for p in loaded.plots] == ["Forces"]
+
+
+def test_build_batch_archive_7z(app, tmp_path):
+    """archive_format='7z' produces a real .7z with the same per-folder layout."""
+    import py7zr
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv",
+        archive_format="7z",
+    )
+    dest = tmp_path / "batch.7z"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    assert dest.exists()
+    with py7zr.SevenZipFile(dest, "r") as z:
+        names = set(z.getnames())
+    assert "caseA/reports.csv" in names
+
+
+def test_build_batch_archive_rejects_unknown_format(app, tmp_path):
+    """An unsupported archive_format raises rather than silently producing a zip."""
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv",
+        archive_format="rar",
+    )
+    dest = tmp_path / "batch.rar"
+    with pytest.raises(ValueError):
+        run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
 
 
 def test_build_batch_archive_combined_report(app, tmp_path):

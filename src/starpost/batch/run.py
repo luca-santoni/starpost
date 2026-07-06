@@ -5,7 +5,7 @@ that data set: the selected report table, an image of each saved plot, the
 saved-scene stills and, optionally, the data set's portable CSV (the same file
 the Data tab's Export Data button writes). A single report combining every data
 set is also written at the archive root (optional). All the per-data-set folders
-are then packed into a single ``.zip`` written to the user's output folder.
+are then packed into a single archive (ZIP or 7Z) written to the user's output folder.
 
 Plots are rendered with a real :class:`PlotView`, so this runs on the GUI thread
 (Qt widgets can't be created off it). Extraction and scene rendering shell out to
@@ -64,6 +64,7 @@ class BatchConfig:
     saved_scenes: list[dict] = field(default_factory=list)
     include_dataset_csv: bool = False   # write the portable data-set CSV per folder
     combined_report: bool = True        # also write one all-sims report at the root
+    archive_format: str = "zip"         # zip | 7z (the packed output format)
 
 
 def _plot_size(plot_data: dict, default=(1280, 720)) -> tuple[int, int]:
@@ -159,6 +160,30 @@ def _zip_dir(src_dir: Path, dest_zip: Path) -> None:
                 zf.write(p, p.relative_to(src_dir).as_posix())
 
 
+def _sevenzip_dir(src_dir: Path, dest: Path) -> None:
+    """Pack every file under ``src_dir`` into a .7z at ``dest`` (paths relative to
+    ``src_dir``, so the archive's top level is the per-data-set folders)."""
+    # Lazy import: py7zr is only needed when the user picks 7Z, and it pulls in
+    # compression libs we don't want on the startup path.
+    import py7zr
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with py7zr.SevenZipFile(dest, "w") as z:
+        for p in sorted(src_dir.rglob("*")):
+            if p.is_file():
+                z.write(p, p.relative_to(src_dir).as_posix())
+
+
+def _pack_dir(src_dir: Path, dest: Path, fmt: str) -> None:
+    """Pack ``src_dir`` into ``dest`` in archive format ``fmt`` ("zip" | "7z")."""
+    if fmt == "zip":
+        _zip_dir(src_dir, dest)
+    elif fmt == "7z":
+        _sevenzip_dir(src_dir, dest)
+    else:
+        raise ValueError(f"Unsupported archive format: {fmt!r}")
+
+
 def _source_steps(config: BatchConfig, source: BatchSource) -> int:
     """How many progress steps a source contributes: an extraction (for a .sim),
     the report table, the data-set CSV, one per saved plot, and one per saved
@@ -203,17 +228,17 @@ def build_batch_archive(
     config: BatchConfig,
     settings,
     runner: StarRunner,
-    dest_zip: Path,
+    dest: Path,
     *,
     log: Optional[LogSink] = None,
     progress: Optional[Progress] = None,
     plot_renderer: Optional[Callable[[SimResult, dict, Path], bool]] = None,
 ) -> Path:
-    """Produce ``dest_zip`` from ``config``: one folder per data set holding its
+    """Produce ``dest`` from ``config``: one folder per data set holding its
     reports, saved-plot images and saved-scene stills, plus (when
     ``config.combined_report``) a single all-sims report at the archive root.
     Reports a 0..1 fraction and the current action to ``progress``. Returns
-    ``dest_zip``.
+    ``dest``.
 
     When run off the GUI thread, ``plot_renderer`` renders a saved plot on the GUI
     thread instead (Qt widgets can't be built off it); by default plots render on
@@ -222,7 +247,7 @@ def build_batch_archive(
     render_plot = plot_renderer or (
         lambda result, pdata, path: render_saved_plot(result, pdata, settings, path)
     )
-    dest_zip = Path(dest_zip)
+    dest = Path(dest)
     combined = bool(config.reports and config.combined_report)
     steps = _Steps(
         sum(_source_steps(config, s) for s in config.sources)
@@ -311,7 +336,7 @@ def build_batch_archive(
             steps.advance()
 
         steps.at("Packaging archive…")
-        _zip_dir(out_root, dest_zip)
+        _pack_dir(out_root, dest, config.archive_format)
         steps.finish("Done")
-    log(f"Wrote {dest_zip}")
-    return dest_zip
+    log(f"Wrote {dest}")
+    return dest

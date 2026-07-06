@@ -3,6 +3,12 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [2.1.1] — 2026-07-05
+
+### New Features
+- **Run batch → Summary** — the *Archive format* selector now works: batches can
+  be packed as **ZIP** or **7Z**. The unavailable **RAR** option has been removed.
+
 ## [2.1.0] — 2026-07-01
 
 A refinement release polishing the Files-tab appearance and the Run batch

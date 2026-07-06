@@ -103,9 +103,9 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **Run batch** (toolbar → *Run batch*) — a guided wizard (**Source → Reports →
   Plots → Scenes → Summary**) that bundles the chosen report tables, saved plot
   images and saved scene stills — and, optionally, each data set's portable CSV —
-  into a **single archive** (a `.zip`, one folder per data set). Whole setups can
-  be saved and reloaded as **batch profiles**. *(The format selector also lists
-  7Z and RAR; these are not produced yet — planned for a future release.)*
+  into a **single archive** (a `.zip` or `.7z`, one folder per data set), the
+  format chosen on the Summary tab. Whole setups can be saved and reloaded as
+  **batch profiles**.
 - **Scene rendering** (the **Scenes** tab) — render scene stills from a `.sim`:
   - A **scene → displayer tree** (like the monitor-plot groups): tick a scene,
     then tick which of its **scalar/vector displayers** to show; a **Saved views**
