@@ -1538,6 +1538,27 @@ def test_build_batch_archive_includes_dataset_csv(app, tmp_path):
     assert [p.name for p in loaded.plots] == ["Forces"]
 
 
+def test_build_batch_archive_7z(app, tmp_path):
+    """archive_format='7z' produces a real .7z with the same per-folder layout."""
+    import py7zr
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv",
+        archive_format="7z",
+    )
+    dest = tmp_path / "batch.7z"
+    run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+    assert dest.exists()
+    with py7zr.SevenZipFile(dest, "r") as z:
+        names = set(z.getnames())
+    assert "caseA/reports.csv" in names
+
+
 def test_build_batch_archive_combined_report(app, tmp_path):
     """With combined_report (the default), one all-sims report is written at the
     archive root (one column per sim), alongside each data set's own report."""
