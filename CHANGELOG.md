@@ -3,6 +3,15 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [2.2.0] — 2026-07-06
+
+### New Features
+- **Express batch** — the toolbar **Run batch** button is now a hover dropdown
+  with **Full Batch** (the full wizard) and **Express batch**, a lean window for
+  users who already have a saved batch profile: pick the profile and sources, set
+  the archive options, and run. Batch profiles now also remember the report
+  format, "include units", and "combined report" settings.
+
 ## [2.1.1] — 2026-07-05
 
 ### New Features

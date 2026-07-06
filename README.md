@@ -105,7 +105,10 @@ A licensed STAR-CCM+ installation must be present on the machine.
   images and saved scene stills — and, optionally, each data set's portable CSV —
   into a **single archive** (a `.zip` or `.7z`, one folder per data set), the
   format chosen on the Summary tab. Whole setups can be saved and reloaded as
-  **batch profiles**.
+  **batch profiles**. The toolbar **Run batch** button is a hover dropdown:
+  **Full Batch** opens this wizard, while **Express batch** runs an existing
+  batch profile quickly — choose the profile and sources, set the archive
+  options, and run.
 - **Scene rendering** (the **Scenes** tab) — render scene stills from a `.sim`:
   - A **scene → displayer tree** (like the monitor-plot groups): tick a scene,
     then tick which of its **scalar/vector displayers** to show; a **Saved views**
