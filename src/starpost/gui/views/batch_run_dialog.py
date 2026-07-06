@@ -648,6 +648,9 @@ class SourcePanel(QWidget):
             # Still exists (callers may still reference it), just never shown.
             self._has_similar_format.setVisible(False)
         options.addStretch(1)
+        # Kept so callers (e.g. the Express dialog) can add their own controls
+        # into the Options column, beneath the source input.
+        self._options_layout = options
 
         self._source_window = _CheckableList()
 
@@ -694,6 +697,11 @@ class SourcePanel(QWidget):
     def similar_format_checked(self) -> bool:
         """Whether the 'Has similar format' box is ticked (always False when hidden)."""
         return self._has_similar_format.isChecked()
+
+    def add_option_widget(self, widget) -> None:
+        """Add ``widget`` to the Options column, beneath the source input (above the
+        trailing stretch). Lets a host dialog extend the panel's options in place."""
+        self._options_layout.insertWidget(self._options_layout.count() - 1, widget)
 
     def _refresh_source_window(self) -> None:
         """Rebuild the right-hand window for the selected source — the loaded .sim

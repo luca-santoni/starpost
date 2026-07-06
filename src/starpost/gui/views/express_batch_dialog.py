@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.core.starccm_runner import StarRunner
-from starpost.gui.views.batch_run_dialog import SourcePanel, _header, execute_batch
+from starpost.gui.views.batch_run_dialog import SourcePanel, execute_batch
 
 
 class ExpressBatchDialog(QDialog):
@@ -54,16 +54,15 @@ class ExpressBatchDialog(QDialog):
             data_sets=data_sets, results=results, show_similar_format=False
         )
 
-        # Export options stacked under a header (mirrors the full Summary tab).
+        # Export options live in the panel's Options column, beneath the source
+        # input, rather than in a separate section.
         self._export_format = QComboBox()
         self._export_format.addItem("ZIP", "zip")
         self._export_format.addItem("7Z", "7z")
         self._include_dataset_csv = QCheckBox("Include dataset .csv")
-        options = QVBoxLayout()
-        options.addWidget(_header("Export options"))
-        options.addWidget(QLabel("Archive format"))
-        options.addWidget(self._export_format)
-        options.addWidget(self._include_dataset_csv)
+        self._source_panel.add_option_widget(QLabel("Archive format"))
+        self._source_panel.add_option_widget(self._export_format)
+        self._source_panel.add_option_widget(self._include_dataset_csv)
 
         self._run_btn = QPushButton("Batch run")
         self._run_btn.clicked.connect(self._run)
@@ -75,7 +74,6 @@ class ExpressBatchDialog(QDialog):
         layout.addLayout(profile_row)
         layout.addWidget(empty_note)
         layout.addWidget(self._source_panel, 1)
-        layout.addLayout(options)
         layout.addLayout(button_row)
 
         self._sync_run_enabled()
