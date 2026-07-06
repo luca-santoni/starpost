@@ -5,7 +5,7 @@ that data set: the selected report table, an image of each saved plot, the
 saved-scene stills and, optionally, the data set's portable CSV (the same file
 the Data tab's Export Data button writes). A single report combining every data
 set is also written at the archive root (optional). All the per-data-set folders
-are then packed into a single ``.zip`` written to the user's output folder.
+are then packed into a single archive (ZIP or 7Z) written to the user's output folder.
 
 Plots are rendered with a real :class:`PlotView`, so this runs on the GUI thread
 (Qt widgets can't be created off it). Extraction and scene rendering shell out to
@@ -176,10 +176,12 @@ def _sevenzip_dir(src_dir: Path, dest: Path) -> None:
 
 def _pack_dir(src_dir: Path, dest: Path, fmt: str) -> None:
     """Pack ``src_dir`` into ``dest`` in archive format ``fmt`` ("zip" | "7z")."""
-    if fmt == "7z":
+    if fmt == "zip":
+        _zip_dir(src_dir, dest)
+    elif fmt == "7z":
         _sevenzip_dir(src_dir, dest)
     else:
-        _zip_dir(src_dir, dest)
+        raise ValueError(f"Unsupported archive format: {fmt!r}")
 
 
 def _source_steps(config: BatchConfig, source: BatchSource) -> int:

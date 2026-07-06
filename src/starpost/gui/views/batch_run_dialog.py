@@ -1809,8 +1809,9 @@ class BatchRunDialog(QDialog):
 
     def _run_batch(self) -> None:
         """Batch run: write each data set's reports, saved-plot images and
-        saved-scene stills into a per-data-set folder, packed into one .zip in the
-        chosen output folder. Runs on a worker thread behind a progress dialog."""
+        saved-scene stills into a per-data-set folder, packed into one archive
+        (ZIP or 7Z) in the chosen output folder. Runs on a worker thread behind a
+        progress dialog."""
         from starpost.batch.run import BatchConfig
 
         sources = self._batch_sources()

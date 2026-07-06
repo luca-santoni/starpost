@@ -1559,6 +1559,21 @@ def test_build_batch_archive_7z(app, tmp_path):
     assert "caseA/reports.csv" in names
 
 
+def test_build_batch_archive_rejects_unknown_format(app, tmp_path):
+    """An unsupported archive_format raises rather than silently producing a zip."""
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(name="caseA", result=result)],
+        reports={"Drag"}, report_format="csv",
+        archive_format="rar",
+    )
+    dest = tmp_path / "batch.rar"
+    with pytest.raises(ValueError):
+        run.build_batch_archive(config, Settings(), run.StarRunner(Settings()), dest)
+
+
 def test_build_batch_archive_combined_report(app, tmp_path):
     """With combined_report (the default), one all-sims report is written at the
     archive root (one column per sim), alongside each data set's own report."""
