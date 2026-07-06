@@ -2073,3 +2073,28 @@ def test_hover_menu_tool_button_respects_disabled_state(app, monkeypatch):
     btn.setEnabled(True)
     btn.enterEvent(make_enter_event())
     assert calls == [1]
+
+
+def test_hover_menu_tool_button_clears_leftover_hover(app, monkeypatch):
+    """After its menu closes, the button drops the stuck hover (auto-raise) outline
+    when the pointer has left it, but keeps it while still hovered."""
+    from PySide6.QtCore import QPoint, Qt
+
+    import starpost.gui.widgets as widgets
+    from starpost.gui.widgets import HoverMenuToolButton
+
+    btn = HoverMenuToolButton()
+    btn.resize(80, 24)
+
+    # Pointer left the button → the leftover hover state is cleared.
+    btn.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, True)
+    monkeypatch.setattr(widgets.QCursor, "pos", staticmethod(lambda: QPoint(10000, 10000)))
+    btn._clear_stuck_hover()
+    assert btn.testAttribute(Qt.WidgetAttribute.WA_UnderMouse) is False
+
+    # Pointer still over the button → hover state is preserved.
+    btn.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, True)
+    center = btn.mapToGlobal(btn.rect().center())
+    monkeypatch.setattr(widgets.QCursor, "pos", staticmethod(lambda: center))
+    btn._clear_stuck_hover()
+    assert btn.testAttribute(Qt.WidgetAttribute.WA_UnderMouse) is True

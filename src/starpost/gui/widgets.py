@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -312,4 +312,13 @@ class HoverMenuToolButton(QToolButton):
             return
         menu = self.menu()
         if menu is not None and not menu.isVisible():
-            self.showMenu()
+            self.showMenu()  # blocks until the menu is dismissed
+            self._clear_stuck_hover()
+
+    def _clear_stuck_hover(self) -> None:
+        """After the popup closes, the button keeps its hover (auto-raise) outline:
+        the menu grabbed the mouse, so no leaveEvent arrived to drop the mouse-over
+        state. Clear it when the pointer is no longer over the button."""
+        if not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
+            self.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, False)
+            self.update()
