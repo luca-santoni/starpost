@@ -1958,3 +1958,55 @@ def test_plots_tab_name_click_toggles_monitor(app):
     )
     assert child.checkState(0) == Qt.CheckState.Unchecked
     tree.close()
+
+
+def test_express_dialog_run_disabled_without_profile(app):
+    import starpost.gui.views.express_batch_dialog as ebd
+
+    dlg = ebd.ExpressBatchDialog(None, data_sets=[], results=[], settings=None)
+    assert dlg._run_btn.isEnabled() is False
+
+
+def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.express_batch_dialog as ebd
+    from starpost.core.settings import BatchProfile
+
+    BatchProfile(
+        name="Nightly", selected_reports=["Drag"],
+        report_format="XLSX", include_units=False, combined_report=False,
+    ).save()
+
+    result = _sim_result_with_data()  # sim_name "caseA"
+    dlg = ebd.ExpressBatchDialog(
+        None, data_sets=["caseA"], results=[result], settings=None
+    )
+    dlg._profile_box.setCurrentText("Nightly")
+    assert dlg._run_btn.isEnabled() is True
+
+    # Check a source.
+    panel = dlg._source_panel
+    panel._source_input.setCurrentIndex(panel._source_input.findData("data"))
+    panel._source_window.item(0).setCheckState(Qt.CheckState.Checked)
+    dlg._export_format.setCurrentIndex(dlg._export_format.findData("7z"))
+    dlg._include_dataset_csv.setChecked(True)
+
+    captured = {}
+    monkeypatch.setattr(ebd, "execute_batch",
+                        lambda *a, **k: captured.setdefault("cfg", a[1]) and None)
+    monkeypatch.setattr(ebd.QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: str(tmp_path)))
+    monkeypatch.setattr(ebd.QMessageBox, "information",
+                        staticmethod(lambda *a, **k: None))
+
+    dlg._run()
+
+    cfg = captured["cfg"]
+    assert cfg.reports == {"Drag"}
+    assert cfg.report_format == "xlsx"
+    assert cfg.include_units is False
+    assert cfg.combined_report is False
+    assert cfg.archive_format == "7z"
+    assert cfg.include_dataset_csv is True
+    assert [s.name for s in cfg.sources] == ["caseA"]
