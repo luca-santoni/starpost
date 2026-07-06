@@ -1139,7 +1139,6 @@ class BatchRunDialog(QDialog):
         self._export_format = QComboBox()
         self._export_format.addItem("ZIP", "zip")
         self._export_format.addItem("7Z", "7z")
-        self._export_format.addItem("RAR", "rar")
         self._include_dataset_csv = QCheckBox("Include dataset .csv")
         self._include_dataset_csv.setToolTip(
             "Also write each data set's portable StarPost CSV (the same file as "
@@ -1848,7 +1847,8 @@ class BatchRunDialog(QDialog):
         out_dir = QFileDialog.getExistingDirectory(self, "Choose output folder")
         if not out_dir:
             return
-        dest = Path(out_dir) / f"starpost_batch_{datetime.now():%Y%m%d_%H%M%S}.zip"
+        fmt = self._export_format.currentData()
+        dest = Path(out_dir) / f"starpost_batch_{datetime.now():%Y%m%d_%H%M%S}.{fmt}"
         config = BatchConfig(
             sources=sources,
             reports=reports,
@@ -1858,6 +1858,7 @@ class BatchRunDialog(QDialog):
             saved_scenes=saved_scenes,
             include_dataset_csv=include_dataset_csv,
             combined_report=self._report_combined.isChecked(),
+            archive_format=fmt,
         )
         runner = StarRunner(self._settings) if self._settings else None
 

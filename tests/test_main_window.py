@@ -536,7 +536,7 @@ def test_batch_run_dialog_summary_tab(app):
     # Export options offer the archive formats.
     assert [
         dlg._export_format.itemData(i) for i in range(dlg._export_format.count())
-    ] == ["zip", "7z", "rar"]
+    ] == ["zip", "7z"]
     # Reports column lists only the checked reports.
     assert [
         dlg._summary_reports.item(i).text()
