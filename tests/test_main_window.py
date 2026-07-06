@@ -1174,6 +1174,29 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     dlg2.close()
 
 
+def test_batch_run_dialog_profile_captures_report_settings(app):
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.core.settings import BatchProfile
+
+    dlg = brd.BatchRunDialog(None, report_names=["Drag"])
+    dlg._report_format.setCurrentText("ODS")
+    dlg._report_include_units.setChecked(False)
+    dlg._report_combined.setChecked(False)
+
+    prof = dlg._build_profile("P")
+    assert prof.report_format == "ODS"
+    assert prof.include_units is False
+    assert prof.combined_report is False
+
+    dlg._apply_profile(
+        BatchProfile(name="Q", report_format="XLSX",
+                     include_units=True, combined_report=True)
+    )
+    assert dlg._report_format.currentText() == "XLSX"
+    assert dlg._report_include_units.isChecked() is True
+    assert dlg._report_combined.isChecked() is True
+
+
 def test_batch_run_dialog_save_scene_captures_image_options(app, monkeypatch):
     """Save Scene records the current image resolution and format with the
     scene, so each saved scene carries its own render options."""

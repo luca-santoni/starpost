@@ -672,6 +672,9 @@ class BatchRunDialog(QDialog):
             ],
             saved_plots=self._saved_entries(self._saved_plots),
             saved_scenes=self._saved_entries(self._saved_scenes),
+            report_format=self._report_format.currentText(),
+            include_units=self._report_include_units.isChecked(),
+            combined_report=self._report_combined.isChecked(),
         )
 
     @staticmethod
@@ -697,6 +700,11 @@ class BatchRunDialog(QDialog):
             )
         self._restore_saved(self._saved_plots, profile.saved_plots)
         self._restore_saved(self._saved_scenes, profile.saved_scenes)
+        idx = self._report_format.findText(profile.report_format)
+        if idx >= 0:
+            self._report_format.setCurrentIndex(idx)
+        self._report_include_units.setChecked(profile.include_units)
+        self._report_combined.setChecked(profile.combined_report)
 
     @staticmethod
     def _restore_saved(list_widget, entries) -> None:
