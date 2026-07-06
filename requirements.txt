@@ -9,3 +9,4 @@ odfpy>=1.4
 PyYAML>=6.0
 Jinja2>=3.1
 platformdirs>=4.0
+py7zr>=0.21
