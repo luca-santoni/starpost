@@ -1967,6 +1967,21 @@ def test_express_dialog_run_disabled_without_profile(app):
     assert dlg._run_btn.isEnabled() is False
 
 
+def test_express_dialog_export_options_under_header(app):
+    """Archive format + dataset-csv sit under a bold 'Export options' header,
+    matching the full Summary tab."""
+    from PySide6.QtWidgets import QLabel
+
+    import starpost.gui.views.express_batch_dialog as ebd
+
+    dlg = ebd.ExpressBatchDialog(None, data_sets=[], results=[], settings=None)
+    headers = [
+        lbl for lbl in dlg.findChildren(QLabel)
+        if lbl.text() == "Export options" and "bold" in lbl.styleSheet()
+    ]
+    assert len(headers) == 1
+
+
 def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
     from PySide6.QtCore import Qt
 

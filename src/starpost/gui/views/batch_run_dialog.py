@@ -89,6 +89,13 @@ from starpost.gui.widgets import (
 _TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
 
 
+def _header(text: str) -> QLabel:
+    """A bold section header label, shared across the batch dialogs."""
+    label = QLabel(text)
+    label.setStyleSheet("font-weight: bold;")
+    return label
+
+
 class _LockedTabBar(UniformTabBar):
     """A tab bar the user cannot drive: mouse and keyboard tab changes are
     swallowed, so the active tab moves only programmatically (the Continue
@@ -677,10 +684,8 @@ class SourcePanel(QWidget):
 
     @staticmethod
     def _header(text: str) -> QLabel:
-        """A bold section header label."""
-        label = QLabel(text)
-        label.setStyleSheet("font-weight: bold;")
-        return label
+        """A bold section header label (delegates to the module-level helper)."""
+        return _header(text)
 
     def current_mode(self) -> str:
         """The selected source mode: ``"sim"`` or ``"data"``."""
@@ -968,10 +973,8 @@ class BatchRunDialog(QDialog):
 
     @staticmethod
     def _header(text: str) -> QLabel:
-        """A bold section header label."""
-        label = QLabel(text)
-        label.setStyleSheet("font-weight: bold;")
-        return label
+        """A bold section header label (delegates to the module-level helper)."""
+        return _header(text)
 
     def _extract_setup_sim(self) -> bool:
         """Extract the first selected .sim and repopulate the Reports/Plots/Scenes

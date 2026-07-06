@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import BatchProfile, list_batch_profiles
 from starpost.core.starccm_runner import StarRunner
-from starpost.gui.views.batch_run_dialog import SourcePanel, execute_batch
+from starpost.gui.views.batch_run_dialog import SourcePanel, _header, execute_batch
 
 
 class ExpressBatchDialog(QDialog):
@@ -43,25 +43,27 @@ class ExpressBatchDialog(QDialog):
         )
         empty_note.setVisible(self._profile_box.count() == 0)
 
+        # Compact, right-aligned selector to match the full window's profile bar.
         profile_row = QHBoxLayout()
+        profile_row.addStretch(1)
         profile_row.addWidget(QLabel("Batch profile"))
-        profile_row.addWidget(self._profile_box, 1)
+        profile_row.addWidget(self._profile_box)
 
         # Sources (no "Has similar format" — the profile already defines outputs).
         self._source_panel = SourcePanel(
             data_sets=data_sets, results=results, show_similar_format=False
         )
 
-        # Export options (mirrors the full Summary tab).
+        # Export options stacked under a header (mirrors the full Summary tab).
         self._export_format = QComboBox()
         self._export_format.addItem("ZIP", "zip")
         self._export_format.addItem("7Z", "7z")
         self._include_dataset_csv = QCheckBox("Include dataset .csv")
-        export_row = QHBoxLayout()
-        export_row.addWidget(QLabel("Archive format"))
-        export_row.addWidget(self._export_format)
-        export_row.addWidget(self._include_dataset_csv)
-        export_row.addStretch(1)
+        options = QVBoxLayout()
+        options.addWidget(_header("Export options"))
+        options.addWidget(QLabel("Archive format"))
+        options.addWidget(self._export_format)
+        options.addWidget(self._include_dataset_csv)
 
         self._run_btn = QPushButton("Batch run")
         self._run_btn.clicked.connect(self._run)
@@ -73,7 +75,7 @@ class ExpressBatchDialog(QDialog):
         layout.addLayout(profile_row)
         layout.addWidget(empty_note)
         layout.addWidget(self._source_panel, 1)
-        layout.addLayout(export_row)
+        layout.addLayout(options)
         layout.addLayout(button_row)
 
         self._sync_run_enabled()
