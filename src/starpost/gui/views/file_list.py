@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from starpost.gui.widgets import enable_range_selection
+from starpost.gui.widgets import clear_item_view_hover, enable_range_selection
 from starpost.utils.paths import file_list_cache_path
 
 MAX_FILES = 25  # v1 expected ceiling; warn beyond this
@@ -215,7 +215,7 @@ class FileListPanel(QWidget):
         self._tree.setColumnCount(1)
         enable_range_selection(self._tree)  # Shift/Ctrl+click multi-select
         self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        self._tree.customContextMenuRequested.connect(self._show_context_menu)
+        self._tree.customContextMenuRequested.connect(self._context_menu_at)
         self._tree.itemDoubleClicked.connect(self._on_double_click)
         # Internal drag-drop re-parents items; persist the new layout afterwards.
         self._tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -663,6 +663,15 @@ class FileListPanel(QWidget):
             yield item
             if _is_folder(item):
                 yield from self._iter_all(item)
+
+    def _context_menu_at(self, pos) -> None:
+        """Show the item context menu, then clear the row's leftover hover
+        highlight — the menu grabbed the mouse, so the view never saw the pointer
+        leave the row it popped up over."""
+        try:
+            self._show_context_menu(pos)
+        finally:
+            clear_item_view_hover(self._tree)
 
     def _show_context_menu(self, pos) -> None:
         item = self._tree.itemAt(pos)

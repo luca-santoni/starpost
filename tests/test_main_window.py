@@ -2098,3 +2098,72 @@ def test_hover_menu_tool_button_clears_leftover_hover(app, monkeypatch):
     monkeypatch.setattr(widgets.QCursor, "pos", staticmethod(lambda: center))
     btn._clear_stuck_hover()
     assert btn.testAttribute(Qt.WidgetAttribute.WA_UnderMouse) is True
+
+
+def test_clear_item_view_hover_delivers_leave_conditionally(app, monkeypatch):
+    """clear_item_view_hover sends a Leave to the viewport (clearing the stuck
+    hover row) when the pointer is off it, and leaves it alone when still over it."""
+    from PySide6.QtCore import QEvent, QObject, QPoint
+    from PySide6.QtWidgets import QTreeWidget
+
+    import starpost.gui.widgets as widgets
+
+    tree = QTreeWidget()
+    tree.resize(120, 80)
+
+    seen = []
+
+    class _LeaveSpy(QObject):
+        def eventFilter(self, _obj, ev):
+            if ev.type() == QEvent.Type.Leave:
+                seen.append(1)
+            return False
+
+    spy = _LeaveSpy()
+    tree.viewport().installEventFilter(spy)
+
+    # Pointer off the viewport → a Leave is delivered.
+    monkeypatch.setattr(widgets.QCursor, "pos", staticmethod(lambda: QPoint(10000, 10000)))
+    widgets.clear_item_view_hover(tree)
+    assert seen == [1]
+
+    # Pointer over the viewport → no Leave (a genuine hover is kept).
+    seen.clear()
+    vp = tree.viewport()
+    monkeypatch.setattr(
+        widgets.QCursor, "pos",
+        staticmethod(lambda: vp.mapToGlobal(vp.rect().center())),
+    )
+    widgets.clear_item_view_hover(tree)
+    assert seen == []
+
+
+def test_file_and_data_panels_clear_hover_after_context_menu(app, monkeypatch):
+    """The Files and Data context-menu slots clear the tree's leftover hover once
+    the menu returns — via the wrapper's finally, so every branch is covered."""
+    from PySide6.QtCore import QPoint
+
+    import starpost.gui.views.data_list as dl
+    import starpost.gui.views.file_list as fl
+
+    for module, make in ((fl, fl.FileListPanel), (dl, dl.DataListPanel)):
+        cleared = []
+        monkeypatch.setattr(module, "clear_item_view_hover", lambda view: cleared.append(view))
+        panel = make()
+        # Stub the menu-showing body so no real (blocking) popup is created.
+        monkeypatch.setattr(panel, "_show_context_menu", lambda pos: None)
+        panel._context_menu_at(QPoint(0, 0))
+        assert cleared == [panel._tree]
+
+        # The clear must still run if the menu handler raises.
+        cleared.clear()
+
+        def _boom(pos):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(panel, "_show_context_menu", _boom)
+        try:
+            panel._context_menu_at(QPoint(0, 0))
+        except RuntimeError:
+            pass
+        assert cleared == [panel._tree]

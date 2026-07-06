@@ -5,6 +5,7 @@ from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, 
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QHBoxLayout,
     QLineEdit,
@@ -322,3 +323,15 @@ class HoverMenuToolButton(QToolButton):
         if not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
             self.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, False)
             self.update()
+
+
+def clear_item_view_hover(view) -> None:
+    """Drop an item view's leftover hover highlight after a popup (a context menu
+    or a dialog) grabbed the mouse, leaving the row it was over still painted as
+    hovered. Sends a synthetic Leave to the viewport — which makes the view clear
+    its hover index and repaint — but only when the pointer is no longer over the
+    viewport (so a genuine hover is kept)."""
+    viewport = view.viewport()
+    if not viewport.rect().contains(viewport.mapFromGlobal(QCursor.pos())):
+        QApplication.sendEvent(viewport, QEvent(QEvent.Type.Leave))
+        viewport.update()

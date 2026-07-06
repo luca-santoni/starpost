@@ -37,7 +37,11 @@ from PySide6.QtWidgets import (
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
 from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
-from starpost.gui.widgets import enable_check_range, enable_range_selection
+from starpost.gui.widgets import (
+    clear_item_view_hover,
+    enable_check_range,
+    enable_range_selection,
+)
 from starpost.utils.paths import data_list_cache_path
 
 # Item data roles and the type tag they carry (matching file_list's layout).
@@ -267,7 +271,7 @@ class DataListPanel(QWidget):
         enable_range_selection(self._tree)  # Shift/Ctrl+click multi-select
         enable_check_range(self._tree)  # Shift+click ticks a range of checkboxes
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._tree.customContextMenuRequested.connect(self._show_context_menu)
+        self._tree.customContextMenuRequested.connect(self._context_menu_at)
         self._tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._tree.setDragEnabled(True)
@@ -577,6 +581,15 @@ class DataListPanel(QWidget):
         self.folder_properties_requested.emit(item.text(0), names)
 
     # --- context menu ----------------------------------------------------
+    def _context_menu_at(self, pos) -> None:
+        """Show the item context menu, then clear the row's leftover hover
+        highlight — the menu grabbed the mouse, so the view never saw the pointer
+        leave the row it popped up over."""
+        try:
+            self._show_context_menu(pos)
+        finally:
+            clear_item_view_hover(self._tree)
+
     def _show_context_menu(self, pos) -> None:
         item = self._tree.itemAt(pos)
         menu = QMenu(self)
