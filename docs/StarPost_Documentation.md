@@ -16,7 +16,7 @@
 > STAR-CCM+ 2310 install (reports, plots, and scene/view discovery); the
 > scene-render *apply-saved-view* call is the one remaining version-specific
 > operation still being validated (see [Limitations](#4-limitations)).
-> Document last updated: 2026-07-02
+> Document last updated: 2026-07-06
 
 ---
 
