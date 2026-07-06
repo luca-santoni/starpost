@@ -299,3 +299,17 @@ def install_combo_accent(app) -> None:
     if _combo_installer is None:
         _combo_installer = _ComboAccentInstaller()
         app.installEventFilter(_combo_installer)
+
+
+class HoverMenuToolButton(QToolButton):
+    """A toolbar button whose attached menu drops on hover (mouse-enter) as well
+    as on click. Qt has no native hover-popup mode, so we pop the menu from
+    ``enterEvent``; the guard stops it re-opening while it is already showing."""
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        if not self.isEnabled():
+            return
+        menu = self.menu()
+        if menu is not None and not menu.isVisible():
+            self.showMenu()

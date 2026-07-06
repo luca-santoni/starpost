@@ -49,7 +49,9 @@ def test_batch_run_dialog_sequential_navigation(app):
     # provides one. ("Has similar format" is disabled in data mode, so advancing
     # triggers no extraction.)
     dlg = BatchRunDialog(data_sets=["case"])
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
     tabs = dlg._tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
         "Source", "Reports", "Plots", "Scenes", "Summary"
@@ -105,10 +107,14 @@ def test_batch_run_dialog_source_window(app):
     from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
     dlg = BatchRunDialog(data_sets=["caseA", "caseB"])
-    win = dlg._source_window
-    assert dlg._source_input.currentData() == "sim" and win.count() == 0  # blank
+    win = dlg._source_panel._source_window
+    assert (
+        dlg._source_panel._source_input.currentData() == "sim" and win.count() == 0
+    )  # blank
 
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
     assert [win.item(i).text() for i in range(win.count())] == ["caseA", "caseB"]
     assert all(
         win.item(i).flags() & Qt.ItemFlag.ItemIsUserCheckable
@@ -116,7 +122,9 @@ def test_batch_run_dialog_source_window(app):
         for i in range(win.count())
     )
 
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("sim"))
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("sim")
+    )
     assert win.count() == 0  # back to blank
     dlg.close()
 
@@ -129,31 +137,32 @@ def test_batch_run_dialog_source_buttons(app, monkeypatch):
     import starpost.gui.views.batch_run_dialog as brd
 
     dlg = brd.BatchRunDialog(data_sets=["caseA"])
-    win = dlg._source_window
+    panel = dlg._source_panel
+    win = panel._source_window
     # .sim mode: Load File shown, Load Data Set hidden
-    assert not dlg._load_file_btn.isHidden() and dlg._load_dataset_btn.isHidden()
+    assert not panel._load_file_btn.isHidden() and panel._load_dataset_btn.isHidden()
     monkeypatch.setattr(
         brd.QFileDialog, "getOpenFileNames",
         lambda *a, **k: (["/cases/a.sim", "/cases/b.sim"], ""),
     )
-    dlg._load_files()
+    panel._load_files()
     assert [win.item(i).text() for i in range(win.count())] == ["a.sim", "b.sim"]
 
     # data mode: Load Data Set shown, Load File hidden
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
-    assert dlg._load_file_btn.isHidden() and not dlg._load_dataset_btn.isHidden()
+    panel._source_input.setCurrentIndex(panel._source_input.findData("data"))
+    assert panel._load_file_btn.isHidden() and not panel._load_dataset_btn.isHidden()
     monkeypatch.setattr(
         brd.QFileDialog, "getOpenFileNames", lambda *a, **k: (["/x/extra.csv"], "")
     )
-    dlg._load_data_sets()
+    panel._load_data_sets()
     assert "extra" in [win.item(i).text() for i in range(win.count())]
 
     # Clear unchecks all; Select All re-checks all
-    dlg._set_all_source(False)
+    panel._set_all_source(False)
     assert all(
         win.item(i).checkState() == Qt.CheckState.Unchecked for i in range(win.count())
     )
-    dlg._set_all_source(True)
+    panel._set_all_source(True)
     assert all(
         win.item(i).checkState() == Qt.CheckState.Checked for i in range(win.count())
     )
@@ -165,8 +174,10 @@ def test_batch_run_dialog_no_source_warns(app, monkeypatch):
     import starpost.gui.views.batch_run_dialog as brd
 
     dlg = brd.BatchRunDialog(data_sets=["caseA"])
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
-    dlg._set_all_source(False)  # uncheck the only data set
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
+    dlg._source_panel._set_all_source(False)  # uncheck the only data set
 
     warned = []
     monkeypatch.setattr(brd.QMessageBox, "warning", lambda *a, **k: warned.append(a))
@@ -181,11 +192,12 @@ def test_batch_run_dialog_similar_format_disabled_in_data_mode(app):
     from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
     dlg = BatchRunDialog(data_sets=["caseA"])
-    assert dlg._has_similar_format.isEnabled()  # .sim mode (default)
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
-    assert not dlg._has_similar_format.isEnabled()  # grayed in data mode
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("sim"))
-    assert dlg._has_similar_format.isEnabled()  # re-enabled back in .sim mode
+    panel = dlg._source_panel
+    assert panel._has_similar_format.isEnabled()  # .sim mode (default)
+    panel._source_input.setCurrentIndex(panel._source_input.findData("data"))
+    assert not panel._has_similar_format.isEnabled()  # grayed in data mode
+    panel._source_input.setCurrentIndex(panel._source_input.findData("sim"))
+    assert panel._has_similar_format.isEnabled()  # re-enabled back in .sim mode
     dlg.close()
 
 
@@ -205,8 +217,8 @@ def test_batch_run_dialog_similar_format_extracts_first(app, monkeypatch):
         brd.QFileDialog, "getOpenFileNames",
         lambda *a, **k: (["/cases/a.sim", "/cases/b.sim"], ""),
     )
-    dlg._load_files()
-    dlg._has_similar_format.setChecked(True)
+    dlg._source_panel._load_files()
+    dlg._source_panel._has_similar_format.setChecked(True)
 
     result = SimResult(
         sim_path="/cases/a.sim",
@@ -226,7 +238,7 @@ def test_batch_run_dialog_similar_format_extracts_first(app, monkeypatch):
     # The first selected .sim was extracted, the tabs repopulated, and the dialog
     # advanced off Source. Both files stay in the source list (no trimming).
     assert extracted == [Path("/cases/a.sim")]
-    assert [p.name for p in dlg._sim_files] == ["a.sim", "b.sim"]
+    assert [p.name for p in dlg._source_panel._sim_files] == ["a.sim", "b.sim"]
     assert dlg._tabs.currentIndex() == 1
     reports = [dlg._reports_window.item(i).text()
                for i in range(dlg._reports_window.count())]
@@ -250,8 +262,10 @@ def test_batch_run_dialog_source_row_click_toggles(app):
     from starpost.gui.views.batch_run_dialog import BatchRunDialog
 
     dlg = BatchRunDialog(data_sets=["caseA"])
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
-    win = dlg._source_window
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
+    win = dlg._source_panel._source_window
     item = win.item(0)
     assert item.checkState() == Qt.CheckState.Checked
 
@@ -278,6 +292,36 @@ def test_batch_run_dialog_source_row_click_toggles(app):
     win.mousePressEvent(empty)
     assert not win.selectedItems() and win.currentItem() is None
     dlg.close()
+
+
+def test_source_panel_resolves_checked_sources(app):
+    """SourcePanel resolves its checked rows to BatchSources on its own, without
+    a full BatchRunDialog around it (the shape the Express batch dialog needs)."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.batch_run_dialog as brd
+
+    result = _sim_result_with_data()  # sim_name "caseA", existing test helper
+    panel = brd.SourcePanel(
+        None, data_sets=["caseA"], results=[result], show_similar_format=False
+    )
+    panel._source_input.setCurrentIndex(panel._source_input.findData("data"))
+    assert panel._source_window.count() == 1
+    panel._source_window.item(0).setCheckState(Qt.CheckState.Checked)
+
+    srcs = panel.sources()
+    assert [s.name for s in srcs] == ["caseA"]
+    assert srcs[0].result is result
+    assert panel.has_checked() is True
+
+
+def test_source_panel_hides_similar_format_when_disabled(app):
+    """When embedded without the 'Has similar format' option, the checkbox is
+    still created (callers may still poke at it) but never shown."""
+    import starpost.gui.views.batch_run_dialog as brd
+
+    panel = brd.SourcePanel(None, show_similar_format=False)
+    assert panel._has_similar_format.isVisible() is False
 
 
 def test_batch_run_dialog_reports_tab(app):
@@ -1174,6 +1218,29 @@ def test_batch_profile_saves_reports_plots_scenes(app, monkeypatch):
     dlg2.close()
 
 
+def test_batch_run_dialog_profile_captures_report_settings(app):
+    import starpost.gui.views.batch_run_dialog as brd
+    from starpost.core.settings import BatchProfile
+
+    dlg = brd.BatchRunDialog(None, report_names=["Drag"])
+    dlg._report_format.setCurrentText("ODS")
+    dlg._report_include_units.setChecked(False)
+    dlg._report_combined.setChecked(False)
+
+    prof = dlg._build_profile("P")
+    assert prof.report_format == "ODS"
+    assert prof.include_units is False
+    assert prof.combined_report is False
+
+    dlg._apply_profile(
+        BatchProfile(name="Q", report_format="XLSX",
+                     include_units=True, combined_report=True)
+    )
+    assert dlg._report_format.currentText() == "XLSX"
+    assert dlg._report_include_units.isChecked() is True
+    assert dlg._report_combined.isChecked() is True
+
+
 def test_batch_run_dialog_save_scene_captures_image_options(app, monkeypatch):
     """Save Scene records the current image resolution and format with the
     scene, so each saved scene carries its own render options."""
@@ -1667,7 +1734,9 @@ def test_batch_run_dialog_run_batch_wiring(app, tmp_path, monkeypatch):
         settings=Settings(starccm_path="/usr/bin/starccm+"),
     )
     # Data mode → caseA is listed and checked.
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
     plot = QListWidgetItem("Drag plot")
     plot.setData(Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"})
     dlg._saved_plots.addItem(plot)
@@ -1719,7 +1788,9 @@ def test_batch_run_dialog_run_batch_threaded(app, tmp_path, monkeypatch):
         data_sets=["caseA"], report_names=["Drag"], results=[result],
         settings=Settings(),
     )
-    dlg._source_input.setCurrentIndex(dlg._source_input.findData("data"))
+    dlg._source_panel._source_input.setCurrentIndex(
+        dlg._source_panel._source_input.findData("data")
+    )
     plot = QListWidgetItem("Drag plot")
     plot.setData(
         Qt.ItemDataRole.UserRole, {"monitors": {"Forces": ["Drag"]}, "format": "png"}
@@ -1887,3 +1958,103 @@ def test_plots_tab_name_click_toggles_monitor(app):
     )
     assert child.checkState(0) == Qt.CheckState.Unchecked
     tree.close()
+
+
+def test_express_dialog_run_disabled_without_profile(app):
+    import starpost.gui.views.express_batch_dialog as ebd
+
+    dlg = ebd.ExpressBatchDialog(None, data_sets=[], results=[], settings=None)
+    assert dlg._run_btn.isEnabled() is False
+
+
+def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.express_batch_dialog as ebd
+    from starpost.core.settings import BatchProfile
+
+    BatchProfile(
+        name="Nightly", selected_reports=["Drag"],
+        report_format="XLSX", include_units=False, combined_report=False,
+    ).save()
+
+    result = _sim_result_with_data()  # sim_name "caseA"
+    dlg = ebd.ExpressBatchDialog(
+        None, data_sets=["caseA"], results=[result], settings=None
+    )
+    dlg._profile_box.setCurrentText("Nightly")
+    assert dlg._run_btn.isEnabled() is True
+
+    # Check a source.
+    panel = dlg._source_panel
+    panel._source_input.setCurrentIndex(panel._source_input.findData("data"))
+    panel._source_window.item(0).setCheckState(Qt.CheckState.Checked)
+    dlg._export_format.setCurrentIndex(dlg._export_format.findData("7z"))
+    dlg._include_dataset_csv.setChecked(True)
+
+    captured = {}
+    monkeypatch.setattr(ebd, "execute_batch",
+                        lambda *a, **k: captured.setdefault("cfg", a[1]) and None)
+    monkeypatch.setattr(ebd.QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: str(tmp_path)))
+    monkeypatch.setattr(ebd.QMessageBox, "information",
+                        staticmethod(lambda *a, **k: None))
+
+    dlg._run()
+
+    cfg = captured["cfg"]
+    assert cfg.reports == {"Drag"}
+    assert cfg.report_format == "xlsx"
+    assert cfg.include_units is False
+    assert cfg.combined_report is False
+    assert cfg.archive_format == "7z"
+    assert cfg.include_dataset_csv is True
+    assert [s.name for s in cfg.sources] == ["caseA"]
+
+
+def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):
+    import starpost.gui.main_window as mw
+
+    win = mw.MainWindow(Settings())
+    labels = [a.text() for a in win._run_button.menu().actions()]
+    assert labels == ["Full Batch", "Express batch"]
+
+    opened = {}
+    import starpost.gui.views.express_batch_dialog as ebd
+
+    class _Fake:
+        def __init__(self, *a, **k): opened["express"] = True
+        def exec(self): return 0
+
+    monkeypatch.setattr(ebd, "ExpressBatchDialog", _Fake)
+    win._run_express_batch()
+    assert opened.get("express") is True
+
+
+def test_hover_menu_tool_button_respects_disabled_state(app, monkeypatch):
+    """A disabled HoverMenuToolButton must not pop its menu on enterEvent — hovering
+    over it during a running batch should not defeat the mid-run lockout."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QEnterEvent
+    from PySide6.QtWidgets import QMenu
+
+    from starpost.gui.widgets import HoverMenuToolButton
+
+    btn = HoverMenuToolButton()
+    menu = QMenu(btn)
+    menu.addAction("Full Batch")
+    btn.setMenu(menu)
+
+    calls = []
+    monkeypatch.setattr(btn, "showMenu", lambda: calls.append(1))
+
+    def make_enter_event():
+        return QEnterEvent(QPointF(1, 1), QPointF(1, 1), QPointF(1, 1))
+
+    btn.setEnabled(False)
+    btn.enterEvent(make_enter_event())
+    assert calls == []
+
+    btn.setEnabled(True)
+    btn.enterEvent(make_enter_event())
+    assert calls == [1]
