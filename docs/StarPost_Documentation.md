@@ -2,7 +2,7 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **2.1.0**
+> Version: **2.2.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
@@ -36,6 +36,7 @@
    - [3.8 Log console](#38-log-console)
    - [3.9 Export dialog](#39-export-dialog)
    - [3.9a Run batch dialog](#39a-run-batch-dialog)
+   - [3.9b Express batch dialog](#39b-express-batch-dialog)
    - [3.10 Settings dialog](#310-settings-dialog)
    - [3.11 Welcome / setup wizard](#311-welcome--setup-wizard)
    - [3.12 Updates](#312-updates)
@@ -251,7 +252,7 @@ A single toolbar at the top with three actions:
 
 | Action | Behaviour |
 |---|---|
-| **Run batch** | Opens the [Run batch dialog](#39a-run-batch-dialog) — a guided wizard for picking a source (`.sim` files or loaded data sets), the reports/plots/scenes to include, and packaging them into a single archive. (To extract straight to the workspace without the wizard, right-click → **Open** a file in the Files panel instead.) Disabled while a run is in progress. |
+| **Run batch** | A **hover dropdown** (its menu drops on mouse-over) with two entries: **Full Batch** — opens the [Run batch dialog](#39a-run-batch-dialog), the guided five-tab wizard; and **Express batch** — opens the [Express batch dialog](#39b-express-batch-dialog), a lean window for running a saved batch profile quickly. (To extract straight to the workspace without a wizard, right-click → **Open** a file in the Files panel instead.) The whole button is disabled while a run is in progress. |
 | **Export…** | Opens the [Export dialog](#39-export-dialog). |
 | **Settings…** | Opens the [Settings dialog](#310-settings-dialog). |
 
