@@ -233,6 +233,13 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert "getAnimationLength" in text
         assert "isDirectory" in text
         assert "[movieType=" in text
+        # Introspected-API strategies: preferred-length getter, armed
+        # server-side recorder, and the GUI's own frame-loop protocol.
+        assert "getPreferredAnimationLength" in text
+        assert "markRecordingScene" in text
+        assert "beginMovieExport" in text
+        assert "recordFrameLoop" in text
+        assert "finalizeMovieExport" in text
 
 
 @pytest.fixture(scope="module")

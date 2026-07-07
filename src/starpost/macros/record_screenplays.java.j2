@@ -134,7 +134,7 @@ public class record_screenplays extends StarMacro {
         }
         String posterCell = hasPoster ? esc(poster) : "";
         try {
-            invokeRecord(sim, sp, resolvePath(moviePath));
+            invokeRecord(sim, sp, scene, resolvePath(moviePath));
             idx.println("movie," + esc(name) + "," + esc(label) + ","
                 + esc(movie) + "," + tail + "," + posterCell);
             sim.println("starpost: recorded '" + label + "' -> " + movie);
@@ -154,15 +154,15 @@ public class record_screenplays extends StarMacro {
     // unfillable ones, and each invocation failure's root cause); when no
     // candidate exists at all, the full public method list of each scanned
     // object is dumped so the log reveals this release's API.
-    private void invokeRecord(Simulation sim, Object sp, String path)
-            throws Exception {
+    private void invokeRecord(Simulation sim, Object sp, Scene scene,
+                              String path) throws Exception {
         // Targets to scan: the screenplay itself plus common recorder
         // sub-objects reached by no-arg getters.
         List<Object> targets = new ArrayList<>();
         targets.add(sp);
         for (String getter : new String[] {
-                "getScreenplayDirector", "getDirector", "getRecorder",
-                "getAnimationDirector" }) {
+                "getScreenplayDirector", "getAnimationDirectorBase",
+                "getDirector", "getRecorder", "getAnimationDirector" }) {
             Object t = invokeQuiet(sp, getter);
             if (t != null) {
                 targets.add(t);
@@ -171,7 +171,10 @@ public class record_screenplays extends StarMacro {
         StringBuilder tried = new StringBuilder();
         // The empirically-verified signature first; the generic name/type
         // scan below stays as the fallback for other releases.
-        if (recordKnown(sim, targets, path, tried)) {
+        if (recordKnown(sim, sp, scene, targets, path, tried)) {
+            return;
+        }
+        if (recordFrameLoop(sim, sp, path, tried)) {
             return;
         }
         List<Object[]> candidates = new ArrayList<>();  // {target, method}
@@ -269,13 +272,42 @@ public class record_screenplays extends StarMacro {
     // undocumented, so 0 and then 1 are tried, each verified by the output
     // file appearing. Returns true on success; appends diagnostics to tried
     // otherwise.
-    private boolean recordKnown(Simulation sim, List<Object> targets,
-                                String path, StringBuilder tried) {
+    private boolean recordKnown(Simulation sim, Object sp, Scene scene,
+                                List<Object> targets, String path,
+                                StringBuilder tried) {
+        // Arm the server-side recorder: it renders whatever scene was marked,
+        // and prepareForExport()/setFramesPerSecond() prime it (introspected
+        // from star.common.AnimationDirectorBase).
+        Object adb = invokeQuiet(sp, "getAnimationDirectorBase");
+        if (adb != null) {
+            if (scene != null) {
+                try {
+                    adb.getClass().getMethod("markRecordingScene", Scene.class)
+                        .invoke(adb, scene);
+                } catch (Exception e) {
+                    sim.println("starpost: markRecordingScene unavailable: "
+                        + rootMessage(e));
+                }
+            }
+            try {
+                adb.getClass().getMethod("setFramesPerSecond", double.class)
+                    .invoke(adb, (double) FPS);
+            } catch (Exception e) {
+                // best-effort
+            }
+            Object prepared = invokeQuiet(adb, "prepareForExport");
+            sim.println("starpost: prepareForExport -> " + prepared);
+        }
         double length = probeLength(sim, targets);
         if (length <= 0) {
             tried.append("\n  [known-signature path skipped: no animation "
                 + "length getter found]");
             return false;
+        }
+        double start = 0.0;
+        Object st = invokeQuiet(sp, "getPreferredStartTime");
+        if (st instanceof Number) {
+            start = ((Number) st).doubleValue();
         }
         Class<?>[] sig9 = { int.class, int.class, double.class, double.class,
             double.class, String.class, int.class, boolean.class,
@@ -293,10 +325,10 @@ public class record_screenplays extends StarMacro {
                 for (int movieType = 0; movieType <= 1; movieType++) {
                     Object[] args = (sig == sig9)
                         ? new Object[] { MOV_WIDTH, MOV_HEIGHT, (double) FPS,
-                            0.0, length, path, movieType, Boolean.TRUE,
+                            start, length, path, movieType, Boolean.TRUE,
                             Boolean.FALSE }
                         : new Object[] { MOV_WIDTH, MOV_HEIGHT, (double) FPS,
-                            0.0, length, path, movieType };
+                            start, length, path, movieType };
                     tried.append("\n  ").append(m).append(" [movieType=")
                         .append(movieType).append("]");
                     try {
@@ -308,7 +340,7 @@ public class record_screenplays extends StarMacro {
                         sim.println("starpost: trying "
                             + target.getClass().getSimpleName() + ".record("
                             + MOV_WIDTH + ", " + MOV_HEIGHT + ", "
-                            + (double) FPS + ", 0.0, " + length
+                            + (double) FPS + ", " + start + ", " + length
                             + ", file, " + movieType + ", ...)");
                         m.invoke(target, args);
                         if (verifyOutput(path)) {
@@ -329,12 +361,89 @@ public class record_screenplays extends StarMacro {
         return false;
     }
 
+    // The screenplay movie-export protocol as the GUI drives it (introspected
+    // from star.screenplay.Screenplay): initializeForMovieExport, then
+    // beginMovieExport(file, w, h, fps, magnification, antiAliasing), then one
+    // updateAnimation(t) + exportMovieFrame() per frame, then endMovieExport
+    // and finalizeMovieExport. Returns true on verified output.
+    private boolean recordFrameLoop(Simulation sim, Object sp, String path,
+                                    StringBuilder tried) {
+        Object director = invokeQuiet(sp, "getScreenplayDirector");
+        Object st = invokeQuiet(sp, "getPreferredStartTime");
+        Object len = invokeQuiet(sp, "getPreferredAnimationLength");
+        if (director == null || !(st instanceof Number)
+                || !(len instanceof Number)
+                || ((Number) len).doubleValue() <= 0) {
+            tried.append("\n  [frame-loop skipped: director/start/length "
+                + "unavailable]");
+            return false;
+        }
+        double start = ((Number) st).doubleValue();
+        double length = ((Number) len).doubleValue();
+        Method begin;
+        Method updateAnim;
+        Method exportFrame;
+        try {
+            begin = sp.getClass().getMethod("beginMovieExport", String.class,
+                int.class, int.class, double.class, int.class, boolean.class);
+            updateAnim = director.getClass().getMethod("updateAnimation",
+                double.class);
+            exportFrame = sp.getClass().getMethod("exportMovieFrame");
+        } catch (Exception e) {
+            tried.append("\n  [frame-loop skipped: protocol methods missing: ")
+                .append(rootMessage(e)).append("]");
+            return false;
+        }
+        // frames = length * fps + 1, capped defensively.
+        int frames = (int) Math.round(length * FPS) + 1;
+        if (frames > 100000) {
+            tried.append("\n  [frame-loop skipped: implausible frame count "
+                + frames + "]");
+            return false;
+        }
+        sim.println("starpost: frame-loop export: " + frames + " frames @ "
+            + FPS + " fps, t=" + start + ".." + (start + length));
+        try {
+            new File(path).createNewFile();
+        } catch (Exception ce) {
+            // best-effort — see invokeRecord
+        }
+        try {
+            invokeQuiet(sp, "initializeForMovieExport");
+            begin.invoke(sp, path, MOV_WIDTH, MOV_HEIGHT, (double) FPS, 1,
+                Boolean.TRUE);
+            for (int f = 0; f < frames; f++) {
+                updateAnim.invoke(director, start + f / (double) FPS);
+                Object r = exportFrame.invoke(sp);
+                if (f == 0) {
+                    sim.println("starpost: first frame exported ("
+                        + r + ")");
+                }
+            }
+        } catch (Exception e) {
+            tried.append("\n  [frame-loop failed: ").append(rootMessage(e))
+                .append("]");
+        } finally {
+            // Always close the export so the server isn't left mid-record.
+            invokeQuiet(sp, "endMovieExport");
+            invokeQuiet(sp, "finalizeMovieExport");
+        }
+        if (verifyOutput(path)) {
+            sim.println("starpost: recorded via screenplay frame-loop export");
+            return true;
+        }
+        deleteIfEmpty(new File(path));
+        tried.append("\n  [frame-loop: no output file]");
+        return false;
+    }
+
     // The screenplay's animation length in seconds, probed via common getters
     // on the screenplay and its director objects (the export dialog calls the
     // field "Animation Length"); <= 0 when none is found.
     private double probeLength(Simulation sim, List<Object> targets) {
-        String[] getters = { "getAnimationLength", "getDuration", "getLength",
-            "getStopTime", "getEndTime" };
+        String[] getters = { "getPreferredAnimationLength",
+            "getAnimationEndTime", "getAnimationLength", "getDuration",
+            "getLength", "getStopTime", "getEndTime" };
         for (Object target : targets) {
             for (String g : getters) {
                 Object v = invokeQuiet(target, g);
