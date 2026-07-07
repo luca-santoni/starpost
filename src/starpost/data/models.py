@@ -73,13 +73,22 @@ class Scene:
 
 
 @dataclass
+class Screenplay:
+    """A STAR-CCM+ screenplay (animation): the scene it plays and that scene's
+    selectable scalar/vector displayers."""
+    name: str
+    scene: str = ""   # the scene the screenplay animates ("" if unresolved)
+    displayers: list[Displayer] = field(default_factory=list)
+
+
+@dataclass
 class MediaArtifact:
     """A rendered visual output (e.g. a scene still). The file lives on disk; this
     just records where it is and what produced it."""
     name: str                   # display name (the scene name, for stills)
     path: str                   # absolute path to the rendered file on disk
     source: str = ""            # the scene (or, later, screenplay) it came from
-    kind: str = "still"         # "still" | "video" (video reserved for later)
+    kind: str = "still"         # "still" | "movie" (movie == recorded screenplay)
     width: int = 0
     height: int = 0
     error: Optional[str] = None
@@ -87,6 +96,7 @@ class MediaArtifact:
     sim_path: str = ""          # the .sim this was rendered from
     displayers: str = ""        # the visible scalar/vector displayers (readable)
     view: str = ""              # the saved view applied ("" == the current view)
+    poster: str = ""            # movie-kind only: absolute path to the poster PNG
 
 
 @dataclass
@@ -102,6 +112,10 @@ class SimResult:
     # Saved camera views discovered in the .sim (sim-global, via the view
     # manager); a scene can be rendered from any of these.
     views: list[str] = field(default_factory=list)
+    # Screenplays discovered in the .sim during extraction (no recording), each
+    # with its scene's scalar/vector displayers; these populate the Screenplays
+    # selection tree, mirroring the Scenes tree.
+    screenplays: list[Screenplay] = field(default_factory=list)
     # Visual outputs rendered from this .sim (scene stills, etc.). Produced by a
     # separate render pass, not the numeric extraction.
     media: list[MediaArtifact] = field(default_factory=list)
@@ -122,6 +136,9 @@ class SimResult:
 
     def scene_names(self) -> set[str]:
         return {s.name for s in self.scenes}
+
+    def screenplay_names(self) -> set[str]:
+        return {s.name for s in self.screenplays}
 
     def signature(self) -> tuple[frozenset[str], frozenset[str]]:
         """Used for the homogeneity check across a batch."""

@@ -15,6 +15,7 @@ from starpost.data.models import (
     PlotSeries,
     Report,
     Scene,
+    Screenplay,
     SimResult,
 )
 from starpost.utils.paths import results_cache_path
@@ -134,6 +135,7 @@ def _result_to_dict(r: SimResult) -> dict:
         ],
         "scenes": [asdict(sc) for sc in r.scenes],
         "views": list(r.views),
+        "screenplays": [asdict(sp) for sp in r.screenplays],
         "media": [asdict(m) for m in r.media],
         "extracted_at": r.extracted_at,
         "error": r.error,
@@ -157,12 +159,14 @@ def _result_from_dict(d: dict) -> SimResult:
         )
     media = [MediaArtifact(**m) for m in d.get("media", [])]
     scenes = [_scene_from_dict(s) for s in d.get("scenes", [])]
+    screenplays = [_screenplay_from_dict(s) for s in d.get("screenplays", [])]
     return SimResult(
         sim_path=d["sim_path"],
         reports=reports,
         plots=plots,
         scenes=scenes,
         views=list(d.get("views", [])),
+        screenplays=screenplays,
         media=media,
         extracted_at=d.get("extracted_at", ""),
         error=d.get("error"),
@@ -175,5 +179,13 @@ def _scene_from_dict(s) -> Scene:
         return Scene(name=s)
     return Scene(
         name=s["name"],
+        displayers=[Displayer(**d) for d in s.get("displayers", [])],
+    )
+
+
+def _screenplay_from_dict(s: dict) -> Screenplay:
+    return Screenplay(
+        name=s["name"],
+        scene=s.get("scene", ""),
         displayers=[Displayer(**d) for d in s.get("displayers", [])],
     )
