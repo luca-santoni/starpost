@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 
 from starpost import __version__
 from starpost.batch.job import Job
-from starpost.batch.queue import BatchWorker, SceneRenderWorker
+from starpost.batch.queue import BatchWorker, SceneRenderWorker, ScreenplayRecordWorker
 from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
@@ -46,6 +46,7 @@ from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
 from starpost.gui.views.report_table import ReportTable
 from starpost.gui.views.scene_view import SceneView
+from starpost.gui.views.screenplay_view import ScreenplayView
 from starpost.gui.views.selection_panel import SelectionPanel
 from starpost.utils.logging import get_logger
 
@@ -92,6 +93,14 @@ class MainWindow(QMainWindow):
         # The media paths last drawn in the scene gallery, so it is only rebuilt
         # when the set of stills actually changes (None = stale, force a rebuild).
         self._scene_gallery_paths: list[str] | None = None
+        # Separate thread/worker for on-demand screenplay recording
+        # (Screenplays tab → Record). Mirrors the scene render pair above.
+        self._record_thread: QThread | None = None
+        self._record_worker: ScreenplayRecordWorker | None = None
+        # Whether the Screenplays "recording is expensive" warning has shown
+        # this session, and the movie paths last drawn in its gallery.
+        self._screenplays_warning_shown = False
+        self._screenplay_gallery_paths: list[str] | None = None
         # Whether the plot must redraw when the Plots tab is next shown (its
         # render is skipped while the tab is hidden — see _render_plot).
         self._plot_stale = False
@@ -119,6 +128,7 @@ class MainWindow(QMainWindow):
             zero_threshold=settings.zero_threshold,
         )
         self.scene_view = SceneView()
+        self.screenplay_view = ScreenplayView()
         # The plot view is built lazily (see the plot_view property): it drags
         # in pyqtgraph + numpy (~0.3 s of imports), which shouldn't sit between
         # launch and the window appearing. Until then its tab holds a bare
@@ -144,6 +154,12 @@ class MainWindow(QMainWindow):
         self.selection.selection_changed.connect(self._on_selection_changed)
         self.selection.run_scenes_requested.connect(self._run_scenes)
         self.selection.clear_scenes_requested.connect(self._clear_scenes)
+        self.selection.record_screenplays_requested.connect(
+            self._record_screenplays
+        )
+        self.selection.clear_screenplays_requested.connect(
+            self._clear_screenplays
+        )
         self.file_list.open_requested.connect(self._open_files)
         self.file_list.properties_requested.connect(self._show_file_properties)
         self.data_list.selection_changed.connect(self._on_data_selection_changed)
@@ -212,6 +228,7 @@ class MainWindow(QMainWindow):
         self._plot_tab_layout.setContentsMargins(0, 0, 0, 0)
         tabs.addTab(self._plot_tab, "Plots")
         tabs.addTab(self.scene_view, "Scenes")
+        tabs.addTab(self.screenplay_view, "Screenplays")
         # The selection panel shows only the checklist for the active centre tab:
         # Reports list on Reports, Monitor plots on Plots, Scenes on Scenes.
         self._center_tabs = tabs
@@ -263,6 +280,8 @@ class MainWindow(QMainWindow):
             section = "reports"
         elif widget is self.scene_view:
             section = "scenes"
+        elif widget is self.screenplay_view:
+            section = "screenplays"
         else:
             section = "plots"
         self.selection.set_active_section(section)
@@ -270,6 +289,10 @@ class MainWindow(QMainWindow):
             # Build the gallery now that it's visible (deferred while hidden).
             self._render_scenes_view()
             self._maybe_warn_scenes()
+        elif section == "screenplays":
+            # Build the gallery now that it's visible (deferred while hidden).
+            self._render_screenplays_view()
+            self._maybe_warn_screenplays()
         elif widget is self._plot_tab and self._plot_stale:
             # Redraw now that it's visible (renders are skipped while hidden),
             # and bring the panel's monitor swatches back in step with it.
@@ -294,6 +317,37 @@ class MainWindow(QMainWindow):
         box.setStandardButtons(QMessageBox.Ok)
         # Use the style's green circled checkmark (the Yes-button icon) on OK,
         # matching the affirmative buttons elsewhere in the app.
+        box.button(QMessageBox.Ok).setIcon(
+            self.style().standardIcon(QStyle.SP_DialogYesButton)
+        )
+        dont_show = QCheckBox("Do not show this again")
+        box.setCheckBox(dont_show)
+        box.exec()
+        if dont_show.isChecked():
+            self.settings.show_scenes_warning = False
+            self.settings.save()
+
+    def _maybe_warn_screenplays(self) -> None:
+        """First time the Screenplays tab is opened this session, warn that
+        recording is heavy. Shares the scenes warning's "do not show again"
+        setting — both gate the same expensive rendering path."""
+        if (
+            self._screenplays_warning_shown
+            or not self.settings.show_scenes_warning
+        ):
+            return
+        self._screenplays_warning_shown = True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Screenplays")
+        box.setText(
+            "Recording screenplays is very computationally expensive — a "
+            "movie takes far longer than a still image.\n\n"
+            "It is not recommended on systems with less than 16 GB of system "
+            "memory. Closing other programs on your computer first is "
+            "recommended to prevent memory related errors."
+        )
+        box.setStandardButtons(QMessageBox.Ok)
         box.button(QMessageBox.Ok).setIcon(
             self.style().standardIcon(QStyle.SP_DialogYesButton)
         )
@@ -540,10 +594,13 @@ class MainWindow(QMainWindow):
             self._render_thread is not None and self._render_thread.isRunning()
         )
 
+    def _record_busy(self) -> bool:
+        return self._record_thread is not None and self._record_thread.isRunning()
+
     def _run_scenes(self) -> None:
         """Scenes tab → Run: render the ticked scenes of the ticked data sets to
         stills. Independent of the numeric batch and of Run batch."""
-        if self._busy() or self._render_busy():
+        if self._busy() or self._render_busy() or self._record_busy():
             QMessageBox.information(self, "StarPost", "A run is already in progress.")
             return
         if self._missing_exe():
@@ -648,7 +705,8 @@ class MainWindow(QMainWindow):
             return
         rendered_sources = {a.source for a in artifacts}
         res.media = [
-            m for m in res.media if m.source not in rendered_sources
+            m for m in res.media
+            if not (m.kind == "still" and m.source in rendered_sources)
         ] + list(artifacts)
         self.store.put(res)
         self.store.save_cache_async()  # off the GUI thread; runs on it here
@@ -658,6 +716,171 @@ class MainWindow(QMainWindow):
         # New stills may reuse existing file names (same paths), so force the
         # gallery to rebuild — the thumbnail cache reloads any changed images.
         self._scene_gallery_paths = None
+        self._refresh_from_store()
+
+    def _record_screenplays(self) -> None:
+        """Screenplays tab → Record: record the ticked screenplays of the
+        ticked data set to movies. Independent of the numeric batch, of Run
+        batch, and of scene rendering."""
+        if self._busy() or self._render_busy() or self._record_busy():
+            QMessageBox.information(
+                self, "StarPost", "A run is already in progress."
+            )
+            return
+        if self._missing_exe():
+            return
+        screenplays = self.selection.selected_screenplays()
+        if not screenplays:
+            QMessageBox.information(
+                self, "Screenplays",
+                "Select at least one screenplay to record.",
+            )
+            return
+        # Record one data set at a time: recording is heavy and the output is
+        # per-.sim (same rule as scene rendering).
+        results = self._active_results()
+        if not results:
+            QMessageBox.information(
+                self, "Screenplays", "Tick a data set in the Data tab first."
+            )
+            return
+        if len(results) > 1:
+            QMessageBox.warning(
+                self, "Screenplays",
+                "Select only one data set to record. Untick the others in "
+                "the Data tab, then press Record.",
+            )
+            return
+
+        result = results[0]
+        sim_file = Path(result.sim_path)
+        if not sim_file.exists():
+            QMessageBox.warning(
+                self, "Screenplays",
+                f"The .sim file for “{result.sim_name}” could not be found:\n"
+                f"{result.sim_path}",
+            )
+            return
+        available = result.screenplay_names()
+        wanted = sorted(s for s in screenplays if s in available)
+        if not wanted:
+            QMessageBox.information(
+                self, "Screenplays",
+                "None of the selected screenplays are available in the "
+                "ticked data set.",
+            )
+            return
+        # Each screenplay maps to the displayers to keep visible.
+        show_sel = self.selection.selected_screenplay_displayers()
+        screenplay_show = {s: list(show_sel.get(s, [])) for s in wanted}
+        # Chunk into checkouts of the configured size: each chunk is one
+        # starccm+ session (one license, sim loaded once).
+        per = max(1, self.settings.media.screenplays_per_checkout)
+        items = list(screenplay_show.items())
+        jobs: list[tuple[Path, dict[str, list[str]]]] = [
+            (sim_file, dict(items[i:i + per]))
+            for i in range(0, len(items), per)
+        ]
+        # Saved views: one movie per screenplay × view (empty == its camera).
+        views = sorted(self.selection.selected_views())
+        out_dir = (
+            Path(self.settings.default_output_dir)
+            if self.settings.default_output_dir
+            else sim_file.parent
+        )
+        self._start_record(jobs, out_dir, views)
+
+    def _start_record(
+        self,
+        jobs: list[tuple[Path, dict[str, list[str]]]],
+        out_dir: Path,
+        views: list[str],
+    ) -> None:
+        runner = StarRunner(self.settings)
+        self._record_thread = QThread()
+        self._record_worker = ScreenplayRecordWorker(
+            jobs, runner, out_dir, views
+        )
+        self._record_worker.moveToThread(self._record_thread)
+
+        self._record_thread.started.connect(self._record_worker.run)
+        self._record_worker.log.connect(self.log_console.append)
+        self._record_worker.progress.connect(self.log_console.set_progress)
+        self._record_worker.recorded.connect(self._on_screenplays_recorded)
+        self._record_worker.finished.connect(self._on_record_finished)
+        self._record_worker.finished.connect(self._record_thread.quit)
+
+        self.log_console.clear()
+        # All of a chunk's screenplays record in one checkout, so progress is
+        # per chunk (the macro streams per-screenplay progress to the log).
+        self.log_console.start_progress(len(jobs))
+        # Switch to the Screenplays tab so the gallery is in view when the
+        # movies land.
+        self._center_tabs.setCurrentWidget(self.screenplay_view)
+        self._record_thread.start()
+
+    def _on_screenplays_recorded(self, sim_path, artifacts) -> None:
+        """A file's movies finished: attach them to its result (replacing any
+        prior movies of the same screenplays; stills untouched) and persist."""
+        target = Path(sim_path).resolve()
+        res = next(
+            (
+                r for r in self.store.all()
+                if Path(r.sim_path).resolve() == target
+            ),
+            None,
+        )
+        if res is None:
+            return
+        recorded_sources = {a.source for a in artifacts}
+        res.media = [
+            m for m in res.media
+            if not (m.kind == "movie" and m.source in recorded_sources)
+        ] + list(artifacts)
+        self.store.put(res)
+        self.store.save_cache_async()  # off the GUI thread; runs on it here
+
+    def _on_record_finished(self) -> None:
+        self.log_console.finish_progress()
+        # New movies may reuse existing file names (same paths), so force the
+        # gallery to rebuild — the poster cache reloads any changed images.
+        self._screenplay_gallery_paths = None
+        self._refresh_from_store()
+
+    def _clear_screenplays(self) -> None:
+        """Screenplays tab → "Clear screenplays": drop every recorded movie
+        from the workspace after confirming. The movie/poster files on disk
+        are left in place (matching "Clear scenes")."""
+        if self._record_busy():
+            QMessageBox.information(
+                self, "Clear screenplays",
+                "Screenplays are still recording. Wait for the run to finish "
+                "first.",
+            )
+            return
+        if not any(
+            m.kind == "movie" for r in self.store.all() for m in r.media
+        ):
+            QMessageBox.information(
+                self, "Clear screenplays",
+                "There are no recorded screenplays to clear.",
+            )
+            return
+        if QMessageBox.question(
+            self, "Clear screenplays",
+            "Clear all recorded screenplays? This removes every recorded "
+            "movie from the workspace (the files already saved on disk are "
+            "kept).",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        for r in self.store.all():
+            if any(m.kind == "movie" for m in r.media):
+                r.media = [m for m in r.media if m.kind != "movie"]
+                self.store.put(r)
+        # Persist so the cleared state survives restart (async: no GUI freeze).
+        self.store.save_cache_async()
         self._refresh_from_store()
 
     def _clear_scenes(self) -> None:
@@ -670,7 +893,7 @@ class MainWindow(QMainWindow):
                 "Scenes are still rendering. Wait for the run to finish first.",
             )
             return
-        if not any(r.media for r in self.store.all()):
+        if not any(m.kind == "still" for r in self.store.all() for m in r.media):
             QMessageBox.information(
                 self, "Clear scenes", "There are no rendered scenes to clear."
             )
@@ -684,8 +907,8 @@ class MainWindow(QMainWindow):
             return
 
         for r in self.store.all():
-            if r.media:
-                r.media = []
+            if any(m.kind == "still" for m in r.media):
+                r.media = [m for m in r.media if m.kind != "still"]
                 self.store.put(r)
         # Persist so the cleared state survives restart (async: no GUI freeze).
         self.store.save_cache_async()
@@ -854,7 +1077,15 @@ class MainWindow(QMainWindow):
                 for d in sc.displayers:
                     if d.name not in names:
                         names.append(d.name)
+        screenplay_groups: dict[str, list[str]] = {}
+        for r in results:
+            for sp in r.screenplays:
+                names = screenplay_groups.setdefault(sp.name, [])
+                for d in sp.displayers:
+                    if d.name not in names:
+                        names.append(d.name)
         self.selection.set_available_scenes(scene_groups)
+        self.selection.set_available_screenplays(screenplay_groups)
         self.selection.set_available_views(
             sorted({v for r in results for v in r.views})
         )
@@ -923,6 +1154,7 @@ class MainWindow(QMainWindow):
         self._render_reports()
         self._render_plot()
         self._render_scenes_view()
+        self._render_screenplays_view()
         # The plot just (re)drew, so sync the panel's monitor colour swatches to
         # the colours actually used (and to the current data-set count). The
         # swatches are only visible alongside the Plots tab; when its render was
@@ -951,6 +1183,29 @@ class MainWindow(QMainWindow):
             self.scene_view.show_media(media)
         else:
             self.scene_view.clear()
+
+    def _render_screenplays_view(self) -> None:
+        """Rebuild the recorded-movies gallery — but only when the Screenplays
+        tab is showing and the set of movies actually changed (same deferral
+        pattern as the scene gallery)."""
+        if self._center_tabs.currentWidget() is not self.screenplay_view:
+            self._screenplay_gallery_paths = None  # stale; rebuilt on switch
+            return
+        media = []
+        for r in self._active_results():
+            for m in r.media:
+                if m.kind != "movie":
+                    continue
+                m.sim_path = r.sim_path  # provenance for Properties
+                media.append(m)
+        paths = [m.path for m in media]
+        if paths == self._screenplay_gallery_paths:
+            return  # unchanged — keep the gallery (and its poster thumbnails)
+        self._screenplay_gallery_paths = paths
+        if media:
+            self.screenplay_view.show_media(media)
+        else:
+            self.screenplay_view.clear()
 
     def _render_reports(self) -> None:
         results = self._active_results()

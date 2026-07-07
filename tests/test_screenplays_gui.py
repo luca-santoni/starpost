@@ -132,3 +132,50 @@ def test_screenplay_view_empty_shows_hint(app):
     view = ScreenplayView()
     view.show_media([])
     assert view._stack.currentWidget() is view._hint
+
+
+def test_main_window_has_screenplays_tab(app):
+    import starpost.gui.main_window as mw
+    from starpost.core.settings import Settings
+
+    win = mw.MainWindow(Settings())
+    tabs = win._center_tabs
+    labels = [tabs.tabText(i) for i in range(tabs.count())]
+    assert labels == ["Reports", "Plots", "Scenes", "Screenplays"]
+    win.close()
+
+
+def test_clear_scenes_keeps_movies_and_vice_versa(app, monkeypatch, tmp_path):
+    import starpost.gui.main_window as mw
+    from starpost.core.settings import Settings
+    from starpost.data.models import MediaArtifact, SimResult
+
+    win = mw.MainWindow(Settings())
+    res = SimResult(sim_path=str(tmp_path / "a.sim"))
+    res.media = [
+        MediaArtifact(name="s", path="", source="S", kind="still"),
+        MediaArtifact(name="m", path="", source="P", kind="movie"),
+    ]
+    win.store.put(res)
+    monkeypatch.setattr(
+        mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes
+    )
+    win._clear_scenes()
+    assert [m.kind for m in win.store.get(res.sim_path).media] == ["movie"]
+    win._clear_screenplays()
+    assert win.store.get(res.sim_path).media == []
+    win.close()
+
+
+def test_record_screenplays_requires_selection(app, monkeypatch):
+    import starpost.gui.main_window as mw
+    from starpost.core.settings import Settings
+
+    win = mw.MainWindow(Settings(starccm_path="/bin/true"))
+    infos = []
+    monkeypatch.setattr(
+        mw.QMessageBox, "information", lambda *a, **k: infos.append(a[2])
+    )
+    win._record_screenplays()
+    assert infos and "screenplay" in infos[0].lower()
+    win.close()
