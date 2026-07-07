@@ -221,6 +221,11 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         # A candidate that returns without producing the movie is rejected.
         assert "[no output file]" in text
         assert 'n.contains("movie")' in text
+        # Single-frame exports are excluded; the target file is pre-created so
+        # STAR's writability probe passes, and empty stubs are cleaned up.
+        assert 'n.contains("frame")' in text
+        assert "createNewFile" in text
+        assert "deleteIfEmpty" in text
 
 
 @pytest.fixture(scope="module")

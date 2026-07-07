@@ -172,6 +172,11 @@ public class record_screenplays extends StarMacro {
         for (Object target : targets) {
             for (Method m : target.getClass().getMethods()) {
                 String n = m.getName().toLowerCase();
+                // "…frame…" methods are single-frame image exports
+                // (exportMovieFrame, writePngMovieFrameImage, …), never movies.
+                if (n.contains("frame")) {
+                    continue;
+                }
                 if (n.equals("record") || n.startsWith("export")
                         || n.startsWith("write")) {
                     candidates.add(new Object[] { target, m });
@@ -197,6 +202,15 @@ public class record_screenplays extends StarMacro {
                 tried.append("  [unfillable]");
                 continue;
             }
+            // STAR-CCM+'s hardcopy path aborts when File.canWrite() is false —
+            // which it is for any file that doesn't exist yet ("File ... is not
+            // writable, hardcopy aborted"). Pre-create an empty target so the
+            // writability probe passes; empty stubs are cleaned up again below.
+            try {
+                new File(path).createNewFile();
+            } catch (Exception ce) {
+                // best-effort — the candidate may still manage on its own
+            }
             try {
                 m.invoke(target, args);
                 // A candidate may return normally yet not produce the movie
@@ -204,9 +218,7 @@ public class record_screenplays extends StarMacro {
                 // non-empty file at the expected path counts as success.
                 File out = new File(path);
                 if (!out.exists() || out.length() == 0) {
-                    if (out.exists()) {
-                        out.delete();  // don't leave an empty stub behind
-                    }
+                    deleteIfEmpty(out);  // don't leave an empty stub behind
                     tried.append("  [no output file]");
                     continue;
                 }
@@ -215,6 +227,7 @@ public class record_screenplays extends StarMacro {
                     + "/" + m.getParameterCount());
                 return;
             } catch (Exception e) {
+                deleteIfEmpty(new File(path));
                 tried.append("  [failed: ").append(rootMessage(e)).append("]");
             }
         }
@@ -236,6 +249,7 @@ public class record_screenplays extends StarMacro {
                 }
             }
         }
+        deleteIfEmpty(new File(path));
         throw new Exception("no usable record/export method found on "
             + sp.getClass().getName() + "; candidates tried:" + tried);
     }
@@ -248,6 +262,17 @@ public class record_screenplays extends StarMacro {
         }
         String msg = t.getMessage();
         return (msg == null || msg.isEmpty()) ? t.getClass().getSimpleName() : msg;
+    }
+
+    // Removes a zero-length stub left by a failed/aborted record attempt.
+    private void deleteIfEmpty(File f) {
+        try {
+            if (f.exists() && f.length() == 0) {
+                f.delete();
+            }
+        } catch (Exception e) {
+            // best-effort cleanup only
+        }
     }
 
     // The argument list for the parameter types, or null when a type can't be
