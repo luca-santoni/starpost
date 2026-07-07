@@ -528,6 +528,17 @@ class _SceneTree(QTreeWidget):
         self.set_items(self._groups, preserve=True)
 
 
+class _ScreenplayTree(_SceneTree):
+    """Screenplay picker: identical behaviour to the Scenes tree, over
+    ``{screenplay: [displayer, ...]}`` — checking a screenplay reveals its
+    scene's displayers unchecked; the checked ones stay visible while
+    recording."""
+
+    # The tree logic is inherited wholesale; only the accessor name changes so
+    # call sites read correctly.
+    checked_screenplays = _SceneTree.checked_scenes
+
+
 class _SortableGroupBox(QGroupBox):
     """A group box whose title responds to a right-click: clicking the title
     text invokes ``on_sort(global_pos)`` (to raise a sort menu). Right-clicks
@@ -556,6 +567,8 @@ class SelectionPanel(QWidget):
     selection_changed = Signal()
     run_scenes_requested = Signal()     # the Scenes section's Run button
     clear_scenes_requested = Signal()   # the Scenes section's "Clear scenes" button
+    record_screenplays_requested = Signal()  # the Screenplays Record button
+    clear_screenplays_requested = Signal()   # its "Clear screenplays" button
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -567,6 +580,10 @@ class SelectionPanel(QWidget):
         # checkable children; its Run button renders the checked scenes, showing
         # only the checked displayers.
         self.scenes = _SceneTree()
+        # Screenplays: a tree of screenplays (checkable) whose scene's
+        # scalar/vector displayers are checkable children; its Record button
+        # records the checked screenplays to movies.
+        self.screenplays = _ScreenplayTree()
         # Saved views: a flat checklist of the sim's saved camera views. When any
         # are checked, each checked scene is rendered from each checked view.
         self.views = _CheckList()
@@ -574,6 +591,7 @@ class SelectionPanel(QWidget):
         self.plots.changed.connect(self.selection_changed)
         self.plots.swatch_clicked.connect(self._pick_monitor_color)
         self.scenes.changed.connect(self.selection_changed)
+        self.screenplays.changed.connect(self.selection_changed)
         self.views.changed.connect(self.selection_changed)
 
         # Region-statistics selection hooks (wired by MainWindow), so profiles can
@@ -606,31 +624,54 @@ class SelectionPanel(QWidget):
         # panel. set_active_section toggles between them.
         self._reports_group = self._group("Reports", self.reports)
         self._plots_group = self._group("Monitor plots", self.plots)
-        self._scenes_group = self._scenes_group_box("Scenes", self.scenes)
+        self._scenes_group = self._run_group_box(
+            "Scenes", self.scenes,
+            run_text="Run",
+            run_tip="Render the selected scenes to still images",
+            clear_text="Clear scenes",
+            clear_tip="Delete all rendered scene stills",
+            on_run=self.run_scenes_requested,
+            on_clear=self.clear_scenes_requested,
+        )
+        self._screenplays_group = self._run_group_box(
+            "Screenplays", self.screenplays,
+            run_text="Record",
+            run_tip="Record the selected screenplays to movie files",
+            clear_text="Clear screenplays",
+            clear_tip="Remove all recorded screenplay movies from the workspace",
+            on_run=self.record_screenplays_requested,
+            on_clear=self.clear_screenplays_requested,
+        )
         self._saved_views_group = self._group("Saved views", self.views)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
         layout.addLayout(prof_row)
-        # Stretch so the shown checklist fills the panel. On the Scenes tab the
-        # space is split between the Scenes tree (top, larger) and Saved views
-        # (bottom); the other tabs show a single full-height list.
+        # Stretch so the shown checklist fills the panel. On the Scenes/
+        # Screenplays tabs the space is split between the tree (top, larger)
+        # and Saved views (bottom); the other tabs show a single full-height list.
         layout.addWidget(self._reports_group, 2)
         layout.addWidget(self._plots_group, 2)
         layout.addWidget(self._scenes_group, 2)
+        layout.addWidget(self._screenplays_group, 2)
         layout.addWidget(self._saved_views_group, 1)
         # Default to the Reports section (the centre opens on the Reports tab).
         self.set_active_section("reports")
 
     def set_active_section(self, section: str) -> None:
-        """Show the checklist(s) for the active centre tab: ``"reports"`` shows the
-        Reports list, ``"scenes"`` shows the Scenes tree *and* the Saved views
-        list (split), anything else the Monitor plots list."""
+        """Show the checklist(s) for the active centre tab: ``"reports"`` the
+        Reports list, ``"scenes"`` the Scenes tree, ``"screenplays"`` the
+        Screenplays tree (each with the shared Saved views list below),
+        anything else the Monitor plots list."""
         scenes = section == "scenes"
+        screenplays = section == "screenplays"
         self._reports_group.setVisible(section == "reports")
         self._scenes_group.setVisible(scenes)
-        self._saved_views_group.setVisible(scenes)
-        self._plots_group.setVisible(section not in ("reports", "scenes"))
+        self._screenplays_group.setVisible(screenplays)
+        self._saved_views_group.setVisible(scenes or screenplays)
+        self._plots_group.setVisible(
+            section not in ("reports", "scenes", "screenplays")
+        )
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.
@@ -652,16 +693,17 @@ class SelectionPanel(QWidget):
         v.addWidget(lst)
         return box
 
-    def _scenes_group_box(self, title: str, lst: _CheckList) -> QGroupBox:
-        """Like ``_group`` but with a prominent ``Run`` button at the top that
-        renders the checked scenes to stills (emitting ``run_scenes_requested``)."""
+    def _run_group_box(self, title, lst, run_text, run_tip, clear_text,
+                       clear_tip, on_run, on_clear) -> QGroupBox:
+        """Like ``_group`` but with a prominent action button at the top (Run /
+        Record) plus a destructive clear button, emitting the given signals."""
         box = _SortableGroupBox(
             title, on_sort=lambda gp, lst=lst: self._show_sort_menu(lst, gp)
         )
         box.setToolTip("Right-click the title to sort A–Z / Z–A")
-        run = QPushButton("Run")
-        run.setToolTip("Render the selected scenes to still images")
-        run.clicked.connect(lambda: self.run_scenes_requested.emit())
+        run = QPushButton(run_text)
+        run.setToolTip(run_tip)
+        run.clicked.connect(lambda: on_run.emit())
         all_on = QPushButton("Select all")
         all_on.setToolTip(f"Select every entry under {title}")
         all_off = QPushButton("Clear")
@@ -672,12 +714,12 @@ class SelectionPanel(QWidget):
         all_off.clicked.connect(
             lambda: (lst.set_all(False), self.selection_changed.emit())
         )
-        # Destructive: deletes the rendered still images (not just the selection).
+        # Destructive: drops the rendered artifacts (not just the selection).
         # Styled red via the shared dangerButton object name.
-        clear_rendered = QPushButton("Clear scenes")
+        clear_rendered = QPushButton(clear_text)
         clear_rendered.setObjectName("dangerButton")
-        clear_rendered.setToolTip("Delete all rendered scene stills")
-        clear_rendered.clicked.connect(lambda: self.clear_scenes_requested.emit())
+        clear_rendered.setToolTip(clear_tip)
+        clear_rendered.clicked.connect(lambda: on_clear.emit())
         row = QHBoxLayout()
         row.addWidget(all_on)
         row.addWidget(all_off)
@@ -808,6 +850,19 @@ class SelectionPanel(QWidget):
     def selected_displayers(self) -> dict[str, list[str]]:
         """The checked displayers per checked scene: ``{scene: [displayer, ...]}``."""
         return self.scenes.checked_displayers()
+
+    def set_available_screenplays(self, groups: dict[str, list[str]]) -> None:
+        """Refresh the Screenplays tree from ``{screenplay: [displayer, ...]}``
+        while preserving the current selection."""
+        self.screenplays.set_items(groups, preserve=True)
+
+    def selected_screenplays(self) -> set[str]:
+        """The checked screenplays (tree parents)."""
+        return set(self.screenplays.checked_screenplays())
+
+    def selected_screenplay_displayers(self) -> dict[str, list[str]]:
+        """The checked displayers per checked screenplay."""
+        return self.screenplays.checked_displayers()
 
     def set_available_views(self, view_names: list[str]) -> None:
         """Refresh the Saved views checklist while preserving the selection. New
