@@ -148,11 +148,12 @@ public class record_screenplays extends StarMacro {
 
     // Finds and invokes a record/export/write method reflectively — on the
     // screenplay itself or on a likely recorder sub-object (screenplay director
-    // etc.). Candidates are tried smallest parameter list first; the first
-    // successful call wins. Every candidate is listed in the failure message
-    // (including unfillable ones, and each invocation failure's root cause);
-    // when no candidate exists at all, the full public method list of each
-    // scanned object is dumped so the log reveals this release's API.
+    // etc.). Candidates are tried movie-ish names first, fewest parameters
+    // first; a call only counts as success if the movie file exists
+    // afterwards. Every candidate is listed in the failure message (including
+    // unfillable ones, and each invocation failure's root cause); when no
+    // candidate exists at all, the full public method list of each scanned
+    // object is dumped so the log reveals this release's API.
     private void invokeRecord(Simulation sim, Object sp, String path)
             throws Exception {
         // Targets to scan: the screenplay itself plus common recorder
@@ -177,8 +178,15 @@ public class record_screenplays extends StarMacro {
                 }
             }
         }
-        candidates.sort(Comparator.comparingInt(
-            c -> ((Method) c[1]).getParameterCount()));
+        // Movie-ish names first (record/…movie…/…animation…), then the generic
+        // export*/write* pool; within each group, fewest parameters first.
+        candidates.sort(Comparator.comparingInt(c -> {
+            Method m = (Method) c[1];
+            String n = m.getName().toLowerCase();
+            boolean movieish = n.equals("record") || n.contains("movie")
+                || n.contains("animation");
+            return (movieish ? 0 : 1000) + m.getParameterCount();
+        }));
         StringBuilder tried = new StringBuilder();
         for (Object[] c : candidates) {
             Object target = c[0];
@@ -191,6 +199,17 @@ public class record_screenplays extends StarMacro {
             }
             try {
                 m.invoke(target, args);
+                // A candidate may return normally yet not produce the movie
+                // (e.g. a single-frame image export was matched): only a
+                // non-empty file at the expected path counts as success.
+                File out = new File(path);
+                if (!out.exists() || out.length() == 0) {
+                    if (out.exists()) {
+                        out.delete();  // don't leave an empty stub behind
+                    }
+                    tried.append("  [no output file]");
+                    continue;
+                }
                 sim.println("starpost: recorded via "
                     + target.getClass().getSimpleName() + "." + m.getName()
                     + "/" + m.getParameterCount());

@@ -218,6 +218,9 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert 'n.startsWith("write")' in text
         assert "[unfillable]" in text
         assert "-- public methods of " in text
+        # A candidate that returns without producing the movie is rejected.
+        assert "[no output file]" in text
+        assert 'n.contains("movie")' in text
 
 
 @pytest.fixture(scope="module")
