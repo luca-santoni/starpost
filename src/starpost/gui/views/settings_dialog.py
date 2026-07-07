@@ -337,6 +337,7 @@ class SettingsDialog(QDialog):
         self._add_page("Reports", self._build_reports_page())
         self._add_page("Plots", self._build_plots_page())
         self._add_page("Scenes", self._build_scenes_page())
+        self._add_page("Screenplays", self._build_screenplays_page())
         self._add_page("Export", self._build_export_page())
         self._add_page("Profiles", self._build_profiles_page())
         self._add_page("Misc", self._build_misc_page())
@@ -645,6 +646,57 @@ class SettingsDialog(QDialog):
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         form.addRow("", hint)
+        return self._wrap(form)
+
+    def _build_screenplays_page(self) -> QWidget:
+        # Recording resolution for screenplay movies.
+        self._movie_resolution = QComboBox()
+        self._movie_resolution.addItem("1080p", "1080p")
+        self._movie_resolution.addItem("2160p", "2160p")
+
+        # Movie container (the file extension STAR-CCM+ uses to pick the
+        # encoder).
+        self._movie_format = QComboBox()
+        self._movie_format.addItem("MP4", "mp4")
+        self._movie_format.addItem("AVI", "avi")
+        self._movie_format.addItem("MOV", "mov")
+
+        self._movie_fps = QSpinBox()
+        self._movie_fps.setRange(1, 240)
+        self._movie_fps.setFixedWidth(140)
+
+        self._movie_quality = QComboBox()
+        self._movie_quality.addItem("Low", "low")
+        self._movie_quality.addItem("Medium", "medium")
+        self._movie_quality.addItem("High", "high")
+
+        # Screenplays recorded per license checkout (one starccm+ session).
+        self._screenplays_per_checkout = QSpinBox()
+        self._screenplays_per_checkout.setRange(1, 999)
+        self._screenplays_per_checkout.setFixedWidth(140)
+
+        form = QFormLayout()
+        form.addRow("Movie resolution", self._movie_resolution)
+        form.addRow("Movie format", self._movie_format)
+        form.addRow("Frame rate (fps)", self._movie_fps)
+        form.addRow("Quality", self._movie_quality)
+        hint = QLabel(
+            "Resolution, container, frame rate and encoder quality of the "
+            "movies recorded in the Screenplays tab."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+        form.addRow("Screenplays per license", self._screenplays_per_checkout)
+        spc_hint = QLabel(
+            "How many screenplays to record per license checkout (one "
+            "STAR-CCM+ session, the sim loaded once). 1 records each in its "
+            "own checkout (safest for memory); higher values batch more per "
+            "checkout to cut license churn and reloads."
+        )
+        spc_hint.setObjectName("hint")
+        spc_hint.setWordWrap(True)
+        form.addRow("", spc_hint)
         return self._wrap(form)
 
     def _build_export_page(self) -> QWidget:
@@ -1459,6 +1511,16 @@ class SettingsDialog(QDialog):
         self._image_format.setCurrentIndex(idx if idx >= 0 else 0)
         ridx = self._image_resolution.findData(s.media.image_resolution)
         self._image_resolution.setCurrentIndex(ridx if ridx >= 0 else 0)
+        midx = self._movie_format.findData(s.media.movie_format)
+        self._movie_format.setCurrentIndex(midx if midx >= 0 else 0)
+        mridx = self._movie_resolution.findData(s.media.movie_resolution)
+        self._movie_resolution.setCurrentIndex(mridx if mridx >= 0 else 0)
+        self._movie_fps.setValue(s.media.movie_fps)
+        mqidx = self._movie_quality.findData(s.media.movie_quality)
+        self._movie_quality.setCurrentIndex(mqidx if mqidx >= 0 else 2)
+        self._screenplays_per_checkout.setValue(
+            s.media.screenplays_per_checkout
+        )
 
         idx = self._mode.findData(s.license.mode)
         self._mode.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1572,6 +1634,13 @@ class SettingsDialog(QDialog):
         s.media.scenes_per_checkout = self._scenes_per_checkout.value()
         s.media.image_format = self._image_format.currentData()
         s.media.image_resolution = self._image_resolution.currentData()
+        s.media.movie_format = self._movie_format.currentData()
+        s.media.movie_resolution = self._movie_resolution.currentData()
+        s.media.movie_fps = self._movie_fps.value()
+        s.media.movie_quality = self._movie_quality.currentData()
+        s.media.screenplays_per_checkout = (
+            self._screenplays_per_checkout.value()
+        )
         s.license = LicenseConfig(
             mode=self._mode.currentData(),
             podkey=self._podkey.text().strip(),

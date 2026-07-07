@@ -179,3 +179,28 @@ def test_record_screenplays_requires_selection(app, monkeypatch):
     win._record_screenplays()
     assert infos and "screenplay" in infos[0].lower()
     win.close()
+
+
+def test_settings_dialog_screenplays_page_round_trip(app):
+    from starpost.core.settings import Settings
+    from starpost.gui.views.settings_dialog import SettingsDialog
+
+    s = Settings()
+    s.media.movie_format = "mov"
+    s.media.movie_fps = 24
+    s.media.movie_resolution = "2160p"
+    s.media.movie_quality = "low"
+    s.media.screenplays_per_checkout = 2
+    dlg = SettingsDialog(s)
+    assert dlg._movie_format.currentData() == "mov"
+    assert dlg._movie_fps.value() == 24
+    assert dlg._movie_resolution.currentData() == "2160p"
+    assert dlg._movie_quality.currentData() == "low"
+    assert dlg._screenplays_per_checkout.value() == 2
+    # Change in the UI and accept: _on_accept copies widget values back onto
+    # the Settings object (and saves — redirected by isolated_paths).
+    dlg._movie_format.setCurrentIndex(dlg._movie_format.findData("mp4"))
+    dlg._movie_fps.setValue(60)
+    dlg._on_accept()
+    assert s.media.movie_format == "mp4"
+    assert s.media.movie_fps == 60
