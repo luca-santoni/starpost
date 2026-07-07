@@ -2,21 +2,25 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **2.2.0**
+> Version: **2.3.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
 > smoothing), **on-demand scene-still rendering** (the Scenes tab: scene →
 > scalar/vector displayer selection, saved-view rendering, parallel/`-np`
-> rendering, a thumbnail gallery with Properties), a **guided Run batch dialog**
-> (a Source → Reports → Plots → Scenes → Summary wizard producing a single
-> archive), the full in-app settings dialog, a heavily customizable report/plot
-> export, an in-app update check, and packaged builds (Linux AppImage + Windows
-> Inno Setup installer). The Java extraction macro has been run against a live
-> STAR-CCM+ 2310 install (reports, plots, and scene/view discovery); the
-> scene-render *apply-saved-view* call is the one remaining version-specific
-> operation still being validated (see [Limitations](#4-limitations)).
-> Document last updated: 2026-07-06
+> rendering, a thumbnail gallery with Properties), **on-demand screenplay
+> recording** (the Screenplays tab: screenplay → displayer selection, saved-view
+> recording, a poster-framed gallery that opens movies in the system player), a
+> **guided Run batch dialog** (a Source → Reports → Plots → Scenes → Summary
+> wizard producing a single archive), the full in-app settings dialog, a heavily
+> customizable report/plot export, an in-app update check, and packaged builds
+> (Linux AppImage + Windows Inno Setup installer). The Java extraction macro has
+> been run against a live STAR-CCM+ 2310 install (reports, plots, and scene/view
+> discovery); the scene-render *apply-saved-view* call is the one remaining
+> version-specific operation still being validated (see
+> [Limitations](#4-limitations)). Screenplay recording additionally requires
+> STAR-CCM+ 2022 or newer (see [3.6b Screenplays view](#36b-screenplays-view)).
+> Document last updated: 2026-07-07
 
 ---
 
@@ -32,6 +36,7 @@
    - [3.5 Reports view](#35-reports-view)
    - [3.6 Plots view](#36-plots-view)
    - [3.6a Scenes view](#36a-scenes-view)
+   - [3.6b Screenplays view](#36b-screenplays-view)
    - [3.7 Selection panel (right)](#37-selection-panel-right)
    - [3.8 Log console](#38-log-console)
    - [3.9 Export dialog](#39-export-dialog)
@@ -74,9 +79,12 @@ The core focus is **numeric data**: report values and monitor plots. As of
 **v2.0.0** StarPost also **renders scene stills** (images) from a `.sim`'s
 scenes — letting the engineer pick which scalar/vector displayers are shown and
 which saved camera view to render from — exported as JPG/PNG image files (see
-[Scene rendering](#scene-rendering) and the [Scenes tab](#36a-scenes-view)).
-Animations/screenplays and other field-visualization output remain out of scope
-(see [Limitations](#4-limitations)).
+[Scene rendering](#scene-rendering) and the [Scenes tab](#36a-scenes-view)). As
+of **v2.3.0** it also **records screenplays** (STAR-CCM+ animations) to movie
+files from the same scene → displayer and saved-view picker, with a poster-frame
+gallery (see [Screenplay recording](#screenplay-recording) and the
+[Screenplays tab](#36b-screenplays-view)). Other field-visualization output
+(e.g. XY plots) remains out of scope (see [Limitations](#4-limitations)).
 
 ---
 
@@ -191,6 +199,36 @@ Animations/screenplays and other field-visualization output remain out of scope
   after its hardcopy to limit memory growth. A first-open warning notes that
   rendering is memory-heavy (≥16 GB recommended; close other programs first).
 
+### Screenplay recording
+- **On-demand screenplay recording** from the **Screenplays** tab: record a
+  `.sim`'s STAR-CCM+ screenplays (animations) to **movie files** (**MP4 / AVI /
+  MOV**), at **1080p** or **2160p**, with a configurable frame rate and encoder
+  quality.
+- **Screenplay → displayer selection**: a tree, identical in behaviour to the
+  Scenes tree — each screenplay is a checkable parent and its scene's
+  **scalar/vector displayers** are checkable children — only the ticked
+  displayers are visible in the recording.
+- **Saved-view recording**: shares the Scenes tab's **Saved views** list; each
+  checked screenplay is recorded once per checked view (its camera applied
+  first), or from the screenplay's own/current view when none is checked.
+- **Discovered during extraction**: the normal extraction pass also lists each
+  sim's screenplays (and their scene's scalar/vector displayers), so the
+  Screenplays tab populates without recording anything. Screenplay discovery
+  and recording require **STAR-CCM+ 2022 or newer**; on older releases the tree
+  is simply empty.
+- **Poster-framed gallery** of the recorded movies (per ticked data set): each
+  tile shows a poster frame (the movie's first frame) with a play badge;
+  double-click opens the movie in the **system video player**; right-click →
+  **Properties** (file size, format, frame rate, and the parent `.sim`, data
+  set, screenplay, displayers, and saved view).
+- **Recording pass** (separate from numeric extraction and from scene
+  rendering): runs the record macro in **parallel** (`starccm+ -np`), recording
+  a configurable number of **screenplays per license checkout**. The recorder is
+  invoked **reflectively** (STAR-CCM+'s screenplay API is scanned at runtime,
+  not compiled against), so a mismatch on a given release fails that
+  screenplay only, never the whole run. Shares the Scenes tab's first-open
+  memory warning.
+
 ### Configuration, appearance & resilience
 - **Configurable STAR-CCM+ executable path** and **extra CLI args**.
 - **Licensing**: defaults to **Power-on-Demand key + license server**
@@ -228,7 +266,7 @@ panels.
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  [Run batch] | [Export…]  [Settings…]                        ← toolbar    │
 ├───────────────┬───────────────────────────────────┬───────────────────┤
-│  Files | Data │   Reports | Plots | Scenes        │  Selection panel    │
+│  Files | Data │ Reports|Plots|Scenes|Screenplays  │  Selection panel    │
 │  (left tabs)  │   (centre tabs)                   │  (Profile + lists)  │
 │               │                                   │                     │
 ├───────────────┴───────────────────────────────────┴───────────────────┤
@@ -238,10 +276,12 @@ panels.
 ```
 
 - **Left** — a tab widget with **Files** and **Data** tabs.
-- **Centre** — a tab widget with **Reports**, **Plots**, and **Scenes** tabs.
+- **Centre** — a tab widget with **Reports**, **Plots**, **Scenes**, and
+  **Screenplays** tabs.
 - **Right** — the **Selection panel** (profile controls + the list(s) for the
-  active centre tab — Reports list on Reports, Monitor plots on Plots, and the
-  Scenes tree + Saved views list on Scenes).
+  active centre tab — Reports list on Reports, Monitor plots on Plots, the
+  Scenes tree + Saved views list on Scenes, and the Screenplays tree + the same
+  Saved views list on Screenplays).
 - **Bottom** — the **Log console** (progress + streaming log).
 - The three top regions and the bottom are separated by draggable splitters.
 - Window title: **StarPost**; default size 1280×800.
@@ -454,18 +494,68 @@ for the ticked data set(s).
 Rendering is driven from the **Scenes** section of the selection panel (right);
 see [3.7](#37-selection-panel-right).
 
+### 3.6b Screenplays view
+
+The **Screenplays** tab (centre, after Scenes): a **thumbnail gallery** of the
+screenplay movies recorded for the ticked data set(s). It mirrors the Scenes
+gallery, with poster frames standing in for the (not previewable) video.
+
+- Recording shares the Scenes tab's first-open **"rendering is very
+  computationally expensive"** memory warning (recording a movie is heavier
+  than a still) and its **"Do not show this again"** setting.
+- Until something is recorded, a centred hint **"Select screenplays and press
+  Record to create movies"** is shown.
+- Each recorded movie appears as a **tile** showing its **poster frame** (the
+  movie's first frame, exported alongside it) with a **play badge** overlay; a
+  movie with no poster falls back to a generic play icon. A failed recording
+  shows **"(record failed)"**; a movie or poster file missing from disk shows
+  **"(file missing)"**.
+- **Double-click** a tile to open the movie in the **system video player**
+  (`QDesktopServices`, i.e. whatever the OS associates with the file type).
+- **Clicking empty space** clears the tile selection (removes the accent
+  highlight).
+- **Right-click a tile → Properties** opens a window listing the **file
+  size**, **format**, and **frame rate**, and — below a separator — the
+  **parent `.sim` file**, **data set**, **screenplay**, **displayers** (the
+  visible scalar/vector displayers), and **saved view**.
+
+**Output naming:** each recording writes
+`<dataset>-<screenplay>[-<displayers>][-<view>].<ext>` (the movie, extension
+per the configured container) plus a matching
+`<dataset>-<screenplay>[-<displayers>][-<view>]_poster.png` (the poster frame),
+to the configured output folder, or alongside the `.sim` when none is set.
+
+**One data set at a time:** like scene rendering, **Record** requires exactly
+one ticked Data-tab entry — recording is heavy and the output is per-`.sim`;
+ticking zero or more than one and pressing Record shows a message asking you to
+tick exactly one.
+
+**Settings → Screenplays** (see [3.10](#310-settings-dialog)) configures the
+recorded movie's **resolution** (1080p / 2160p), **container** (MP4 / AVI /
+MOV), **frame rate**, **encoder quality**, and how many **screenplays per
+license checkout** are recorded in one STAR-CCM+ session.
+
+> Screenplay discovery and recording require **STAR-CCM+ 2022 or newer** (the
+> release that introduced first-class Screenplays). On older installs the
+> Screenplays tree is simply empty — nothing errors, there is just nothing to
+> record.
+
+Recording is driven from the **Screenplays** section of the selection panel
+(right); see [3.7](#37-selection-panel-right).
+
 ### 3.7 Selection panel (right)
 
 Chooses which reports and monitor plots are shown/exported, and manages profiles.
 It operates on the **union** of names across the loaded (and ticked) data.
 
 The panel shows the list(s) **matching the active centre tab**: the **Reports**
-list on the Reports tab, the **Monitor plots** list on the Plots tab, and the
-**Scenes** tree + **Saved views** list (split, scenes on top) on the Scenes tab.
-The shown list(s) expand to fill the panel. Selections are remembered —
-switching tabs only changes which list is visible, never what is ticked — and
-profiles still cover reports and plots together (scenes/views are not part of
-profiles).
+list on the Reports tab, the **Monitor plots** list on the Plots tab, the
+**Scenes** tree + **Saved views** list (split, scenes on top) on the Scenes
+tab, and the **Screenplays** tree + the same **Saved views** list (split,
+screenplays on top) on the Screenplays tab. The shown list(s) expand to fill
+the panel. Selections are remembered — switching tabs only changes which list
+is visible, never what is ticked — and profiles still cover reports and plots
+together (scenes/views/screenplays are not part of profiles).
 
 **Profile row (top):**
 - **Profile dropdown** — lists the built-in **Default** first, then saved
@@ -513,11 +603,28 @@ profiles).
   confirmation (the image files already saved on disk are kept), like *Clear
   data*.
 
-**"Saved views" group (Scenes tab, beneath Scenes):**
-- A checklist of the sim's **saved camera views**. Each checked scene is rendered
-  once **per checked view** (its camera applied first); with **none** checked,
-  scenes render from their current view. Like the scene tree, it is scoped to the
-  ticked data set(s).
+**"Screenplays" group (Screenplays tab):**
+- A **tree** of the screenplays in the ticked data set(s), scoped to the current
+  Data selection — identical behaviour to the Scenes tree. Each screenplay is a
+  checkbox; checking it **reveals its scene's scalar/vector displayers** as
+  checkable children, **unticked**, so you pick which to show deliberately.
+- A **Record** button at the top records the checked screenplays of the
+  **single** ticked data set (it errors if zero or more than one is ticked) to
+  movie files, showing only the checked displayers, from the checked **Saved
+  views** (or the screenplay's own/current view if none). No folder prompt —
+  files go to the configured output folder, or alongside the `.sim`. Recording
+  runs in parallel and per the *Screenplays per license* setting; progress and
+  per-screenplay log lines appear in the log console.
+- **Select all** / **Clear** tick/untick every screenplay and displayer.
+- **Clear screenplays** (red) deletes all recorded movies from the workspace
+  after a confirmation (the movie/poster files already saved on disk are kept),
+  like *Clear scenes*.
+
+**"Saved views" group (Scenes and Screenplays tabs, beneath Scenes/Screenplays):**
+- A checklist of the sim's **saved camera views**, shared by both tabs. Each
+  checked scene/screenplay is rendered or recorded once **per checked view**
+  (its camera applied first); with **none** checked, it uses its current view.
+  Like the scene/screenplay tree, it is scoped to the ticked data set(s).
 
 ### 3.8 Log console
 
@@ -696,7 +803,7 @@ profile yields **nothing to output**.
 ### 3.10 Settings dialog
 
 Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
-**eleven pages**, shown in a scrollable stack on the right. **Save** writes
+**twelve pages**, shown in a scrollable stack on the right. **Save** writes
 everything back to `settings.yaml`; **Cancel** discards (and reverts any live
 theme preview). A few actions take effect **immediately**, independent of
 Save/Cancel: **deleting a profile**, **Reset settings**, **Clear all temp
@@ -713,6 +820,7 @@ The pages, in nav order:
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
 | **Scenes** | Scene-rendering output options: **Image resolution** (1080p / 2160p) and **Image format** (JPG / PNG). |
+| **Screenplays** | Screenplay-recording output options: **Movie resolution** (1080p / 2160p), **Movie format** (MP4 / AVI / MOV), **Frame rate (fps)**, **Quality** (Low / Medium / High), and **Screenplays per license** (how many screenplays record per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
 | **Profiles** | Two sections. **Report/plot profiles** — one row per profile (Default first); **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**; **Delete** (not shown for Default) removes the profile after confirmation, immediately. **Batch profiles** — the saved [Run batch dialog](#39a-run-batch-dialog) selections, each with **Show Details** (its reports, saved plots and saved scenes — right-click a saved plot or scene there for **Properties**) and **Delete**. |
 | **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
@@ -772,17 +880,24 @@ running `__version__` against the latest release tag.
   sequential and results are cached. The tool is not a lightweight file reader.
 
 ### Scope
-- **Numeric data + scene stills.** Reports, monitor plots, and **rendered scene
+- **Numeric data + rendered media.** Reports, monitor plots, **rendered scene
   stills** (images of a sim's scenes, with selectable scalar/vector displayers
-  and saved-view cameras). **No animations/screenplays**, and no creation/editing
-  of scenes, displayers, or views inside the `.sim` — StarPost renders the scenes
-  that already exist. Streamline/other displayer types are shown if a scene
-  contains them but are **not selectable** (only scalar/vector displayers are).
-- **Scene rendering is heavy.** It goes through OpenGL (needs working graphics /
-  an offscreen GL context on headless machines) and is memory-intensive — a large
-  case can exhaust RAM, so ≥16 GB is recommended and the per-checkout scene count
-  is kept low by default. Rendering re-runs STAR-CCM+ (one or more extra license
-  checkouts), unlike the cached numeric data.
+  and saved-view cameras), and **recorded screenplay movies** (video, via the
+  same displayer/saved-view picker). No creation/editing of scenes, displayers,
+  views, or screenplays inside the `.sim` — StarPost only renders/records what
+  already exists. Streamline/other displayer types are shown if a scene contains
+  them but are **not selectable** (only scalar/vector displayers are).
+- **Scene rendering and screenplay recording are heavy.** Both go through
+  OpenGL (need working graphics / an offscreen GL context on headless machines)
+  and are memory-intensive — recording a movie is heavier than a still, a large
+  case can exhaust RAM, so ≥16 GB is recommended and the per-checkout scene/
+  screenplay count is kept low by default. Both re-run STAR-CCM+ (one or more
+  extra license checkouts), unlike the cached numeric data.
+- **Screenplay recording requires STAR-CCM+ 2022 or newer** (the release that
+  introduced first-class Screenplays). On older installs the Screenplays tree
+  is simply empty. The record macro finds the recorder method **reflectively**
+  (never compiled against the screenplay API), so an API mismatch on a given
+  release fails only that screenplay, logged as an error row, not the whole run.
 - **Monitor plots only** for plot data (value-vs-iteration/time, e.g. residuals
   and force histories). **XY plots** (a field along a line/probe) and other plot
   types are not handled.
@@ -814,6 +929,12 @@ running `__version__` against the latest release tag.
   still the main unverified assumption for plots. The parser handles the common
   single-X-column layout and is flagged for tightening once tested on real
   exports.
+- **Screenplay recording is not yet validated against a live STAR-CCM+
+  install.** The record macro finds the recorder reflectively (scanning the
+  screenplay object's public methods) precisely because the screenplay API's
+  class/method names shift across releases; automated tests cover macro
+  template rendering only. Manual verification against a real 2022+ install is
+  the remaining step.
 
 ### Packaging
 - **PyInstaller does not cross-compile** — each OS's artifact must be built on
@@ -920,15 +1041,21 @@ Defined in `src/starpost/data/models.py`:
 - **`Displayer`** — a scene's scalar/vector displayer: `name`, `kind`
   (`scalar` / `vector`).
 - **`Scene`** — `name` + its `displayers[]` (scalar/vector only).
-- **`MediaArtifact`** — a rendered still: `name` (display label), `path`,
-  `source` (scene), `kind` (`still`), optional `error`, plus provenance for the
-  Properties window: `sim_path`, `displayers` (the visible ones), `view`.
+- **`Screenplay`** — `name`, `scene` (the scene it animates, `""` if
+  unresolved) + that scene's `displayers[]` (scalar/vector only) — parallel to
+  `Scene`.
+- **`MediaArtifact`** — a rendered/recorded output: `name` (display label),
+  `path`, `source` (the scene, or the screenplay for movies), `kind` (`still` |
+  `movie`), optional `error`, plus provenance for the Properties window:
+  `sim_path`, `displayers` (the visible ones), `view`, and `poster` (movie-kind
+  only: absolute path to the exported poster-frame PNG).
 - **`SimResult`** — everything from one `.sim`: `sim_path`, `reports[]`,
   `plots[]`, `scenes[]` (with displayers), `views[]` (saved-view names),
-  `media[]` (rendered stills), `extracted_at` timestamp, optional batch-level
-  `error`. Helpers: `sim_name`, `report_names()`, `plot_names()`,
-  `scene_names()`, and `signature()` (report + plot names, for the homogeneity
-  check — scenes/views/media are excluded).
+  `screenplays[]` (with their scene's displayers), `media[]` (rendered stills +
+  recorded movies), `extracted_at` timestamp, optional batch-level `error`.
+  Helpers: `sim_name`, `report_names()`, `plot_names()`, `scene_names()`,
+  `screenplay_names()`, and `signature()` (report + plot names, for the
+  homogeneity check — scenes/views/screenplays/media are excluded).
 
 Persistence type in `src/starpost/core/settings.py`:
 
@@ -1198,20 +1325,35 @@ PYTHONPATH=src python -m pytest tests/ -q
   saved-view cameras; a thumbnail gallery with open / right-click Properties /
   Clear scenes; Settings → Scenes (image format + resolution); a first-open
   memory warning; and "Add folder…" importing into a named internal folder.
+- **Screenplay recording (v2.3.0)** — the Screenplays tab: screenplay/
+  displayer discovery during extraction (reusing scene discovery for each
+  screenplay's owning scene); a screenplay→displayer tree + the shared Saved
+  views list; an on-demand, reflective record macro (no compile-time binding to
+  the screenplay API) driven in parallel (`-np`) with screenplays-per-checkout
+  batching; per-displayer visibility and saved-view cameras; one exported
+  poster frame per movie; a poster-framed gallery with open-in-system-player /
+  right-click Properties / Clear screenplays; Settings → Screenplays (movie
+  format, resolution, frame rate, quality); and reuse of the Scenes tab's
+  first-open memory warning.
 - **Cross-platform** config/cache/log locations via platformdirs; packaged Linux
   AppImage and Windows Inno Setup installer.
 - Unit tests for parser, classifier, aggregator, license flags, profile
   round-trip, empty-series detection, portable CSV, credential redaction, file
-  permissions, the updater, tooltip timing, temp-file clearing, and the scene
-  pipeline (scene/media parsing, render-macro generation, media config).
+  permissions, the updater, tooltip timing, temp-file clearing, the scene
+  pipeline (scene/media parsing, render-macro generation, media config), and the
+  screenplay pipeline (screenplay/media parsing, record-macro generation, movie
+  settings, the Screenplays selection tree, and the gallery).
 
 **Not yet exposed / pending:** see [Limitations](#4-limitations) — stop-after-
 current UI, per-plot axis-override UI, and an enforced batch-size warning.
 
 **Not validated:** the scene-render *apply-saved-view* call
-(`getCurrentView().setView(...)`) — the one remaining version-specific macro
-operation — and the `StarPlot.export()` monitor-plot CSV layout. Reports, plots,
-and scene/view **discovery** have been run against a live STAR-CCM+ 2310 install.
+(`getCurrentView().setView(...)`) — the one remaining version-specific scene
+macro operation — the `StarPlot.export()` monitor-plot CSV layout, and the
+screenplay record macro's reflective recorder lookup (automated tests cover
+macro template rendering only; exercising it against a real STAR-CCM+ 2022+
+install is a manual step still pending). Reports, plots, and scene/view
+**discovery** have been run against a live STAR-CCM+ 2310 install.
 
 ---
 
@@ -1254,8 +1396,13 @@ These were locked during requirements gathering and shaped the v1 design.
 - **Enforce/warn on the batch-size ceiling** if it remains a real constraint.
 - **Validate the packaged builds** end to end on clean machines, and consider
   **code-signing** the Windows installer to avoid SmartScreen warnings.
-- **Possible later features** (out of scope today): scene **animations /
-  screenplays** (video), XY plots and other plot types, richer report templating
-  (e.g. full PDF reports), and optional multi-sim-per-session macro runs to reduce
-  license churn further.
+- **Validate screenplay recording** against a real STAR-CCM+ 2022+ install (the
+  reflective recorder lookup is currently only exercised via macro-template
+  unit tests). Consider bundling recorded movies into the [Run batch](#39a-run-batch-dialog)
+  `.zip` export (out of scope today — recorded movies live in the gallery/output
+  folder only).
+- **Possible later features** (out of scope today): image-sequence screenplay
+  output (movie file only today), XY plots and other plot types, richer report
+  templating (e.g. full PDF reports), and optional multi-sim-per-session macro
+  runs to reduce license churn further.
 ```
