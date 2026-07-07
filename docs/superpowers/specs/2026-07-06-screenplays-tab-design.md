@@ -74,6 +74,13 @@ like scene rendering.
   objects, called alongside the existing scenes/views parsing.
 - Saved views are already discovered (`SimResult.views`) and reused unchanged.
 
+### Cache persistence (`data/store.py`)
+- `_result_to_dict` builds its payload with explicit keys (not plain `asdict`), so
+  it gains a `"screenplays": [asdict(sp) for sp in r.screenplays]` entry, and
+  `_result_from_dict` reads it back via `d.get("screenplays", [])` — older caches
+  without the key load with an empty list. `MediaArtifact(**m)` already tolerates
+  the new `poster` field (it defaults when absent from old caches).
+
 ## Section 2 — Recording macro, runner & worker
 
 ### Macro (`macros/record_screenplays.java.j2`, public class `record_screenplays`)
@@ -227,6 +234,9 @@ Offscreen and serialized per the repo's GUI-pytest rule
 ## Out of scope (YAGNI)
 
 - Image-sequence output (movie file only).
+- Including recorded movies in the "Run batch" `.zip` export (`batch/run.py`) —
+  movies live in the gallery/output folder only for now; bundling them is a
+  follow-up if wanted.
 - Editing/authoring screenplays inside StarPost (they are authored in STAR-CCM+;
   StarPost only records existing ones).
 - In-app video playback (open in the system player).
