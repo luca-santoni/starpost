@@ -79,3 +79,56 @@ def test_record_and_clear_buttons_emit_signals(app):
     next(b for b in buttons if b.text() == "Record").click()
     next(b for b in buttons if b.text() == "Clear screenplays").click()
     assert got == ["record", "clear"]
+
+
+def _png(tmp_path, name="poster.png"):
+    """A tiny real PNG on disk (galleries decode from disk)."""
+    from PySide6.QtGui import QImage
+
+    p = tmp_path / name
+    img = QImage(8, 8, QImage.Format.Format_RGB32)
+    img.fill(0xFF336699)
+    img.save(str(p))
+    return p
+
+
+def test_thumbnail_cache_decodes_and_misses(app, tmp_path):
+    from starpost.gui.views.thumbnails import ThumbnailCache
+
+    cache = ThumbnailCache(64)
+    png = _png(tmp_path)
+    assert cache.icon(str(png)) is not None
+    assert cache.icon(str(tmp_path / "missing.png")) is None
+
+
+def test_screenplay_view_shows_movie_tiles(app, tmp_path):
+    from starpost.data.models import MediaArtifact
+    from starpost.gui.views.screenplay_view import ScreenplayView
+
+    poster = _png(tmp_path)
+    movie = tmp_path / "a-Flyby.mp4"
+    movie.write_bytes(b"stub")
+    view = ScreenplayView()
+    view.show_media([
+        MediaArtifact(name="Flyby", path=str(movie), source="Flyby",
+                      kind="movie", poster=str(poster)),
+        MediaArtifact(name="Broken", path="", source="Broken", kind="movie",
+                      error="ERROR"),
+        MediaArtifact(name="Gone", path=str(tmp_path / "gone.mp4"),
+                      source="Gone", kind="movie"),
+        # Stills are the Scenes gallery's business — ignored here.
+        MediaArtifact(name="Still", path=str(poster), source="S",
+                      kind="still"),
+    ])
+    gallery = view._gallery
+    labels = [gallery.item(i).text() for i in range(gallery.count())]
+    assert labels == ["Flyby", "Broken\n(record failed)", "Gone\n(file missing)"]
+    assert not gallery.item(0).icon().isNull()
+
+
+def test_screenplay_view_empty_shows_hint(app):
+    from starpost.gui.views.screenplay_view import ScreenplayView
+
+    view = ScreenplayView()
+    view.show_media([])
+    assert view._stack.currentWidget() is view._hint
