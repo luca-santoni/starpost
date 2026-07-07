@@ -91,16 +91,34 @@ class MediaConfig:
     ``image_resolution`` is the render resolution ("1080p" or "2160p"), mapped to
     pixel dimensions by :data:`IMAGE_RESOLUTIONS`.
 
+    Screenplay recording (Screenplays tab → Record) is configured by ``movie_format``
+    (the recorded movie container: "mp4", "avi", or "mov"), ``movie_fps`` (frame rate),
+    ``movie_resolution`` (recording resolution: "1080p" or "2160p"), ``movie_quality``
+    (encoder quality: "low", "medium", or "high"), and ``screenplays_per_checkout``
+    (how many screenplays are recorded per STAR-CCM+ session before reloading the file).
+
     Defaults to 1080p JPG at 1× magnification."""
     magnification: int = 1
     render_np: int = 1   # cores for parallel rendering; 1 == serial
     scenes_per_checkout: int = 1   # scenes rendered per license checkout
     image_format: str = "jpg"   # rendered image type: "jpg" | "png"
     image_resolution: str = "1080p"   # render resolution: "1080p" | "2160p"
+    # Screenplay recording (Screenplays tab → Record).
+    movie_format: str = "mp4"        # recorded movie container: mp4 | avi | mov
+    movie_fps: int = 30              # recorded movie frame rate
+    movie_resolution: str = "1080p"  # recording resolution: "1080p" | "2160p"
+    movie_quality: str = "high"      # encoder quality: low | medium | high
+    screenplays_per_checkout: int = 1  # screenplays recorded per checkout
 
     def dimensions(self) -> tuple[int, int]:
         """The (width, height) in pixels for the configured resolution."""
         return IMAGE_RESOLUTIONS.get(self.image_resolution, IMAGE_RESOLUTIONS["1080p"])
+
+    def movie_dimensions(self) -> tuple[int, int]:
+        """The (width, height) in pixels for the configured movie resolution."""
+        return IMAGE_RESOLUTIONS.get(
+            self.movie_resolution, IMAGE_RESOLUTIONS["1080p"]
+        )
 
 
 # Image formats offered for scene rendering (file extension == value).
@@ -108,6 +126,13 @@ IMAGE_FORMATS = ("jpg", "png")
 
 # Render resolutions offered for scene rendering -> (width, height) in pixels.
 IMAGE_RESOLUTIONS = {"1080p": (1920, 1080), "2160p": (3840, 2160)}
+
+# Movie containers offered for screenplay recording (file extension == value).
+MOVIE_FORMATS = ("mp4", "avi", "mov")
+
+# Encoder quality levels for screenplay recording; the record macro maps them
+# to a 0..1 quality factor (low/medium/high -> 0.5/0.75/1.0).
+MOVIE_QUALITIES = ("low", "medium", "high")
 
 
 @dataclass
@@ -219,6 +244,28 @@ class Settings:
                     in IMAGE_RESOLUTIONS
                     else "1080p"
                 ),
+                movie_format=(
+                    str(med.get("movie_format", "mp4")).lower()
+                    if str(med.get("movie_format", "mp4")).lower()
+                    in MOVIE_FORMATS
+                    else "mp4"
+                ),
+                movie_fps=max(1, int(med.get("movie_fps", 30))),
+                movie_resolution=(
+                    str(med.get("movie_resolution", "1080p")).lower()
+                    if str(med.get("movie_resolution", "1080p")).lower()
+                    in IMAGE_RESOLUTIONS
+                    else "1080p"
+                ),
+                movie_quality=(
+                    str(med.get("movie_quality", "high")).lower()
+                    if str(med.get("movie_quality", "high")).lower()
+                    in MOVIE_QUALITIES
+                    else "high"
+                ),
+                screenplays_per_checkout=max(
+                    1, int(med.get("screenplays_per_checkout", 1))
+                ),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -275,6 +322,11 @@ class Settings:
                 "scenes_per_checkout": self.media.scenes_per_checkout,
                 "image_format": self.media.image_format,
                 "image_resolution": self.media.image_resolution,
+                "movie_format": self.media.movie_format,
+                "movie_fps": self.media.movie_fps,
+                "movie_resolution": self.media.movie_resolution,
+                "movie_quality": self.media.movie_quality,
+                "screenplays_per_checkout": self.media.screenplays_per_checkout,
             },
             "appearance": {
                 "mode": self.appearance.mode,
