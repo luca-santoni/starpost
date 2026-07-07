@@ -1,6 +1,7 @@
 """Screenplays feature: discovery, media-index parsing, record-macro generation,
 settings round-trips, and cache persistence (the Screenplays tab's backend)."""
 import json
+import pytest
 import tempfile
 from pathlib import Path
 
@@ -211,3 +212,65 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert "Class.forName" in text
         # Each screenplay's scene is closed to free graphics memory.
         assert "scene.close()" in text
+
+
+@pytest.fixture(scope="module")
+def app():
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
+class _StubRunner:
+    """Duck-typed runner for worker tests: records calls, returns canned
+    artifacts or raises."""
+
+    def __init__(self, artifacts=None, error=None):
+        self.calls = []
+        self._artifacts = artifacts or []
+        self._error = error
+
+    def record_screenplays(self, sim_file, output_dir, show, views,
+                           log_sink=None):
+        self.calls.append((sim_file, dict(show), list(views)))
+        if self._error:
+            raise self._error
+        return list(self._artifacts)
+
+
+def test_screenplay_record_worker_emits_artifacts(app, tmp_path):
+    from starpost.batch.queue import ScreenplayRecordWorker
+
+    art = MediaArtifact(name="Flyby", path="/out/a.mp4", source="Flyby",
+                        kind="movie")
+    runner = _StubRunner(artifacts=[art])
+    jobs = [(tmp_path / "a.sim", {"Flyby": ["Scalar velocity"]})]
+    worker = ScreenplayRecordWorker(jobs, runner, tmp_path, views=["Front"])
+    recorded, progress, finished = [], [], []
+    worker.recorded.connect(lambda sp, arts: recorded.append((sp, arts)))
+    worker.progress.connect(lambda done, total: progress.append((done, total)))
+    worker.finished.connect(lambda: finished.append(1))
+    worker.run()
+    assert recorded == [(str(tmp_path / "a.sim"), [art])]
+    assert progress == [(1, 1)] and finished == [1]
+    assert runner.calls == [
+        (tmp_path / "a.sim", {"Flyby": ["Scalar velocity"]}, ["Front"])
+    ]
+
+
+def test_screenplay_record_worker_continues_after_failure(app, tmp_path):
+    from starpost.batch.queue import ScreenplayRecordWorker
+
+    runner = _StubRunner(error=RuntimeError("boom"))
+    jobs = [
+        (tmp_path / "a.sim", {"Flyby": []}),
+        (tmp_path / "b.sim", {"Intro": []}),
+    ]
+    worker = ScreenplayRecordWorker(jobs, runner, tmp_path)
+    logs, finished = [], []
+    worker.log.connect(logs.append)
+    worker.finished.connect(lambda: finished.append(1))
+    worker.run()
+    assert finished == [1]
+    assert len(runner.calls) == 2  # the second job still ran
+    assert any("Recording failed" in line for line in logs)

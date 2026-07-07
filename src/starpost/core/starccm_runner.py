@@ -15,7 +15,11 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
-from starpost.core.macro_generator import render_macro, render_scenes_macro
+from starpost.core.macro_generator import (
+    record_screenplays_macro,
+    render_macro,
+    render_scenes_macro,
+)
 from starpost.core.result_parser import parse_media_index, parse_sim_output
 from starpost.core.settings import Settings
 from starpost.data.models import MediaArtifact, SimResult
@@ -176,6 +180,56 @@ class StarRunner:
         artifacts = parse_media_index(sim_file.stem, output_dir)
         sink(f"Rendered {len(artifacts)} scene still(s) from {sim_file.name}")
         return artifacts
+
+    def record_screenplays(
+        self,
+        sim_file: Path,
+        output_dir: Path,
+        screenplay_show: dict[str, list[str]],
+        view_names: Optional[list[str]] = None,
+        log_sink: Optional[LogSink] = None,
+    ) -> list[MediaArtifact]:
+        """Record the given screenplays of one .sim to movie files.
+
+        ``screenplay_show`` maps each screenplay to record to the scalar/vector
+        displayers of its scene to keep visible. ``view_names`` are the saved
+        views to record each screenplay from (empty/None == its own camera).
+        Runs the separate record macro (one license checkout) and returns the
+        movie artifacts from the media index.
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+        sink = log_sink or (lambda s: None)
+        media = self.settings.media
+        np = self._render_np(media)
+        width, height = media.movie_dimensions()
+
+        with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
+            macro = record_screenplays_macro(
+                output_dir,
+                Path(tmp),
+                screenplay_show,
+                list(view_names or []),
+                width,
+                height,
+                media.movie_fps,
+                media.movie_format,
+                media.movie_quality,
+            )
+            cmd = self.build_command(macro, sim_file, np=np)
+            shown = redact_command(cmd)
+            sink(f"$ {shown}")
+            log.info("recording screenplays: %s", shown)
+
+            code = self._stream(cmd, sink)
+            if code != 0:
+                msg = f"starccm+ exited with code {code} for {sim_file.name}"
+                sink(msg)
+                raise StarRunError(msg)
+
+        artifacts = parse_media_index(sim_file.stem, output_dir)
+        movies = [a for a in artifacts if a.kind == "movie"]
+        sink(f"Recorded {len(movies)} movie(s) from {sim_file.name}")
+        return movies
 
     @staticmethod
     def _render_np(media) -> Optional[int]:
