@@ -302,3 +302,35 @@ def test_screenplay_record_worker_continues_after_failure(app, tmp_path):
     assert finished == [1]
     assert len(runner.calls) == 2  # the second job still ran
     assert any("Recording failed" in line for line in logs)
+
+
+def test_record_macro_emits_frame_progress_markers():
+    with tempfile.TemporaryDirectory() as d:
+        path = record_screenplays_macro(
+            Path("/out"), Path(d), {"Flyby": []}, [], 1920, 1080, 30,
+            "mp4", "high",
+        )
+        text = path.read_text()
+        assert '"starpost-progress: frame "' in text
+
+
+def test_screenplay_record_worker_converts_frame_markers(app, tmp_path):
+    from starpost.batch.queue import ScreenplayRecordWorker
+
+    class _MarkerRunner:
+        def record_screenplays(self, sim_file, output_dir, show, views,
+                               log_sink=None):
+            log_sink("normal line")
+            log_sink("starpost-progress: frame 3/10")
+            return []
+
+    worker = ScreenplayRecordWorker(
+        [(tmp_path / "a.sim", {"S": []})], _MarkerRunner(), tmp_path
+    )
+    logs, frames = [], []
+    worker.log.connect(logs.append)
+    worker.frame_progress.connect(lambda d, t: frames.append((d, t)))
+    worker.run()
+    assert frames == [(3, 10)]
+    assert "normal line" in logs
+    assert not any("starpost-progress" in line for line in logs)

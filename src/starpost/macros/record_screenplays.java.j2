@@ -419,6 +419,11 @@ public class record_screenplays extends StarMacro {
                     sim.println("starpost: first frame exported ("
                         + r + ")");
                 }
+                // Streamed to the client log; the GUI turns these into
+                // fine-grained progress-bar movement (and keeps them out of
+                // the visible console).
+                sim.println("starpost-progress: frame " + (f + 1) + "/"
+                    + frames);
             }
         } catch (Exception e) {
             tried.append("\n  [frame-loop failed: ").append(rootMessage(e))

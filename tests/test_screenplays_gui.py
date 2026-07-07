@@ -204,3 +204,19 @@ def test_settings_dialog_screenplays_page_round_trip(app):
     dlg._on_accept()
     assert s.media.movie_format == "mp4"
     assert s.media.movie_fps == 60
+
+
+def test_record_frame_progress_scales_bar(app, monkeypatch):
+    import starpost.gui.main_window as mw
+    from starpost.core.settings import Settings
+
+    win = mw.MainWindow(Settings())
+    calls = []
+    monkeypatch.setattr(
+        win.log_console, "set_progress", lambda d, t: calls.append((d, t))
+    )
+    win._record_jobs_done = 1
+    win._record_jobs_total = 3
+    win._on_record_frame_progress(165, 331)
+    assert calls == [(1498, 3000)]  # 1000 + round(1000 * 165/331)
+    win.close()

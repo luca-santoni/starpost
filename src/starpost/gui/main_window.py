@@ -97,6 +97,10 @@ class MainWindow(QMainWindow):
         # (Screenplays tab → Record). Mirrors the scene render pair above.
         self._record_thread: QThread | None = None
         self._record_worker: ScreenplayRecordWorker | None = None
+        # Job/frame counters for the recording progress bar (frames advance
+        # the bar fractionally between per-checkout job ticks).
+        self._record_jobs_done = 0
+        self._record_jobs_total = 0
         # Whether the Screenplays "recording is expensive" warning has shown
         # this session, and the movie paths last drawn in its gallery.
         self._screenplays_warning_shown = False
@@ -805,7 +809,8 @@ class MainWindow(QMainWindow):
 
         self._record_thread.started.connect(self._record_worker.run)
         self._record_worker.log.connect(self.log_console.append)
-        self._record_worker.progress.connect(self.log_console.set_progress)
+        self._record_worker.progress.connect(self._on_record_job_progress)
+        self._record_worker.frame_progress.connect(self._on_record_frame_progress)
         self._record_worker.recorded.connect(self._on_screenplays_recorded)
         self._record_worker.finished.connect(self._on_record_finished)
         self._record_worker.finished.connect(self._record_thread.quit)
@@ -814,6 +819,8 @@ class MainWindow(QMainWindow):
         # All of a chunk's screenplays record in one checkout, so progress is
         # per chunk (the macro streams per-screenplay progress to the log).
         self.log_console.start_progress(len(jobs))
+        self._record_jobs_done = 0
+        self._record_jobs_total = len(jobs)
         # Switch to the Screenplays tab so the gallery is in view when the
         # movies land.
         self._center_tabs.setCurrentWidget(self.screenplay_view)
@@ -846,6 +853,23 @@ class MainWindow(QMainWindow):
         # gallery to rebuild — the poster cache reloads any changed images.
         self._screenplay_gallery_paths = None
         self._refresh_from_store()
+
+    def _on_record_job_progress(self, done: int, total: int) -> None:
+        """A recording job (one license checkout) finished: tick the coarse
+        bar and remember the counts for the per-frame interpolation."""
+        self._record_jobs_done = done
+        self._record_jobs_total = total
+        self.log_console.set_progress(done, total)
+
+    def _on_record_frame_progress(self, frame: int, frames: int) -> None:
+        """A frame rendered inside the current job: advance the bar
+        fractionally between job ticks (jobs_done + frame/frames, in
+        per-mille units so set_progress's integer API keeps the detail)."""
+        total = max(self._record_jobs_total, 1)
+        done_units = self._record_jobs_done * 1000 + round(
+            1000 * frame / max(frames, 1)
+        )
+        self.log_console.set_progress(done_units, total * 1000)
 
     def _clear_screenplays(self) -> None:
         """Screenplays tab → "Clear screenplays": drop every recorded movie

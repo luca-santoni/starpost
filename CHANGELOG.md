@@ -17,6 +17,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 - **Settings → Screenplays** — movie resolution (1080p/2160p), container
   (MP4/AVI/MOV), frame rate, encoder quality, and screenplays-per-license
   checkout batching.
+- **Recording progress** — while a screenplay records, the progress bar
+  advances with every rendered frame, not just per license checkout.
 
 ## [2.2.0] — 2026-07-06
 
