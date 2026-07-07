@@ -226,6 +226,13 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert 'n.contains("frame")' in text
         assert "createNewFile" in text
         assert "deleteIfEmpty" in text
+        # The empirically-verified recorder signature is tried first: doubles
+        # are (frameRate, startTime, animationLength), the trailing int is
+        # probed 0/1, and a directory output (PNG frames) is rejected.
+        assert "recordKnown" in text
+        assert "getAnimationLength" in text
+        assert "isDirectory" in text
+        assert "[movieType=" in text
 
 
 @pytest.fixture(scope="module")

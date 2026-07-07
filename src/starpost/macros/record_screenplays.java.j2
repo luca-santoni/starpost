@@ -168,6 +168,12 @@ public class record_screenplays extends StarMacro {
                 targets.add(t);
             }
         }
+        StringBuilder tried = new StringBuilder();
+        // The empirically-verified signature first; the generic name/type
+        // scan below stays as the fallback for other releases.
+        if (recordKnown(sim, targets, path, tried)) {
+            return;
+        }
         List<Object[]> candidates = new ArrayList<>();  // {target, method}
         for (Object target : targets) {
             for (Method m : target.getClass().getMethods()) {
@@ -192,7 +198,6 @@ public class record_screenplays extends StarMacro {
                 || n.contains("animation");
             return (movieish ? 0 : 1000) + m.getParameterCount();
         }));
-        StringBuilder tried = new StringBuilder();
         for (Object[] c : candidates) {
             Object target = c[0];
             Method m = (Method) c[1];
@@ -216,9 +221,8 @@ public class record_screenplays extends StarMacro {
                 // A candidate may return normally yet not produce the movie
                 // (e.g. a single-frame image export was matched): only a
                 // non-empty file at the expected path counts as success.
-                File out = new File(path);
-                if (!out.exists() || out.length() == 0) {
-                    deleteIfEmpty(out);  // don't leave an empty stub behind
+                if (!verifyOutput(path)) {
+                    deleteIfEmpty(new File(path));  // no empty stub left behind
                     tried.append("  [no output file]");
                     continue;
                 }
@@ -252,6 +256,107 @@ public class record_screenplays extends StarMacro {
         deleteIfEmpty(new File(path));
         throw new Exception("no usable record/export method found on "
             + sp.getClass().getName() + "; candidates tried:" + tried);
+    }
+
+    // Empirically-derived recorder signature (parameter meanings read off the
+    // GUI export dialog: Frame Rate / Start Time / Animation Length /
+    // Resolution / Movie Type / Use Anti-Aliasing / Use Transparent
+    // Background):
+    //   record(int width, int height, double frameRate, double startTime,
+    //          double animationLength, String file, int movieType,
+    //          boolean antiAliasing, boolean transparentBackground)
+    // on the screenplay's animation director. The movie-type int is
+    // undocumented, so 0 and then 1 are tried, each verified by the output
+    // file appearing. Returns true on success; appends diagnostics to tried
+    // otherwise.
+    private boolean recordKnown(Simulation sim, List<Object> targets,
+                                String path, StringBuilder tried) {
+        double length = probeLength(sim, targets);
+        if (length <= 0) {
+            tried.append("\n  [known-signature path skipped: no animation "
+                + "length getter found]");
+            return false;
+        }
+        Class<?>[] sig9 = { int.class, int.class, double.class, double.class,
+            double.class, String.class, int.class, boolean.class,
+            boolean.class };
+        Class<?>[] sig7 = { int.class, int.class, double.class, double.class,
+            double.class, String.class, int.class };
+        for (Object target : targets) {
+            for (Class<?>[] sig : new Class<?>[][] { sig9, sig7 }) {
+                Method m;
+                try {
+                    m = target.getClass().getMethod("record", sig);
+                } catch (Exception e) {
+                    continue;
+                }
+                for (int movieType = 0; movieType <= 1; movieType++) {
+                    Object[] args = (sig == sig9)
+                        ? new Object[] { MOV_WIDTH, MOV_HEIGHT, (double) FPS,
+                            0.0, length, path, movieType, Boolean.TRUE,
+                            Boolean.FALSE }
+                        : new Object[] { MOV_WIDTH, MOV_HEIGHT, (double) FPS,
+                            0.0, length, path, movieType };
+                    tried.append("\n  ").append(m).append(" [movieType=")
+                        .append(movieType).append("]");
+                    try {
+                        new File(path).createNewFile();
+                    } catch (Exception ce) {
+                        // best-effort — see invokeRecord
+                    }
+                    try {
+                        sim.println("starpost: trying "
+                            + target.getClass().getSimpleName() + ".record("
+                            + MOV_WIDTH + ", " + MOV_HEIGHT + ", "
+                            + (double) FPS + ", 0.0, " + length
+                            + ", file, " + movieType + ", ...)");
+                        m.invoke(target, args);
+                        if (verifyOutput(path)) {
+                            sim.println("starpost: recorded via known "
+                                + "signature (movieType=" + movieType + ")");
+                            return true;
+                        }
+                        deleteIfEmpty(new File(path));
+                        tried.append("  [no output file]");
+                    } catch (Exception e) {
+                        deleteIfEmpty(new File(path));
+                        tried.append("  [failed: ").append(rootMessage(e))
+                            .append("]");
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // The screenplay's animation length in seconds, probed via common getters
+    // on the screenplay and its director objects (the export dialog calls the
+    // field "Animation Length"); <= 0 when none is found.
+    private double probeLength(Simulation sim, List<Object> targets) {
+        String[] getters = { "getAnimationLength", "getDuration", "getLength",
+            "getStopTime", "getEndTime" };
+        for (Object target : targets) {
+            for (String g : getters) {
+                Object v = invokeQuiet(target, g);
+                if (v instanceof Number) {
+                    double d = ((Number) v).doubleValue();
+                    if (d > 0) {
+                        sim.println("starpost: animation length " + d
+                            + " s (via " + g + ")");
+                        return d;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
+    // A recording only counts when a non-empty regular file exists at path —
+    // a directory is rejected (a PNG-frames export creates one, and
+    // File.length() is nonzero for directories on most filesystems).
+    private boolean verifyOutput(String path) {
+        File out = new File(path);
+        return out.exists() && !out.isDirectory() && out.length() > 0;
     }
 
     // The root cause's message for a (possibly wrapped) invocation failure.
