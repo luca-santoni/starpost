@@ -18,6 +18,7 @@ from starpost.data.models import (
     PlotSeries,
     Report,
     Scene,
+    Screenplay,
     SimResult,
 )
 from starpost.utils.logging import get_logger
@@ -50,6 +51,9 @@ def parse_sim_output(
     result.plots = _parse_plots(sim_name, output_dir, classification)
     result.scenes = _parse_scenes(output_dir / f"{sim_name}__scenes_index.csv")
     result.views = _parse_views(output_dir / f"{sim_name}__views_index.csv")
+    result.screenplays = _parse_screenplays(
+        output_dir / f"{sim_name}__screenplays_index.csv"
+    )
     return result
 
 
@@ -88,6 +92,31 @@ def _parse_scenes(path: Path) -> list[Scene]:
     return list(scenes.values())
 
 
+def _parse_screenplays(path: Path) -> list[Screenplay]:
+    """Read the screenplays index (``screenplay,scene,displayer,kind`` rows)
+    into Screenplays, each carrying its scene's scalar/vector displayers. Rows
+    are grouped by screenplay; a row with an empty displayer just registers the
+    screenplay. Preserves first-seen order."""
+    if not path.exists():
+        # Older extractions (pre-screenplays) simply have no screenplay list.
+        return []
+    plays: dict[str, Screenplay] = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            name = (row.get("screenplay") or "").strip()
+            if not name:
+                continue
+            play = plays.setdefault(
+                name,
+                Screenplay(name=name, scene=(row.get("scene") or "").strip()),
+            )
+            disp = (row.get("displayer") or "").strip()
+            kind = (row.get("kind") or "").strip() or "scalar"
+            if disp:
+                play.displayers.append(Displayer(name=disp, kind=kind))
+    return list(plays.values())
+
+
 def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
     """Read the media index a render pass wrote into ``output_dir`` and resolve
     each entry's file to an absolute path. Missing index -> empty list."""
@@ -101,6 +130,10 @@ def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
             file_cell = (row.get("file") or "").strip()
             err = (row.get("error") or "").strip()
             full = str((output_dir / file_cell).resolve()) if file_cell else ""
+            poster_cell = (row.get("poster") or "").strip()
+            poster = (
+                str((output_dir / poster_cell).resolve()) if poster_cell else ""
+            )
             media.append(
                 MediaArtifact(
                     name=row.get("name", ""),
@@ -110,6 +143,7 @@ def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
                     error=err or None,
                     displayers=(row.get("displayers") or "").strip(),
                     view=(row.get("view") or "").strip(),
+                    poster=poster,
                 )
             )
     return media
