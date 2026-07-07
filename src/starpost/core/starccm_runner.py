@@ -229,7 +229,12 @@ class StarRunner:
 
         artifacts = parse_media_index(sim_file.stem, output_dir)
         movies = [a for a in artifacts if a.kind == "movie"]
-        sink(f"Recorded {len(movies)} movie(s) from {sim_file.name}")
+        ok = [a for a in movies if not a.error]
+        failed = len(movies) - len(ok)
+        summary = f"Recorded {len(ok)} movie(s)"
+        if failed:
+            summary += f" ({failed} failed)"
+        sink(summary + f" from {sim_file.name}")
         return movies
 
     @staticmethod

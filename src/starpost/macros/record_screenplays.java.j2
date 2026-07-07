@@ -146,48 +146,97 @@ public class record_screenplays extends StarMacro {
         }
     }
 
-    // Finds and invokes a record/export method on the screenplay reflectively.
-    // Candidates: public methods named "record" or starting with "export",
-    // whose parameters can all be filled from what we have:
-    //   String       -> the output file path (first String parameter only)
-    //   int/long     -> width, height, fps (in positional order, then 0)
-    //   float/double -> the QUALITY factor
-    //   boolean      -> false
-    // Tried smallest parameter list first; the first successful call wins. If
-    // none succeeds, throws with the candidate signatures so the log shows
-    // what this release offers.
+    // Finds and invokes a record/export/write method reflectively — on the
+    // screenplay itself or on a likely recorder sub-object (screenplay director
+    // etc.). Candidates are tried smallest parameter list first; the first
+    // successful call wins. Every candidate is listed in the failure message
+    // (including unfillable ones, and each invocation failure's root cause);
+    // when no candidate exists at all, the full public method list of each
+    // scanned object is dumped so the log reveals this release's API.
     private void invokeRecord(Simulation sim, Object sp, String path)
             throws Exception {
-        List<Method> candidates = new ArrayList<>();
-        for (Method m : sp.getClass().getMethods()) {
-            String n = m.getName().toLowerCase();
-            if (n.equals("record") || n.startsWith("export")) {
-                candidates.add(m);
+        // Targets to scan: the screenplay itself plus common recorder
+        // sub-objects reached by no-arg getters.
+        List<Object> targets = new ArrayList<>();
+        targets.add(sp);
+        for (String getter : new String[] {
+                "getScreenplayDirector", "getDirector", "getRecorder",
+                "getAnimationDirector" }) {
+            Object t = invokeQuiet(sp, getter);
+            if (t != null) {
+                targets.add(t);
             }
         }
-        candidates.sort(Comparator.comparingInt(Method::getParameterCount));
+        List<Object[]> candidates = new ArrayList<>();  // {target, method}
+        for (Object target : targets) {
+            for (Method m : target.getClass().getMethods()) {
+                String n = m.getName().toLowerCase();
+                if (n.equals("record") || n.startsWith("export")
+                        || n.startsWith("write")) {
+                    candidates.add(new Object[] { target, m });
+                }
+            }
+        }
+        candidates.sort(Comparator.comparingInt(
+            c -> ((Method) c[1]).getParameterCount()));
         StringBuilder tried = new StringBuilder();
-        for (Method m : candidates) {
+        for (Object[] c : candidates) {
+            Object target = c[0];
+            Method m = (Method) c[1];
+            tried.append("\n  ").append(m);
             Object[] args = fillArgs(m.getParameterTypes(), path);
             if (args == null) {
+                tried.append("  [unfillable]");
                 continue;
             }
-            tried.append("\n  ").append(m.toString());
             try {
-                m.invoke(sp, args);
-                sim.println("starpost: recorded via " + m.getName() + "/"
-                    + m.getParameterCount());
+                m.invoke(target, args);
+                sim.println("starpost: recorded via "
+                    + target.getClass().getSimpleName() + "." + m.getName()
+                    + "/" + m.getParameterCount());
                 return;
             } catch (Exception e) {
-                // try the next candidate
+                tried.append("  [failed: ").append(rootMessage(e)).append("]");
+            }
+        }
+        if (candidates.isEmpty()) {
+            for (Object target : targets) {
+                tried.append("\n  -- public methods of ")
+                    .append(target.getClass().getName()).append(" --");
+                for (Method m : target.getClass().getMethods()) {
+                    if (m.getDeclaringClass() == Object.class) {
+                        continue;
+                    }
+                    tried.append("\n  ").append(m.getName()).append("(");
+                    Class<?>[] ps = m.getParameterTypes();
+                    for (int i = 0; i < ps.length; i++) {
+                        if (i > 0) tried.append(", ");
+                        tried.append(ps[i].getSimpleName());
+                    }
+                    tried.append(")");
+                }
             }
         }
         throw new Exception("no usable record/export method found on "
             + sp.getClass().getName() + "; candidates tried:" + tried);
     }
 
+    // The root cause's message for a (possibly wrapped) invocation failure.
+    private String rootMessage(Throwable e) {
+        Throwable t = e;
+        while (t.getCause() != null && t.getCause() != t) {
+            t = t.getCause();
+        }
+        String msg = t.getMessage();
+        return (msg == null || msg.isEmpty()) ? t.getClass().getSimpleName() : msg;
+    }
+
     // The argument list for the parameter types, or null when a type can't be
-    // filled (or no String parameter exists to receive the output path).
+    // filled (or no String/File parameter exists to receive the output path):
+    //   String/File  -> the output file path (first such parameter only)
+    //   int/long     -> width, height, fps (in positional order, then 0)
+    //   float/double -> the QUALITY factor
+    //   boolean      -> false
     private Object[] fillArgs(Class<?>[] types, String path) {
         Object[] args = new Object[types.length];
         boolean pathUsed = false;
@@ -195,8 +244,8 @@ public class record_screenplays extends StarMacro {
         int[] intVals = { MOV_WIDTH, MOV_HEIGHT, FPS };
         for (int i = 0; i < types.length; i++) {
             Class<?> t = types[i];
-            if (t == String.class && !pathUsed) {
-                args[i] = path;
+            if ((t == String.class || t == File.class) && !pathUsed) {
+                args[i] = (t == File.class) ? new File(path) : (Object) path;
                 pathUsed = true;
             } else if (t == int.class || t == Integer.class
                     || t == long.class || t == Long.class) {

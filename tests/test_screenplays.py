@@ -212,6 +212,12 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert "Class.forName" in text
         # Each screenplay's scene is closed to free graphics memory.
         assert "scene.close()" in text
+        # The reflective recorder scans director sub-objects and write* methods,
+        # and its failure path dumps unfillable candidates / the full API.
+        assert '"getScreenplayDirector"' in text
+        assert 'n.startsWith("write")' in text
+        assert "[unfillable]" in text
+        assert "-- public methods of " in text
 
 
 @pytest.fixture(scope="module")
