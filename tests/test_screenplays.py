@@ -1,9 +1,10 @@
 """Screenplays feature: discovery, media-index parsing, record-macro generation,
 settings round-trips, and cache persistence (the Screenplays tab's backend)."""
 import json
+import tempfile
 from pathlib import Path
 
-from starpost.core.macro_generator import render_macro
+from starpost.core.macro_generator import record_screenplays_macro, render_macro
 from starpost.core.result_parser import parse_media_index, parse_sim_output
 from starpost.core.settings import MediaConfig, Settings
 from starpost.data.models import Displayer, MediaArtifact, Screenplay, SimResult
@@ -177,3 +178,36 @@ def test_media_config_movie_values_clamped():
     assert s.media.movie_quality == "high"
     assert s.media.movie_fps == 1
     assert s.media.screenplays_per_checkout == 1
+
+
+def test_record_screenplays_macro_embeds_selection_and_movie_settings():
+    with tempfile.TemporaryDirectory() as d:
+        path = record_screenplays_macro(
+            Path("/out"),
+            Path(d),
+            {"Flyby": ["Scalar velocity"], "Intro": []},
+            ["Front"],
+            1920,
+            1080,
+            24,
+            "avi",
+            "medium",
+        )
+        text = path.read_text()
+        assert path.name == "record_screenplays.java"
+        assert "public class record_screenplays" in text
+        assert 'MOV_EXT = "avi"' in text
+        assert "FPS = 24" in text
+        assert "MOV_WIDTH = 1920" in text and "MOV_HEIGHT = 1080" in text
+        assert "QUALITY = 0.75" in text
+        assert 'VIEW_NAMES = { "Front" }' in text
+        assert (
+            'm.put("Flyby", new LinkedHashSet<>(Arrays.asList('
+            '"Scalar velocity")));'
+        ) in text
+        assert 'm.put("Intro", new LinkedHashSet<>(Arrays.asList()));' in text
+        # No compile-time dependency on the screenplay API; graceful lookup.
+        assert "import star.screenplay" not in text
+        assert "Class.forName" in text
+        # Each screenplay's scene is closed to free graphics memory.
+        assert "scene.close()" in text
