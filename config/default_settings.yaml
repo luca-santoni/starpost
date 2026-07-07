@@ -11,7 +11,8 @@ license:
   licpath: ""                # license server       -> -licpath <port>@<server>
   license_file: ""           # used only when mode == license_file -> -licpath <file>
 
-# Scene-still rendering (Scenes tab → Run). Resolution + magnification passed to
+# Media rendering: scene stills (Scenes tab → Run) and screenplay movies
+# (Screenplays tab → Record). Resolution + magnification passed to
 # the render macro's scene.printAndWait call. render_np is the number of cores
 # used to render (starccm+ -np): 1 = serial; 2..N partitions a large mesh across
 # ranks instead of loading it into one process — faster and less memory per rank.

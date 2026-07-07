@@ -178,8 +178,9 @@ class StarRunner:
                 raise StarRunError(msg)
 
         artifacts = parse_media_index(sim_file.stem, output_dir)
-        sink(f"Rendered {len(artifacts)} scene still(s) from {sim_file.name}")
-        return artifacts
+        stills = [a for a in artifacts if a.kind == "still"]
+        sink(f"Rendered {len(stills)} scene still(s) from {sim_file.name}")
+        return stills
 
     def record_screenplays(
         self,

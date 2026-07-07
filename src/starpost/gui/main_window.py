@@ -1173,6 +1173,8 @@ class MainWindow(QMainWindow):
         media = []
         for r in self._active_results():
             for m in r.media:
+                if m.kind != "still":
+                    continue
                 m.sim_path = r.sim_path  # provenance for the Properties window
                 media.append(m)
         paths = [m.path for m in media]
