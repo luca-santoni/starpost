@@ -29,8 +29,16 @@ working scenes code.
   tree — each screenplay expands to its scene's scalar/vector displayers, and
   unchecked ones are hidden before recording.
 - **STAR-CCM+ target:** modern first-class Screenplays (Simcenter STAR-CCM+
-  2022+/2306+). Exact recorder Java class names are verified against the installed
-  release during implementation.
+  2022+/2306+).
+- **Macro API access — reflection, turnkey:** the record macro never references
+  the screenplay API at compile time (a Java compile error is fatal to the whole
+  macro and cannot be try/caught). The screenplay manager is obtained via
+  `Class.forName` + `Simulation.get`, and the record call is found by scanning the
+  screenplay object's public record/export methods, filling arguments by type.
+  An API mismatch on some release degrades to a logged `ERROR` media row, never a
+  dead macro. This supersedes the user-pasted-snippet approach in the older
+  `docs/screenplay_plan.md` (Phase 3): no Settings paste box, ships working with
+  no user setup.
 - **Movie settings exposed:** format (MP4/AVI/MOV), frame rate (fps), resolution
   (width × height), and quality/bitrate.
 - **Gallery preview:** the record macro also exports one **poster frame** (PNG) per
@@ -97,8 +105,13 @@ For each checked screenplay × each view:
 2. Apply the saved view to the scene's current view (reuse `applyView` and the
    reflective `presentationName` helper so we don't bind to a release-specific view
    class).
-3. Record the screenplay to a movie in `output_dir` via the modern screenplay
-   recorder API, at the configured resolution/fps/format/quality.
+3. Record the screenplay to a movie in `output_dir` at the configured
+   resolution/fps/format/quality, invoking the recorder **reflectively** (see the
+   Decisions section): candidate `record`/`export…` methods on the screenplay are
+   scanned and the first whose parameters can be filled (String → output path,
+   ints → width/height/fps, float/double → quality factor) is invoked. If none
+   fits, the failure is logged with the candidate signatures so the log shows
+   what the installed release offers.
 4. Export one **poster frame** (PNG) for that movie — first frame, via
    `scene.printAndWait` after the view/visibility are set.
 5. Write a media-index row: `kind=movie`, `source=<screenplay>`,
@@ -108,8 +121,8 @@ For each checked screenplay × each view:
 Discipline copied from `render_scenes`: best-effort per screenplay (log + `ERROR`
 row on failure, never abort the whole run); close the scene after each recording to
 release graphics resources; reuse `sanitizeFile`/`esc`/index-writing scaffolding.
-Exact recorder class names verified against the installed 2022+ release during
-implementation.
+The reflective lookup is exercised against a real 2022+ install as a manual
+verification step (automated tests cover the template rendering only).
 
 ### Runner (`core/starccm_runner.py` + `core/macro_generator.py`)
 - New `record_screenplays(sim_file, output_dir, screenplay_show, views)` alongside
@@ -153,8 +166,9 @@ Add `to_dict`/`from_dict` round-tripping (clamp malformed values) and a
   (`record_screenplays_requested` signal) and **Clear screenplays** button
   (`clear_screenplays_requested`, styled `dangerButton`), mirroring the scenes
   group.
-- Profiles persist screenplay + displayer selection alongside scenes (extend the
-  profile schema; older profiles load with empty screenplay selection).
+- Profiles: unchanged. Profiles do not persist scene selection today, so
+  screenplay selection is likewise not persisted — an exact mirror of the Scenes
+  tab. (Persisting both is a possible follow-up, out of scope here.)
 
 ### Gallery (`gui/views/screenplay_view.py`)
 - New `ScreenplayView`, modeled on `SceneView`: a thumbnail gallery driven by
