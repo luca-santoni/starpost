@@ -206,7 +206,6 @@ def test_batch_run_dialog_similar_format_extracts_first(app, monkeypatch):
     .sim and repopulates the Reports and Plots tabs from its result."""
     from pathlib import Path
 
-    from PySide6.QtCore import Qt
 
     import starpost.gui.views.batch_run_dialog as brd
     from starpost.core.settings import Settings
@@ -1776,7 +1775,6 @@ def test_batch_run_dialog_run_batch_threaded(app, tmp_path, monkeypatch):
     """End to end on the worker thread: a data set with a saved plot produces a
     zip, with the plot rendered via the GUI-thread marshalling (no deadlock)."""
     import zipfile
-    from pathlib import Path
 
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QDialog, QListWidgetItem

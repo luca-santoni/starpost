@@ -84,7 +84,7 @@ class ScenePropertiesDialog(QDialog):
     """Properties for a rendered scene still: its file details (size, resolution,
     format) plus the sim, data set, scene and displayers it came from."""
 
-    def __init__(self, artifact, parent=None) -> None:
+    def __init__(self, artifact, parent=None, source_label: str = "Report group") -> None:
         super().__init__(parent)
         path = Path(artifact.path) if artifact.path else None
         title = artifact.name or (path.name if path else "Scene")
@@ -120,7 +120,7 @@ class ScenePropertiesDialog(QDialog):
         form.addRow(sep)
         form.addRow("Parent .sim file:", QLabel(sim_file))
         form.addRow("Data set:", QLabel(data_set))
-        form.addRow("Report group:", QLabel(scene))
+        form.addRow(f"{source_label}:", QLabel(scene))
         # Wrap the (possibly long) field list onto further lines instead of
         # stretching the window ever wider.
         displayers_label = QLabel(displayers)

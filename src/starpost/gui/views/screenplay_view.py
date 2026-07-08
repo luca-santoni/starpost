@@ -1,21 +1,23 @@
-"""Scenes view (centre tab): a gallery of rendered scene stills.
+"""Screenplays view (centre tab): a gallery of recorded screenplay movies.
 
-Mirrors the Reports/Plots centre tabs in spirit. It shows thumbnails of the
-stills rendered for the ticked data sets; double-clicking one opens it in the
-system image viewer. While nothing has been rendered it shows a centred hint.
+Mirrors the Scenes gallery: one tile per recorded movie, showing its poster
+frame with a play badge (or a generic play icon when no poster exists).
+Double-clicking a tile opens the movie in the system video player. While
+nothing has been recorded it shows a centred hint.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QPoint, QSize, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPolygon
 from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QStackedLayout,
+    QStyle,
     QWidget,
 )
 
@@ -24,12 +26,37 @@ from starpost.gui.views.thumbnails import ThumbnailCache
 from starpost.gui.widgets import enable_range_selection
 
 _THUMB = 220  # thumbnail edge in px
-_ART_ROLE = Qt.ItemDataRole.UserRole + 1  # the MediaArtifact behind a thumbnail
+_ART_ROLE = Qt.ItemDataRole.UserRole + 1  # the MediaArtifact behind a tile
+
+
+def _play_badge(icon: QIcon, edge: int) -> QIcon:
+    """``icon`` with a centred play badge (translucent disc + white triangle),
+    so a movie tile reads as playable at a glance."""
+    pm = icon.pixmap(QSize(edge, edge))
+    if pm.isNull():
+        return icon
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    r = min(pm.width(), pm.height()) // 5
+    cx, cy = pm.width() // 2, pm.height() // 2
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(0, 0, 0, 130))
+    p.drawEllipse(QPoint(cx, cy), r, r)
+    p.setBrush(QColor(255, 255, 255, 230))
+    p.drawPolygon(
+        QPolygon([
+            QPoint(cx - r // 3, cy - r // 2),
+            QPoint(cx - r // 3, cy + r // 2),
+            QPoint(cx + r // 2, cy),
+        ])
+    )
+    p.end()
+    return QIcon(pm)
 
 
 class _Gallery(QListWidget):
     """Thumbnail list that deselects when empty space is clicked, so the accent
-    highlight is removed from any selected thumbnail (default Qt keeps it)."""
+    highlight is removed from any selected tile (default Qt keeps it)."""
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         if self.itemAt(event.position().toPoint()) is None:
@@ -38,11 +65,11 @@ class _Gallery(QListWidget):
         super().mousePressEvent(event)
 
 
-class SceneView(QWidget):
+class ScreenplayView(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
-        self._hint = QLabel("Select scenes and press Run to render stills")
+        self._hint = QLabel("Select screenplays and press Record to create movies")
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hint.setEnabled(False)  # muted, like a placeholder
 
@@ -64,7 +91,7 @@ class SceneView(QWidget):
         self._stack.addWidget(self._gallery)
         self._stack.setCurrentWidget(self._hint)
 
-        # Shared decode-at-thumbnail-size icon cache (path + mtime keyed).
+        # Shared decode-at-thumbnail-size icon cache for the poster frames.
         self._thumbs = ThumbnailCache(_THUMB)
 
     def clear(self) -> None:
@@ -72,26 +99,29 @@ class SceneView(QWidget):
         self._stack.setCurrentWidget(self._hint)
 
     def show_media(self, artifacts: list[MediaArtifact]) -> None:
-        """Show one thumbnail per still in ``artifacts`` (errored or missing
-        files are listed without an image). Falls back to the hint when empty."""
+        """Show one tile per movie in ``artifacts`` (errored or missing files
+        are listed without a poster). Falls back to the hint when empty."""
         self._gallery.clear()
-        stills = [a for a in artifacts if a.kind == "still"]
-        if not stills:
+        movies = [a for a in artifacts if a.kind == "movie"]
+        if not movies:
             self._stack.setCurrentWidget(self._hint)
             return
 
-        for art in stills:
+        for art in movies:
             label = art.name or Path(art.path).stem
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, art.path)
             item.setData(_ART_ROLE, art)
             item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             if art.error:
-                item.setText(f"{label}\n(render failed)")
+                item.setText(f"{label}\n(record failed)")
             elif art.path and Path(art.path).exists():
-                icon = self._thumbs.icon(art.path)
+                icon = self._thumbs.icon(art.poster) if art.poster else None
                 if icon is not None:
-                    item.setIcon(icon)
+                    item.setIcon(_play_badge(icon, _THUMB))
+                else:
+                    # No poster: a generic play icon still marks it a movie.
+                    item.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
                 item.setToolTip(art.path)
             else:
                 item.setText(f"{label}\n(file missing)")
@@ -105,7 +135,7 @@ class SceneView(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _show_context_menu(self, pos) -> None:
-        """Right-clicking a thumbnail offers Properties for that rendered still."""
+        """Right-clicking a tile offers Properties for that recorded movie."""
         item = self._gallery.itemAt(pos)
         if item is None:
             return
@@ -113,8 +143,12 @@ class SceneView(QWidget):
         properties = menu.addAction("Properties")
         chosen = menu.exec(self._gallery.viewport().mapToGlobal(pos))
         if chosen is properties:
-            from starpost.gui.views.properties_dialog import ScenePropertiesDialog
+            from starpost.gui.views.properties_dialog import (
+                ScenePropertiesDialog,
+            )
 
             art = item.data(_ART_ROLE)
             if art is not None:
-                ScenePropertiesDialog(art, self).exec()
+                ScenePropertiesDialog(
+                    art, self, source_label="Screenplay"
+                ).exec()

@@ -9,6 +9,7 @@
 //   <simname>__plots_index.csv       plot,csv_file   (maps plot name -> file)
 //   <simname>__scenes_index.csv      scene,displayer,kind  (scalar/vector only)
 //   <simname>__views_index.csv       view            (one saved-view name per row)
+//   <simname>__screenplays_index.csv screenplay,scene,displayer,kind
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -31,6 +32,7 @@ public class extract_all extends StarMacro {
         exportPlots(sim, simName, dir);
         exportScenes(sim, simName, dir);
         exportViews(sim, simName, dir);
+        exportScreenplays(sim, simName, dir);
     }
 
     // Lists the saved camera views in the .sim (sim-global, from the view
@@ -150,5 +152,119 @@ public class extract_all extends StarMacro {
             return "\"" + s.replace("\"", "\"\"") + "\"";
         }
         return s;
+    }
+
+    // Lists the screenplays (animations) in the .sim and, for each, the scene
+    // it plays and that scene's scalar/vector displayers. One row per
+    // (screenplay, displayer); a screenplay with no such displayers still gets
+    // a row with empty displayer/kind so it appears in the Screenplays tree.
+    //
+    // The screenplay API only exists on recent releases (2022+) and its class
+    // names are never referenced at compile time (a compile error is fatal to
+    // the whole macro): the manager comes from Class.forName, so on an older
+    // release this writes a header-only index and extraction is unaffected.
+    private void exportScreenplays(Simulation sim, String simName, String dir) {
+        String out = dir + File.separator + simName + "__screenplays_index.csv";
+        try (PrintWriter w = new PrintWriter(new FileWriter(out))) {
+            w.println("screenplay,scene,displayer,kind");
+            for (Object sp : screenplays(sim)) {
+                String name = presentationName(sp);
+                if (name == null) {
+                    continue;
+                }
+                Scene scene = screenplayScene(sp);
+                String sceneName = (scene == null)
+                    ? "" : scene.getPresentationName();
+                boolean any = false;
+                if (scene != null) {
+                    for (DisplayerBase d
+                            : scene.getDisplayerManager().getObjects()) {
+                        String kind = null;
+                        if (d instanceof ScalarDisplayer) {
+                            kind = "scalar";
+                        } else if (d instanceof VectorDisplayer) {
+                            kind = "vector";
+                        }
+                        if (kind != null) {
+                            w.println(esc(name) + "," + esc(sceneName) + ","
+                                + esc(d.getPresentationName()) + "," + kind);
+                            any = true;
+                        }
+                    }
+                }
+                if (!any) {
+                    w.println(esc(name) + "," + esc(sceneName) + ",,");
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: failed to write screenplays index: "
+                + e.getMessage());
+        }
+    }
+
+    // The sim's screenplays, or an empty list when this release has none.
+    private java.util.List<Object> screenplays(Simulation sim) {
+        java.util.List<Object> out = new java.util.ArrayList<>();
+        try {
+            Class<?> mgrClass =
+                Class.forName("star.screenplay.ScreenplayManager");
+            Object mgr = Simulation.class.getMethod("get", Class.class)
+                .invoke(sim, mgrClass);
+            Object objs = mgr.getClass().getMethod("getObjects").invoke(mgr);
+            for (Object sp : (Iterable<?>) objs) {
+                out.add(sp);
+            }
+        } catch (Exception e) {
+            sim.println("starpost: no screenplays found ("
+                + e.getMessage() + ")");
+        }
+        return out;
+    }
+
+    // The Scene a screenplay plays, found by probing common accessors on the
+    // screenplay and its actors (the concrete API differs across releases).
+    // Returns null when no scene can be resolved.
+    private Scene screenplayScene(Object sp) {
+        Object scene = firstScene(invokeQuiet(sp, "getScene"));
+        if (scene == null) {
+            scene = firstScene(invokeQuiet(sp, "getScenes"));
+        }
+        if (scene == null) {
+            Object actors = invokeQuiet(sp, "getActors");
+            if (actors instanceof Iterable) {
+                for (Object actor : (Iterable<?>) actors) {
+                    scene = firstScene(invokeQuiet(actor, "getScene"));
+                    if (scene != null) {
+                        break;
+                    }
+                }
+            }
+        }
+        return (scene instanceof Scene) ? (Scene) scene : null;
+    }
+
+    // o itself when it is a Scene, else the first Scene inside an Iterable o.
+    private Object firstScene(Object o) {
+        if (o instanceof Scene) {
+            return o;
+        }
+        if (o instanceof Iterable) {
+            for (Object item : (Iterable<?>) o) {
+                if (item instanceof Scene) {
+                    return item;
+                }
+            }
+        }
+        return null;
+    }
+
+    // getMethod(name).invoke(o), or null if the method doesn't exist/fails.
+    private Object invokeQuiet(Object o, String method) {
+        if (o == null) return null;
+        try {
+            return o.getClass().getMethod(method).invoke(o);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

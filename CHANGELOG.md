@@ -3,6 +3,23 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [2.3.0] — 2026-07-07
+
+### New Features
+- **Screenplays tab** — a new centre tab (after Scenes) that records STAR-CCM+
+  screenplays to movie files. Screenplays are discovered during normal
+  extraction (no extra license checkout); the selection panel's Screenplays
+  tree mirrors the Scenes tree (checkable screenplays with their scene's
+  scalar/vector displayers), and the shared **Saved views** list records one
+  movie per screenplay × view. **Record** runs off the GUI thread, one license
+  checkout at a time. Gallery tiles show a poster frame with a play badge;
+  double-clicking opens the movie in the system video player.
+- **Settings → Screenplays** — movie resolution (1080p/2160p), container
+  (MP4/AVI/MOV), frame rate, encoder quality, and screenplays-per-license
+  checkout batching.
+- **Recording progress** — while a screenplay records, the progress bar
+  advances with every rendered frame, not just per license checkout.
+
 ## [2.2.0] — 2026-07-06
 
 ### New Features

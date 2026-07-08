@@ -1,7 +1,50 @@
 # Screenplays tab — design
 
 **Date:** 2026-07-06
-**Status:** Approved (design), pending implementation plan
+**Status:** Implemented (v2.3.0) and verified against Simcenter STAR-CCM+ 2506.
+
+## Verification findings (2026-07-07)
+
+Manual verification against a real STAR-CCM+ 2506 install refined the record
+macro beyond the original reflective design. Recorded here so the next round of
+work (on higher-spec hardware) starts from what we learned:
+
+- **Recorder API (introspected from `screenplay.jar` / `starbase.jar`).** The
+  working call is `star.common.AnimationDirectorBase.record(int, int, double,
+  double, double, String, int[, boolean, boolean])` on the screenplay's
+  animation director, after arming it (`markRecordingScene`,
+  `setFramesPerSecond`, `prepareForExport`). The three doubles are **Frame Rate,
+  Start Time, Animation Length** (read off the GUI export dialog); the trailing
+  int is **movie type**: `0` = Movie File, `1` = Directory of PNG Frames. Only
+  `movieType 0` is used. Length comes from `getPreferredAnimationLength()`.
+- **Frame-loop fallback is what actually succeeds on 2506:**
+  `initializeForMovieExport` → `beginMovieExport` → per-frame `updateAnimation`
+  + `exportMovieFrame` → `endMovieExport`/`finalizeMovieExport`, which also
+  drives the per-frame progress bar. The native `record(movieType=0)` call was
+  reached but did not reliably emit the movie file within our verify window; the
+  native-vs-frame-loop question (and a possible async completion / no-stub fix)
+  is the main open item for higher-spec follow-up. Recording a GUI macro of a
+  manual **Movie File** export would settle the exact native call.
+- **A `File.canWrite()` quirk** aborts STAR's hardcopy path for a not-yet-
+  existing target ("File … is not writable, hardcopy aborted"); the macro
+  pre-creates an empty target and cleans up empty stubs.
+- **`movieType 1` was a trap:** it renders every frame to PNGs in a directory,
+  which `verifyOutput` then rejects as a non-file — a full wasted render. It is
+  no longer attempted.
+- **Performance is RAM-bound, not macro-bound.** Batch recording loads the whole
+  mesh per session; a case that exceeds available RAM swaps to disk (the
+  multi-tens-of-minutes `Loading/configuring connectivity` stall). A
+  ~21M-cell case wants ~30–40 GB; verification hit this wall on a 16 GB /
+  i5-12500H laptop. Levers: adequate RAM (the real fix), batch multiple
+  recordings per checkout to pay the load once, and re-save at the local
+  partition count to skip re-partition compute. `-np` does **not** add memory on
+  a single machine. See `docs/StarPost_Documentation.md` §3.6b for the
+  user-facing version.
+
+Open items for the next session (higher-spec hardware): confirm whether native
+`record(movieType=0)` can produce the movie directly (async completion / drop
+the pre-created stub for the movie-file path), and consider pipelining the
+frame-loop via `exportMovieFrameAsync` to overlap render and encode.
 
 ## Summary
 
