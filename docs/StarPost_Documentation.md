@@ -556,18 +556,53 @@ tries, in order:
    `prepareForExport`). The parameter meanings were read off the GUI export
    dialog. **`movieType 0` (Movie File) is the only one used**; `movieType 1`
    (Directory of PNG Frames) is deliberately never tried — it produces the wrong
-   output and would cost a full wasted render.
+   output and would cost a full wasted render. This is the **fast** path on an
+   adequately-resourced machine, but it renders the whole movie inside one call
+   and emits **no per-frame progress** in batch (see the limitation below).
 2. **Frame-loop export** — the protocol the GUI itself drives:
    `initializeForMovieExport` → `beginMovieExport` → per-frame `updateAnimation`
    + `exportMovieFrame` → `endMovieExport`/`finalizeMovieExport`. This is the
-   fallback that produces the movie when the native call does not, and it is the
-   source of the per-frame progress-bar movement.
+   fallback that produces the movie when the native call does not; because
+   StarPost drives it frame by frame, it is the **only** path that yields a
+   determinate per-frame progress bar.
 3. A generic name/type scan, as a last resort for other releases.
 
 A call only counts as success when a non-empty **movie file** (not a directory)
 exists afterwards. On total failure the log dumps every candidate signature so
 the installed release's real API is visible. This was verified against
-**Simcenter STAR-CCM+ 2506** (record path 2 succeeds there).
+**Simcenter STAR-CCM+ 2506**: on a memory-starved machine record path 2 (the
+frame loop) succeeds, and on an adequately-resourced machine record path 1 (the
+fast native call) succeeds.
+
+#### Recording progress feedback — and its limitation
+
+**What the progress bar shows depends on which record path runs**, and this is a
+real limitation of driving STAR-CCM+ from a `-batch` macro rather than a StarPost
+shortcoming:
+
+- **Native path (path 1) → an indeterminate "Recording…" busy indicator.**
+  STAR's `record()` renders the entire movie inside a single call and reports
+  frame-by-frame progress **only to its graphical progress presenter**
+  (`star.base.neo.ProgressPresenter`) — which does not exist under `starccm+
+  -batch`. None of that progress reaches the macro, `starccm+` stdout, or the
+  StarPost log, so a **per-frame count is not obtainable on this path**. This was
+  confirmed empirically: a native record produced a full movie while emitting
+  nothing between the start and end of the call. Rather than a frozen bar or a
+  fabricated percentage, StarPost shows an honest **indeterminate
+  "Recording &lt;screenplay&gt;…" animation** for the duration of each record.
+  Because this is the fast path, it is the one you normally see.
+- **Frame-loop path (path 2) → a true per-frame bar.** Here StarPost drives the
+  export one frame at a time, so the macro emits a progress marker per rendered
+  frame and the bar advances as a **determinate counter**. You generally see
+  this only on machines where the native call could not complete (it is slower
+  and RAM-bound).
+
+So on the fast path you get a *"recording…"* activity animation, not a frame
+number; a genuine frame-by-frame bar appears only on the slower fallback. The
+only way to recover a real frame count on the native path would be to inject a
+custom progress presenter into STAR — unverified and fragile, and not currently
+attempted. Note also that **neither the movie nor its poster is previewable
+in-app while recording**; the gallery tile appears once the file lands on disk.
 
 #### Performance and hardware requirements
 
@@ -959,6 +994,12 @@ running `__version__` against the latest release tag.
   is simply empty. The record macro finds the recorder method **reflectively**
   (never compiled against the screenplay API), so an API mismatch on a given
   release fails only that screenplay, logged as an error row, not the whole run.
+- **No per-frame progress on the fast record path.** STAR-CCM+'s native movie
+  export reports frame progress only to its GUI, which is absent under `-batch`,
+  so during a fast (native) record StarPost shows an indeterminate
+  "Recording…" busy indicator rather than a frame count. A true per-frame bar
+  appears only when the slower frame-by-frame fallback path runs. See
+  [3.6b](#36b-screenplays-view).
 - **Monitor plots only** for plot data (value-vs-iteration/time, e.g. residuals
   and force histories). **XY plots** (a field along a line/probe) and other plot
   types are not handled.
