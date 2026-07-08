@@ -268,10 +268,12 @@ public class record_screenplays extends StarMacro {
     //   record(int width, int height, double frameRate, double startTime,
     //          double animationLength, String file, int movieType,
     //          boolean antiAliasing, boolean transparentBackground)
-    // on the screenplay's animation director. The movie-type int is
-    // undocumented, so 0 and then 1 are tried, each verified by the output
-    // file appearing. Returns true on success; appends diagnostics to tried
-    // otherwise.
+    // on the screenplay's animation director. The movie-type int selects the
+    // GUI's "Movie Type" radio: 0 == Movie File (an actual .mp4/.avi/.mov),
+    // 1 == Directory of PNG Frames. Only 0 is used — 1 renders every frame as
+    // PNGs into a directory (the wrong output, and a full wasted render).
+    // Success is confirmed by the movie file existing afterwards. Returns true
+    // on success; appends diagnostics to tried otherwise.
     private boolean recordKnown(Simulation sim, Object sp, Scene scene,
                                 List<Object> targets, String path,
                                 StringBuilder tried) {
@@ -322,7 +324,10 @@ public class record_screenplays extends StarMacro {
                 } catch (Exception e) {
                     continue;
                 }
-                for (int movieType = 0; movieType <= 1; movieType++) {
+                // movieType 1 (Directory of PNG Frames) is deliberately never
+                // tried — it renders every frame to PNGs (wrong output) and is
+                // then rejected as a directory, a full wasted render.
+                for (int movieType = 0; movieType <= 0; movieType++) {
                     Object[] args = (sig == sig9)
                         ? new Object[] { MOV_WIDTH, MOV_HEIGHT, (double) FPS,
                             start, length, path, movieType, Boolean.TRUE,
