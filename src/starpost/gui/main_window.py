@@ -811,6 +811,7 @@ class MainWindow(QMainWindow):
         self._record_worker.log.connect(self.log_console.append)
         self._record_worker.progress.connect(self._on_record_job_progress)
         self._record_worker.frame_progress.connect(self._on_record_frame_progress)
+        self._record_worker.recording.connect(self._on_record_started)
         self._record_worker.recorded.connect(self._on_screenplays_recorded)
         self._record_worker.finished.connect(self._on_record_finished)
         self._record_worker.finished.connect(self._record_thread.quit)
@@ -860,6 +861,13 @@ class MainWindow(QMainWindow):
         self._record_jobs_done = done
         self._record_jobs_total = total
         self.log_console.set_progress(done, total)
+
+    def _on_record_started(self, label: str) -> None:
+        """A screenplay's record just began. Show a busy indicator: STAR's fast
+        native record() renders silently in -batch, so no per-frame markers may
+        follow. If the frame-loop path runs instead, its frame_progress restores
+        the determinate bar automatically."""
+        self.log_console.busy(f"Recording {label}…")
 
     def _on_record_frame_progress(self, frame: int, frames: int) -> None:
         """A frame rendered inside the current job: advance the bar

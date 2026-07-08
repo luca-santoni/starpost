@@ -3,6 +3,17 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [Unreleased]
+
+### Improvements
+- **Recording feedback on the fast path** — during a screenplay's native
+  STAR-CCM+ record, the progress bar now shows an indeterminate
+  "Recording <name>…" busy animation, so the app clearly signals it is working.
+  (The native record renders every frame silently in batch — STAR reports frame
+  progress only to its GUI, which is absent here — so a real per-frame count
+  isn't available on that path; the slower frame-by-frame fallback keeps its
+  exact per-frame bar.)
+
 ## [2.3.0] — 2026-07-07
 
 ### New Features

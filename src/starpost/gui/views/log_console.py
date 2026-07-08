@@ -59,10 +59,24 @@ class LogConsole(QWidget):
         before the first file has finished."""
         self._hide_timer.stop()  # a new run cancels any pending hide
         self._set_progress_visible(True)
+        self._progress.setRange(0, _SCALE)  # leave any prior 'busy' state
         self._counter.setText(f"0/{total}")
         self._progress.setValue(round(_SCALE * _STARTING_FRACTION))
 
+    def busy(self, message: str) -> None:
+        """Switch the bar to an indeterminate 'busy' animation with a status
+        message — for a step that is running but reports no fine-grained
+        progress (e.g. STAR-CCM+'s native movie record, which renders every
+        frame silently in -batch). A later set_progress restores the normal
+        determinate bar."""
+        self._hide_timer.stop()
+        self._set_progress_visible(True)
+        self._progress.setRange(0, 0)  # marquee: activity without a percentage
+        self._counter.setText(message)
+
     def set_progress(self, done: int, total: int) -> None:
+        if self._progress.maximum() == 0:  # coming back from the 'busy' state
+            self._progress.setRange(0, _SCALE)
         self._counter.setText(f"{done}/{total}")
         self._progress.setValue(round(_SCALE * done / max(total, 1)))
 
@@ -72,5 +86,6 @@ class LogConsole(QWidget):
 
     def clear(self) -> None:
         self._text.clear()
+        self._progress.setRange(0, _SCALE)  # leave any 'busy' state
         self._progress.reset()
         self._counter.setText("")

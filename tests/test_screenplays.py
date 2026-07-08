@@ -314,6 +314,17 @@ def test_record_macro_emits_frame_progress_markers():
         assert '"starpost-progress: frame "' in text
 
 
+def test_record_macro_emits_recording_marker():
+    with tempfile.TemporaryDirectory() as d:
+        path = record_screenplays_macro(
+            Path("/out"), Path(d), {"Flyby": []}, [], 1920, 1080, 30,
+            "mp4", "high",
+        )
+        text = path.read_text()
+        # The busy-indicator marker is announced before each record attempt.
+        assert '"starpost-progress: recording "' in text
+
+
 def test_screenplay_record_worker_converts_frame_markers(app, tmp_path):
     from starpost.batch.queue import ScreenplayRecordWorker
 
@@ -333,4 +344,25 @@ def test_screenplay_record_worker_converts_frame_markers(app, tmp_path):
     worker.run()
     assert frames == [(3, 10)]
     assert "normal line" in logs
+    assert not any("starpost-progress" in line for line in logs)
+
+
+def test_screenplay_record_worker_converts_recording_marker(app, tmp_path):
+    from starpost.batch.queue import ScreenplayRecordWorker
+
+    class _RecordingRunner:
+        def record_screenplays(self, sim_file, output_dir, show, views,
+                               log_sink=None):
+            log_sink("starpost-progress: recording Flyby-velocity")
+            return []
+
+    worker = ScreenplayRecordWorker(
+        [(tmp_path / "a.sim", {"S": []})], _RecordingRunner(), tmp_path
+    )
+    logs, started = [], []
+    worker.log.connect(logs.append)
+    worker.recording.connect(started.append)
+    worker.run()
+    assert started == ["Flyby-velocity"]
+    # The marker itself stays out of the visible console.
     assert not any("starpost-progress" in line for line in logs)

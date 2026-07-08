@@ -141,6 +141,7 @@ class ScreenplayRecordWorker(QObject):
     log = Signal(str)                  # a line of record output
     progress = Signal(int, int)        # (completed, total)
     frame_progress = Signal(int, int)  # (frame, frames) within the current job
+    recording = Signal(str)            # a screenplay's record just began (label)
     recorded = Signal(object, object)  # (sim_path: str, list[MediaArtifact])
     finished = Signal()
 
@@ -158,9 +159,11 @@ class ScreenplayRecordWorker(QObject):
         self._views = list(views or [])
 
     def _sink(self, line: str) -> None:
-        """Log sink for the runner: per-frame progress markers from the record
-        macro become frame_progress signals (not log lines); everything else
-        passes through to the log."""
+        """Log sink for the runner: progress markers from the record macro
+        become signals (not log lines); everything else passes through to the
+        log. Two markers: per-frame counts (frame-loop path) drive the
+        determinate bar, and a per-screenplay 'recording' notice drives the
+        busy indicator for the native path, which then renders silently."""
         if line.startswith("starpost-progress: frame "):
             tail = line.rsplit(" ", 1)[-1]  # "X/Y"
             done_s, _, total_s = tail.partition("/")
@@ -169,6 +172,9 @@ class ScreenplayRecordWorker(QObject):
                 return
             except ValueError:
                 pass  # malformed marker — let it fall through to the log
+        elif line.startswith("starpost-progress: recording "):
+            self.recording.emit(line[len("starpost-progress: recording "):])
+            return
         self.log.emit(line)
 
     def run(self) -> None:

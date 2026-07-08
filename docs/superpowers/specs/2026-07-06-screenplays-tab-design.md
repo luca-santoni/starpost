@@ -30,26 +30,27 @@ work (on higher-spec hardware) starts from what we learned:
   So native recording works on adequate hardware; the frame loop remains the
   fallback. A GUI macro of a manual **Movie File** export would still pin the
   exact preferred native call for other releases.
-- **No progress bar on the native path (open).** STAR *does* track frame
-  progress during native `record()` — the GUI shows `Writing Animation File:
-  Writing Frame N` / `NN%` — but it pushes those updates to its graphical
-  **`star.base.neo.ProgressPresenter`** (`setMessage`/`setValue`/`setMaximum`,
-  in `starbase.jar`), which has no GUI in `-batch` mode. Our per-frame
-  `starpost-progress:` markers live only in `recordFrameLoop`, which the native
-  path skips, so the StarPost progress bar never moves during a fast native
-  render. Deciding question for the next session: **does that
-  `Writing Frame N` / percentage text reach the `starccm+` stdout in batch?**
-  - **If yes** → trivial: teach `ScreenplayRecordWorker._sink` to recognise the
-    line (or the `NN%`) and emit `frame_progress`, exactly like the frame-loop
-    markers — a real per-frame bar on the fast native path.
-  - **If no** (GUI-only) → options are (a) an indeterminate "Recording movie…"
-    **busy indicator** during the native call (honest, always doable); (b) force
-    the frame-loop path for its markers (but that likely gives up the native
-    path's speed); or (c) inject a custom `ProgressPresenter` — the
-    `record(int,int,…)` overloads take no presenter, while the
-    `record(SimulationProcessObject, …)` overloads (currently marked
-    `[unfillable]`) do route through a process object, so wiring a presenter we
-    can read is *possible in principle* but unverified and fragile.
+- **No per-frame count on the native path — resolved with a busy indicator
+  (2026-07-08).** STAR *does* track frame progress during native `record()` —
+  the GUI shows `Writing Animation File: Writing Frame N` / `NN%` — but it pushes
+  those updates to its graphical **`star.base.neo.ProgressPresenter`**
+  (`setMessage`/`setValue`/`setMaximum`, in `starbase.jar`), which has no GUI in
+  `-batch` mode. The deciding question — *does that `Writing Frame N` /
+  percentage text reach the `starccm+` stdout in batch?* — was **tested
+  empirically** with a minimal native-record probe (`RecordProbe.java`): the
+  `record()` call produced a full movie but emitted **nothing** to stdout
+  between the start/end banners. So the answer is **no** — stdout parsing can't
+  drive the bar on the native path. Chosen fix: **an indeterminate "Recording
+  <name>…" busy indicator** during each record. The macro prints a
+  `starpost-progress: recording <label>` marker before `invokeRecord`;
+  `ScreenplayRecordWorker._sink` turns it into a `recording` signal →
+  `MainWindow._on_record_started` → `LogConsole.busy(...)` (a marquee
+  `QProgressBar` via `setRange(0, 0)`). The frame-loop path's per-frame markers
+  still arrive and restore the determinate bar automatically, so it keeps its
+  real per-frame count. (Rejected alternatives: force the frame-loop path — gives
+  up native speed; inject a custom `ProgressPresenter` via the
+  `record(SimulationProcessObject, …)` overloads — possible in principle but
+  unverified and fragile.)
 - **A `File.canWrite()` quirk** aborts STAR's hardcopy path for a not-yet-
   existing target ("File … is not writable, hardcopy aborted"); the macro
   pre-creates an empty target and cleans up empty stubs.
@@ -68,12 +69,11 @@ work (on higher-spec hardware) starts from what we learned:
 
 Open items for the next session (higher-spec hardware, for faster iteration):
 
-1. **Progress bar on the native path** — first check whether STAR's
-   `Writing Frame N` / `NN%` progress text appears in the `starccm+` stdout
-   during a batch record (look at the StarPost log console mid-record). If it
-   does, parse it in `ScreenplayRecordWorker._sink` → `frame_progress`. If not,
-   add an indeterminate "Recording movie…" busy indicator during the record
-   call. (See the "No progress bar on the native path" finding above.)
+1. **Progress bar on the native path** — *done (2026-07-08).* Empirically
+   confirmed STAR emits no frame text to stdout in batch, so a busy indicator
+   was added (see the resolved finding above). A real per-frame count on the
+   native path would still need a custom `ProgressPresenter` injection, left as
+   an optional future experiment.
 2. **Confirm the native call is the preferred one** across releases — a GUI
    macro recording of a manual **Movie File** export pins the exact signature;
    consider dropping the pre-created stub for the movie-file path and/or polling

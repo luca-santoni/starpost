@@ -220,3 +220,27 @@ def test_record_frame_progress_scales_bar(app, monkeypatch):
     win._on_record_frame_progress(165, 331)
     assert calls == [(1498, 3000)]  # 1000 + round(1000 * 165/331)
     win.close()
+
+
+def test_record_started_shows_busy_indicator(app, monkeypatch):
+    import starpost.gui.main_window as mw
+    from starpost.core.settings import Settings
+
+    win = mw.MainWindow(Settings())
+    messages = []
+    monkeypatch.setattr(win.log_console, "busy", messages.append)
+    win._on_record_started("Flyby-velocity")
+    assert messages == ["Recording Flyby-velocity…"]
+    win.close()
+
+
+def test_log_console_busy_then_progress_restores_determinate(app):
+    from starpost.gui.views.log_console import LogConsole, _SCALE
+
+    lc = LogConsole()
+    lc.busy("Recording…")
+    assert lc._progress.maximum() == 0  # indeterminate marquee
+    # A subsequent frame/job progress update returns to a determinate bar.
+    lc.set_progress(1, 2)
+    assert lc._progress.maximum() == _SCALE
+    assert lc._progress.value() == round(_SCALE * 1 / 2)

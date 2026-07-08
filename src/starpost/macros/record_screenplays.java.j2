@@ -134,6 +134,11 @@ public class record_screenplays extends StarMacro {
         }
         String posterCell = hasPoster ? esc(poster) : "";
         try {
+            // Announce the record so the UI can show a busy indicator: STAR's
+            // native record() renders silently in -batch (progress goes only to
+            // its absent GUI presenter), so no per-frame markers may follow.
+            // Streamed to the client log; kept out of the visible console.
+            sim.println("starpost-progress: recording " + label);
             invokeRecord(sim, sp, scene, resolvePath(moviePath));
             idx.println("movie," + esc(name) + "," + esc(label) + ","
                 + esc(movie) + "," + tail + "," + posterCell);
