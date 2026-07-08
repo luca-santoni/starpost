@@ -3,15 +3,6 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
-## [Unreleased]
-
-### Improvements
-- **Recording progress on the native path** — the per-frame progress bar now
-  also advances during STAR-CCM+'s fast native `record()`, by recognising
-  STAR's own frame/percentage progress text in the record output (previously
-  only the slower frame-loop fallback moved the bar). Those genuine STAR lines
-  stay visible in the log console.
-
 ## [2.3.0] — 2026-07-07
 
 ### New Features
