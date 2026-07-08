@@ -14,6 +14,7 @@ Usage (from the GUI):
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -128,6 +129,37 @@ class SceneRenderWorker(QObject):
         self.finished.emit()
 
 
+# STAR-CCM+'s native record() reports frame progress to its GUI
+# ProgressPresenter (absent under -batch), but it also echoes frame/percentage
+# text to the process log. These patterns lift a (done, total) pair out of that
+# text so the fast native path — which never runs our own frame-loop markers —
+# still advances the bar. The frame form ("...frame 100 of 330", "frame 100/330")
+# is preferred; a bare percentage counts only on a movie/animation line.
+_NATIVE_FRAME_RE = re.compile(r"frame\s+(\d+)\s*(?:of|/)\s*(\d+)", re.IGNORECASE)
+_NATIVE_PCT_RE = re.compile(r"(?<!\d)(\d{1,3})\s*%")
+_PCT_CONTEXT = ("frame", "animation", "movie", "hardcopy", "encod")
+
+
+def _parse_native_progress(line: str) -> Optional[tuple[int, int]]:
+    """Pull a (done, total) frame pair from STAR's own native record output, or
+    None if the line carries no recognisable movie progress. Handles an explicit
+    frame count ("...frame 100 of 330", "frame 100/330") and a bare percentage on
+    a movie/animation line ("Writing animation: 45%")."""
+    m = _NATIVE_FRAME_RE.search(line)
+    if m:
+        done, total = int(m.group(1)), int(m.group(2))
+        if total > 0 and 0 <= done <= total:
+            return done, total
+    low = line.lower()
+    if any(k in low for k in _PCT_CONTEXT):
+        m = _NATIVE_PCT_RE.search(line)
+        if m:
+            pct = int(m.group(1))
+            if 0 <= pct <= 100:
+                return pct, 100
+    return None
+
+
 class ScreenplayRecordWorker(QObject):
     """Records screenplay movies off the GUI thread, one .sim per STAR-CCM+
     process. Each job is a (sim_file, screenplay_show) pair, where
@@ -158,9 +190,11 @@ class ScreenplayRecordWorker(QObject):
         self._views = list(views or [])
 
     def _sink(self, line: str) -> None:
-        """Log sink for the runner: per-frame progress markers from the record
-        macro become frame_progress signals (not log lines); everything else
-        passes through to the log."""
+        """Log sink for the runner. Two progress sources feed the bar. Our own
+        frame-loop markers ("starpost-progress: frame X/Y") become frame_progress
+        signals and are hidden from the visible log. STAR's native record()
+        progress text (the fast native path, where our markers never fire) is
+        recognised too, but — being genuine STAR output — is kept in the log."""
         if line.startswith("starpost-progress: frame "):
             tail = line.rsplit(" ", 1)[-1]  # "X/Y"
             done_s, _, total_s = tail.partition("/")
@@ -169,6 +203,10 @@ class ScreenplayRecordWorker(QObject):
                 return
             except ValueError:
                 pass  # malformed marker — let it fall through to the log
+        else:
+            native = _parse_native_progress(line)
+            if native is not None:
+                self.frame_progress.emit(*native)
         self.log.emit(line)
 
     def run(self) -> None:

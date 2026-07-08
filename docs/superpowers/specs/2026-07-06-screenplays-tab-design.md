@@ -68,12 +68,19 @@ work (on higher-spec hardware) starts from what we learned:
 
 Open items for the next session (higher-spec hardware, for faster iteration):
 
-1. **Progress bar on the native path** — first check whether STAR's
-   `Writing Frame N` / `NN%` progress text appears in the `starccm+` stdout
-   during a batch record (look at the StarPost log console mid-record). If it
-   does, parse it in `ScreenplayRecordWorker._sink` → `frame_progress`. If not,
-   add an indeterminate "Recording movie…" busy indicator during the record
-   call. (See the "No progress bar on the native path" finding above.)
+1. **Progress bar on the native path** — *Option A implemented (pending format
+   verification).* `ScreenplayRecordWorker._sink` now parses STAR's own native
+   record output via `_parse_native_progress` (`batch/queue.py`): a `frame N of
+   M` / `frame N/M` count, or a percentage on a movie/animation line, becomes a
+   `frame_progress` signal, so the fast native path moves the bar too. The
+   regexes cover the *plausible* STAR formats but the **exact text STAR emits in
+   `-batch` is still unverified** (the deciding check needs a real record with a
+   POD key — `scratchpad/RecordProbe.java` is a minimal probe for it). Next
+   session: run a real native record, confirm which line format actually reaches
+   stdout, and tighten `_NATIVE_FRAME_RE` / `_PCT_CONTEXT` to match. **If STAR
+   emits nothing to stdout** (all progress goes to the GUI `ProgressPresenter`),
+   the parser is a harmless no-op and the fallback is an indeterminate
+   "Recording movie…" busy indicator during the record call.
 2. **Confirm the native call is the preferred one** across releases — a GUI
    macro recording of a manual **Movie File** export pins the exact signature;
    consider dropping the pre-created stub for the movie-file path and/or polling

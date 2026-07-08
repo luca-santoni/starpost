@@ -334,3 +334,42 @@ def test_screenplay_record_worker_converts_frame_markers(app, tmp_path):
     assert frames == [(3, 10)]
     assert "normal line" in logs
     assert not any("starpost-progress" in line for line in logs)
+
+
+def test_parse_native_progress_recognises_star_formats():
+    from starpost.batch.queue import _parse_native_progress
+
+    # Explicit frame counts (preferred), either separator.
+    assert _parse_native_progress("Writing frame 100 of 330") == (100, 330)
+    assert _parse_native_progress("Frame 5/330 written") == (5, 330)
+    # Percentage, but only with movie/animation context.
+    assert _parse_native_progress("Writing animation file: 45%") == (45, 100)
+    assert _parse_native_progress("Encoding movie 100 %") == (100, 100)
+    # No movie context, or no progress at all: ignored.
+    assert _parse_native_progress("Loading mesh: 50% complete") is None
+    assert _parse_native_progress("Region 3 of 10 initialised") is None
+    assert _parse_native_progress("normal line") is None
+    # Out-of-range guards.
+    assert _parse_native_progress("frame 400 of 330") is None
+
+
+def test_screenplay_record_worker_converts_native_progress(app, tmp_path):
+    from starpost.batch.queue import ScreenplayRecordWorker
+
+    class _NativeRunner:
+        def record_screenplays(self, sim_file, output_dir, show, views,
+                               log_sink=None):
+            log_sink("Writing frame 1 of 4")
+            log_sink("Writing frame 4 of 4")
+            return []
+
+    worker = ScreenplayRecordWorker(
+        [(tmp_path / "a.sim", {"S": []})], _NativeRunner(), tmp_path
+    )
+    logs, frames = [], []
+    worker.log.connect(logs.append)
+    worker.frame_progress.connect(lambda d, t: frames.append((d, t)))
+    worker.run()
+    assert frames == [(1, 4), (4, 4)]
+    # Genuine STAR output stays visible in the log (unlike our own markers).
+    assert any("Writing frame 4 of 4" in line for line in logs)
