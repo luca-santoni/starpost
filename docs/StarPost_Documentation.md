@@ -540,6 +540,67 @@ license checkout** are recorded in one STAR-CCM+ session.
 > Screenplays tree is simply empty — nothing errors, there is just nothing to
 > record.
 
+#### How the recorder is invoked (and why it is reflective)
+
+The screenplay record/export API is version-specific and its class names shift
+across releases, and a Java compile error is fatal to the whole macro. So the
+record macro never references the screenplay API at compile time — it locates
+the recorder **reflectively** at runtime (`Class.forName`, method scanning) and
+tries, in order:
+
+1. **Native movie export** — `star.common.AnimationDirectorBase.record(int
+   width, int height, double frameRate, double startTime, double
+   animationLength, String file, int movieType[, boolean antiAliasing, boolean
+   transparentBackground])`, reached via the screenplay's animation director,
+   after arming it (`markRecordingScene`, `setFramesPerSecond`,
+   `prepareForExport`). The parameter meanings were read off the GUI export
+   dialog. **`movieType 0` (Movie File) is the only one used**; `movieType 1`
+   (Directory of PNG Frames) is deliberately never tried — it produces the wrong
+   output and would cost a full wasted render.
+2. **Frame-loop export** — the protocol the GUI itself drives:
+   `initializeForMovieExport` → `beginMovieExport` → per-frame `updateAnimation`
+   + `exportMovieFrame` → `endMovieExport`/`finalizeMovieExport`. This is the
+   fallback that produces the movie when the native call does not, and it is the
+   source of the per-frame progress-bar movement.
+3. A generic name/type scan, as a last resort for other releases.
+
+A call only counts as success when a non-empty **movie file** (not a directory)
+exists afterwards. On total failure the log dumps every candidate signature so
+the installed release's real API is visible. This was verified against
+**Simcenter STAR-CCM+ 2506** (record path 2 succeeds there).
+
+#### Performance and hardware requirements
+
+Recording is bound by how much of the case fits in RAM, not by the macro.
+Batch recording launches a **fresh** STAR-CCM+ session that must **load the
+whole mesh** before any frame renders, and if the machine lacks the RAM to hold
+the case, STAR pages it to disk — that swap thrashing, not the encoder, is what
+makes a large case slow. Observed rule of thumb: STAR-CCM+ needs roughly
+**1.5–2 GB of RAM per million cells** for a case with field data, so e.g. a
+~21-million-cell case wants **~30–40 GB**; on a 16 GB machine the mesh load
+alone can take tens of minutes of swapping (this affects scene stills too, not
+only screenplays).
+
+Consequences and levers:
+
+- **Adequate RAM is the real fix.** Record a large case on a workstation or the
+  cluster where it was solved (32–64 GB+), not a memory-starved laptop.
+- **More parallel cores does *not* add memory on a single machine.** The
+  "Parallel cores" setting (`-np`) helps on a *cluster* (more nodes = more total
+  RAM); on one machine all ranks share the same RAM, so raising it will not
+  relieve a memory shortfall and can slightly worsen it.
+- **A `.sim` saved at a different partition count is re-partitioned on load**
+  (the `Loading/configuring connectivity (old|new partitions: A|B)` step). Cases
+  solved on a cluster (e.g. 480 partitions) re-partition to the local core count
+  every load. Re-saving the case at the render machine's partition count once
+  skips that re-partition compute on subsequent loads (it does not relieve the
+  memory shortfall).
+- **Batch recordings to pay the load once.** The mesh load is per STAR-CCM+
+  session, so recording several screenplays/views in **one** checkout (raise
+  **Screenplays per license** in Settings → Screenplays) pays it a single time
+  for the whole set — the same way the interactive GUI amortizes a load it keeps
+  resident. For a single movie there is no way around one load.
+
 Recording is driven from the **Screenplays** section of the selection panel
 (right); see [3.7](#37-selection-panel-right).
 
