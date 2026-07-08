@@ -17,14 +17,39 @@ work (on higher-spec hardware) starts from what we learned:
   Start Time, Animation Length** (read off the GUI export dialog); the trailing
   int is **movie type**: `0` = Movie File, `1` = Directory of PNG Frames. Only
   `movieType 0` is used. Length comes from `getPreferredAnimationLength()`.
-- **Frame-loop fallback is what actually succeeds on 2506:**
-  `initializeForMovieExport` → `beginMovieExport` → per-frame `updateAnimation`
-  + `exportMovieFrame` → `endMovieExport`/`finalizeMovieExport`, which also
-  drives the per-frame progress bar. The native `record(movieType=0)` call was
-  reached but did not reliably emit the movie file within our verify window; the
-  native-vs-frame-loop question (and a possible async completion / no-stub fix)
-  is the main open item for higher-spec follow-up. Recording a GUI macro of a
-  manual **Movie File** export would settle the exact native call.
+- **Two working paths, RAM decides which runs.** `recordKnown` (native
+  `record(movieType=0)`) is tried first; `recordFrameLoop`
+  (`initializeForMovieExport` → `beginMovieExport` → per-frame `updateAnimation`
+  + `exportMovieFrame` → `endMovieExport`/`finalizeMovieExport`) is the fallback.
+  - On the **16 GB laptop**, the native call did not deliver the movie in our
+    verify window and the **frame loop** produced it (slowly — RAM-bound).
+  - On a **higher-spec machine** (2026-07-08), the **native `record()` path
+    succeeded and was fast — ~2:15** for the ~11 s / 330-frame test case. It is
+    confirmed the *native* path because `recordKnown` returns before the frame
+    loop is ever reached, so **no per-frame progress markers were emitted**.
+  So native recording works on adequate hardware; the frame loop remains the
+  fallback. A GUI macro of a manual **Movie File** export would still pin the
+  exact preferred native call for other releases.
+- **No progress bar on the native path (open).** STAR *does* track frame
+  progress during native `record()` — the GUI shows `Writing Animation File:
+  Writing Frame N` / `NN%` — but it pushes those updates to its graphical
+  **`star.base.neo.ProgressPresenter`** (`setMessage`/`setValue`/`setMaximum`,
+  in `starbase.jar`), which has no GUI in `-batch` mode. Our per-frame
+  `starpost-progress:` markers live only in `recordFrameLoop`, which the native
+  path skips, so the StarPost progress bar never moves during a fast native
+  render. Deciding question for the next session: **does that
+  `Writing Frame N` / percentage text reach the `starccm+` stdout in batch?**
+  - **If yes** → trivial: teach `ScreenplayRecordWorker._sink` to recognise the
+    line (or the `NN%`) and emit `frame_progress`, exactly like the frame-loop
+    markers — a real per-frame bar on the fast native path.
+  - **If no** (GUI-only) → options are (a) an indeterminate "Recording movie…"
+    **busy indicator** during the native call (honest, always doable); (b) force
+    the frame-loop path for its markers (but that likely gives up the native
+    path's speed); or (c) inject a custom `ProgressPresenter` — the
+    `record(int,int,…)` overloads take no presenter, while the
+    `record(SimulationProcessObject, …)` overloads (currently marked
+    `[unfillable]`) do route through a process object, so wiring a presenter we
+    can read is *possible in principle* but unverified and fragile.
 - **A `File.canWrite()` quirk** aborts STAR's hardcopy path for a not-yet-
   existing target ("File … is not writable, hardcopy aborted"); the macro
   pre-creates an empty target and cleans up empty stubs.
@@ -41,10 +66,21 @@ work (on higher-spec hardware) starts from what we learned:
   a single machine. See `docs/StarPost_Documentation.md` §3.6b for the
   user-facing version.
 
-Open items for the next session (higher-spec hardware): confirm whether native
-`record(movieType=0)` can produce the movie directly (async completion / drop
-the pre-created stub for the movie-file path), and consider pipelining the
-frame-loop via `exportMovieFrameAsync` to overlap render and encode.
+Open items for the next session (higher-spec hardware, for faster iteration):
+
+1. **Progress bar on the native path** — first check whether STAR's
+   `Writing Frame N` / `NN%` progress text appears in the `starccm+` stdout
+   during a batch record (look at the StarPost log console mid-record). If it
+   does, parse it in `ScreenplayRecordWorker._sink` → `frame_progress`. If not,
+   add an indeterminate "Recording movie…" busy indicator during the record
+   call. (See the "No progress bar on the native path" finding above.)
+2. **Confirm the native call is the preferred one** across releases — a GUI
+   macro recording of a manual **Movie File** export pins the exact signature;
+   consider dropping the pre-created stub for the movie-file path and/or polling
+   for async completion so `recordKnown` wins even on the first, cold attempt.
+3. **Optional speed:** pipeline the frame-loop fallback via
+   `exportMovieFrameAsync` to overlap render and encode (only relevant when the
+   native path can't be used).
 
 ## Summary
 
