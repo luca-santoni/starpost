@@ -2,7 +2,7 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **2.3.0**
+> Version: **2.4.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
@@ -11,8 +11,8 @@
 > rendering, a thumbnail gallery with Properties), **on-demand screenplay
 > recording** (the Screenplays tab: screenplay → displayer selection, saved-view
 > recording, a poster-framed gallery that opens movies in the system player), a
-> **guided Run batch dialog** (a Source → Reports → Plots → Scenes → Summary
-> wizard producing a single archive), the full in-app settings dialog, a heavily
+> **guided Run batch dialog** (a Source → Reports → Plots → Scenes → Screenplays
+> → Summary wizard producing a single archive), the full in-app settings dialog, a heavily
 > customizable report/plot export, an in-app update check, and packaged builds
 > (Linux AppImage + Windows Inno Setup installer). The Java extraction macro has
 > been run against a live STAR-CCM+ 2310 install (reports, plots, and scene/view
@@ -800,18 +800,18 @@ monitor selections to the dialog.
 
 Opened from the toolbar **Run batch → Full Batch**. Unlike the [Export dialog](#39-export-dialog)
 (which writes the current view), this is a **guided wizard** that assembles a
-self-contained **archive** of extracted data. It steps through **five tabs** in
-order — **Source → Reports → Plots → Scenes → Summary** — advanced with the
-bottom-right **Continue** button (which becomes **Batch run** on the Summary
-tab); **Back** returns to the previous tab. The tab bar itself is locked, so the
-wizard is always driven by these buttons.
+self-contained **archive** of extracted data. It steps through **six tabs** in
+order — **Source → Reports → Plots → Scenes → Screenplays → Summary** — advanced
+with the bottom-right **Continue** button (which becomes **Batch run** on the
+Summary tab); **Back** returns to the previous tab. The tab bar itself is locked,
+so the wizard is always driven by these buttons.
 
 **Batch profile bar (top).** A **Batch profile** selector with **Load** and
 **Save as…** stores a whole Run-batch setup — the chosen reports (along with the
 **report format**, **Include units** and **Combined report** settings), and the
-saved plots and scenes — under a name for reuse, so loading a profile restores all
-of them. These batch profiles are **separate** from the report/plot profiles used
-by the main view, and are also listed under Settings → Profiles →
+saved plots, scenes and screenplays — under a name for reuse, so loading a profile
+restores all of them. These batch profiles are **separate** from the report/plot
+profiles used by the main view, and are also listed under Settings → Profiles →
 **Batch profiles**.
 
 **The tabs:**
@@ -839,22 +839,31 @@ by the main view, and are also listed under Settings → Profiles →
   captures the current selection as a named entry in the **Saved Scenes** list;
   right-click one for **Properties** (its resolution/format, saved views, and each
   captured scene with its scalar/vector displayers) or **Delete**.
+- **Screenplays** — the same screenplay → displayer tree and a **Saved views**
+  list as the main Screenplays view, plus per-entry **Movie resolution**,
+  **Movie format** (MP4 / AVI / MOV), **Frame rate** and **Quality** options.
+  **Save Screenplay** captures the current selection (with those movie options)
+  as a named entry in the **Saved Screenplays** list; right-click one for
+  **Properties** (its movie options, saved views, and each captured screenplay
+  with its scalar/vector displayers) or **Delete**. Each saved screenplay records
+  one movie per data set into that data set's folder.
 - **Summary** — a final review before the run. **Export options**: the **Archive
   format** selector (**ZIP** or **7Z**) — the run writes the chosen format (a
   `.zip` or a `.7z`) — and **Include dataset .csv** — when ticked, each data set's portable
   StarPost CSV (identical to the Data tab's **Export Data** file) is written into
   its folder in the archive, ready to re-import. Alongside sit read-only
-  **Reports**, **Plots** and **Scenes** lists mirroring the other tabs; right-click
-  a plot or scene here for **Properties** or **Delete** (deleting also removes it
-  from its source Saved list).
+  **Reports**, **Plots**, **Scenes** and **Screenplays** lists mirroring the other
+  tabs; right-click a plot, scene or screenplay here for **Properties** or
+  **Delete** (deleting also removes it from its source Saved list).
 
-**Batch run** then extracts/renders as needed and writes a **single archive**
-(ZIP or 7Z, as chosen on the Summary tab) containing **one folder per data set**,
-each holding its report table, an image
-of every saved plot, the saved-scene stills, and (if enabled) the data set's CSV
-— plus, when **Combined report** is on, one all-sims report at the archive root.
-A progress dialog tracks the run; STAR-CCM+ is only invoked when a `.sim` source
-must be extracted or a scene rendered.
+**Batch run** then extracts/renders/records as needed and writes a **single
+archive** (ZIP or 7Z, as chosen on the Summary tab) containing **one folder per
+data set**, each holding its report table, an image of every saved plot, the
+saved-scene stills, the saved-screenplay movies, and (if enabled) the data set's
+CSV — plus, when **Combined report** is on, one all-sims report at the archive
+root. A progress dialog tracks the run; STAR-CCM+ is only invoked when a `.sim`
+source must be extracted, a scene rendered, or a screenplay recorded. A screenplay
+that fails to record is logged and skipped, without aborting the rest of the run.
 
 > **Multi-select** in the wizard's lists uses **Shift+click** (range) and
 > **Ctrl+click** (toggle); the checkbox lists also support **Shift+click to tick
@@ -864,10 +873,10 @@ must be extracted or a scene rendered.
 
 Opened from the toolbar **Run batch → Express batch**. This is the fast path for
 users who already have a saved **batch profile**: rather than stepping through the
-five-tab wizard, you pick a profile and sources, set the archive options, and run.
+six-tab wizard, you pick a profile and sources, set the archive options, and run.
 The profile supplies everything about the output — the reports (with their
 **report format**, **Include units** and **Combined report** settings), the saved
-plots, and the saved scenes.
+plots, the saved scenes, and the saved screenplays.
 
 **Layout (top to bottom):**
 
@@ -889,12 +898,13 @@ plots, and the saved scenes.
 
 **Batch run** produces the **same output** as the wizard: a **single archive**
 (ZIP or 7Z, as chosen) with **one folder per data set**, each holding its report
-table, an image of every saved plot, the saved-scene stills, and (if enabled) the
-data set's CSV — plus, when the profile's **Combined report** is on, one all-sims
-report at the archive root. As in the wizard, STAR-CCM+ is invoked only when a
-`.sim` source must be extracted or a scene rendered (its executable path must be
-set in Settings), and the run warns on **No data selected** or when the chosen
-profile yields **nothing to output**.
+table, an image of every saved plot, the saved-scene stills, the saved-screenplay
+movies, and (if enabled) the data set's CSV — plus, when the profile's **Combined
+report** is on, one all-sims report at the archive root. As in the wizard,
+STAR-CCM+ is invoked only when a `.sim` source must be extracted, a scene rendered
+or a screenplay recorded (its executable path must be set in Settings), and the
+run warns on **No data selected** or when the chosen profile yields **nothing to
+output**.
 
 ### 3.10 Settings dialog
 

@@ -73,10 +73,11 @@ Two distinct "batch" concepts — don't conflate them:
   license checkout at a time. Supports cooperative "stop after current file"; never killed
   mid-write. Scene rendering has its own `SceneRenderWorker` (parallel `starccm+ -np`).
 - **"Run batch" export** (`run.py`): the toolbar wizard that bundles selected report
-  tables, plot images, scene stills (and optional portable CSVs) into a single `.zip`.
-  This runs **on the GUI thread** because it renders real `PlotView` widgets (Qt widgets
-  can't be created off the GUI thread). `aggregator.py` builds the wide/long comparison
-  DataFrames.
+  tables, plot images, scene stills, screenplay movies (and optional portable CSVs)
+  into a single `.zip`. This runs **on the GUI thread** because it renders real
+  `PlotView` widgets (Qt widgets can't be created off the GUI thread); scene rendering
+  and screenplay recording within it still shell out to STAR-CCM+. `aggregator.py`
+  builds the wide/long comparison DataFrames.
 
 ### GUI (`gui/`)
 `main_window.py` wires the layout: `FileListPanel` | Reports table + `PlotView` tabs |
