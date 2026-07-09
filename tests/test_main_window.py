@@ -39,7 +39,7 @@ def test_run_batch_opens_dialog(app, monkeypatch):
 
 
 def test_batch_run_dialog_sequential_navigation(app):
-    """Five sequential tabs; Continue advances; the button becomes Batch run on
+    """Six sequential tabs; Continue advances; the button becomes Batch run on
     the Summary tab and accepts there."""
     from PySide6.QtWidgets import QDialog
 
@@ -54,7 +54,7 @@ def test_batch_run_dialog_sequential_navigation(app):
     )
     tabs = dlg._tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
-        "Source", "Reports", "Plots", "Scenes", "Summary"
+        "Source", "Reports", "Plots", "Scenes", "Screenplays", "Summary"
     ]
     assert dlg._next.text() == "Continue"
     for expected in range(1, tabs.count()):
@@ -553,6 +553,100 @@ def test_batch_run_dialog_scenes_tab(app):
     dlg.close()
 
 
+def test_batch_run_dialog_screenplays_tab(app):
+    """Screenplays tab: movie options on the left, a screenplay tree (checking a
+    screenplay reveals its scene's scalar/vector displayers) in the middle, and a
+    saved-views checklist on the right — all populated from the loaded sim."""
+    from PySide6.QtCore import Qt
+
+    from starpost.core.settings import Settings
+    from starpost.data.models import Displayer, Screenplay, SimResult
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        screenplays=[
+            Screenplay("Flythrough", "Iso", [
+                Displayer("Static Pressure", "scalar"),
+                Displayer("Velocity", "vector"),
+            ]),
+        ],
+        views=["Top", "Iso"],
+    )
+    dlg = BatchRunDialog(results=[result], settings=Settings())
+
+    # The screenplay tree lists the screenplays; checking one reveals its
+    # displayers as checkable children.
+    root = dlg._screenplay_tree.invisibleRootItem()
+    assert {root.child(i).text(0) for i in range(root.childCount())} == {
+        "Flythrough"
+    }
+    fly = root.child(0)
+    fly.setCheckState(0, Qt.CheckState.Checked)
+    assert [fly.child(j).text(0) for j in range(fly.childCount())] == [
+        "Static Pressure", "Velocity"
+    ]
+    fly.child(0).setCheckState(0, Qt.CheckState.Checked)
+    assert dlg._screenplay_tree.checked_displayers() == {
+        "Flythrough": ["Static Pressure"]
+    }
+
+    # Saved views: checkable, opt-in (start unchecked).
+    vw = dlg._sp_views_window
+    assert {vw.item(i).text() for i in range(vw.count())} == {"Top", "Iso"}
+    assert all(
+        vw.item(i).checkState() == Qt.CheckState.Unchecked for i in range(vw.count())
+    )
+
+    # Movie options exist and are seeded from settings.
+    assert dlg._sp_resolution.currentData() == "1080p"
+    assert dlg._sp_format.currentData() == "mp4"
+    assert dlg._sp_fps.value() == 30
+    assert dlg._sp_quality.currentData() == "high"
+    dlg.close()
+
+
+def test_batch_run_dialog_save_screenplay(app, monkeypatch):
+    """Save Screenplay (shown only on the Screenplays tab) captures the setup
+    (displayers, views, movie options) into the Saved Screenplays list."""
+    from PySide6.QtCore import Qt
+
+    from starpost.core.settings import Settings
+    from starpost.data.models import Displayer, Screenplay, SimResult
+    from starpost.gui.views import batch_run_dialog as brd
+    from starpost.gui.views.batch_run_dialog import BatchRunDialog
+
+    result = SimResult(
+        sim_path="/c/a.sim",
+        screenplays=[Screenplay("Fly", "Iso", [Displayer("P", "scalar")])],
+        views=["Top"],
+    )
+    dlg = BatchRunDialog(results=[result], settings=Settings())
+    root = dlg._screenplay_tree.invisibleRootItem()
+    fly = root.child(0)
+    fly.setCheckState(0, Qt.CheckState.Checked)
+    fly.child(0).setCheckState(0, Qt.CheckState.Checked)
+    dlg._sp_resolution.setCurrentIndex(dlg._sp_resolution.findData("2160p"))
+    dlg._sp_format.setCurrentIndex(dlg._sp_format.findData("mov"))
+    dlg._sp_fps.setValue(60)
+    dlg._sp_quality.setCurrentIndex(dlg._sp_quality.findData("medium"))
+
+    monkeypatch.setattr(
+        brd.QInputDialog, "getText",
+        staticmethod(lambda *a, **k: ("Movie1", True)),
+    )
+    dlg._on_save_screenplay()
+
+    assert dlg._saved_screenplays.count() == 1
+    item = dlg._saved_screenplays.item(0)
+    assert item.text() == "Movie1"
+    assert item.data(Qt.ItemDataRole.UserRole) == {
+        "displayers": {"Fly": ["P"]}, "views": [],
+        "resolution": "2160p", "format": "mov", "fps": 60, "quality": "medium",
+    }
+    dlg.close()
+
+
 def test_batch_run_dialog_summary_tab(app):
     """Summary tab: export options plus read-only lists of the selected reports,
     the saved plots and the saved scenes, refreshed when the tab is shown."""
@@ -567,9 +661,10 @@ def test_batch_run_dialog_summary_tab(app):
     )
     # Deselect a report so "selected" differs from "all".
     dlg._reports_window.item(1).setCheckState(Qt.CheckState.Unchecked)  # Lift
-    # Saved plots / scenes captured on earlier tabs.
+    # Saved plots / scenes / screenplays captured on earlier tabs.
     dlg._saved_plots.addItem(QListWidgetItem("Drag plot"))
     dlg._saved_scenes.addItem(QListWidgetItem("Pressure scene"))
+    dlg._saved_screenplays.addItem(QListWidgetItem("Flythrough movie"))
 
     summary_idx = next(
         i for i in range(dlg._tabs.count()) if dlg._tabs.tabText(i) == "Summary"
@@ -594,6 +689,10 @@ def test_batch_run_dialog_summary_tab(app):
         dlg._summary_scenes.item(i).text()
         for i in range(dlg._summary_scenes.count())
     ] == ["Pressure scene"]
+    assert [
+        dlg._summary_screenplays.item(i).text()
+        for i in range(dlg._summary_screenplays.count())
+    ] == ["Flythrough movie"]
     dlg.close()
 
 
@@ -2100,6 +2199,9 @@ def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
 
     BatchProfile(
         name="Nightly", selected_reports=["Drag"],
+        saved_screenplays=[{"name": "Fly", "data": {
+            "displayers": {"Iso": ["P"]}, "views": [], "resolution": "1080p",
+            "format": "mp4", "fps": 30, "quality": "high"}}],
         report_format="XLSX", include_units=False, combined_report=False,
     ).save()
 
@@ -2135,6 +2237,9 @@ def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
     assert cfg.archive_format == "7z"
     assert cfg.include_dataset_csv is True
     assert [s.name for s in cfg.sources] == ["caseA"]
+    assert cfg.saved_screenplays == [{"name": "Fly", "data": {
+        "displayers": {"Iso": ["P"]}, "views": [], "resolution": "1080p",
+        "format": "mp4", "fps": 30, "quality": "high"}}]
 
 
 def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):

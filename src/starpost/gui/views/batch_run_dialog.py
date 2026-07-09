@@ -1,9 +1,8 @@
 """Run-batch dialog: a sequential, tabbed wizard for configuring a batch run.
 
-Five tabs (Source → Reports → Plots → Scenes → Summary), styled like the Export
-dialog's tabs. The user advances with the bottom-right **Continue** button, which
-becomes **Batch run** on the final Summary tab. The tab contents and the actual
-run wiring are filled in later — this is the navigation scaffold only.
+Six tabs (Source → Reports → Plots → Scenes → Screenplays → Summary), styled like
+the Export dialog's tabs. The user advances with the bottom-right **Continue**
+button, which becomes **Batch run** on the final Summary tab.
 """
 from __future__ import annotations
 
@@ -45,6 +44,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QSlider,
+    QSpinBox,
     QStyle,
     QStyleOptionViewItem,
     QTabWidget,
@@ -79,14 +79,14 @@ from starpost.gui.views.plot_view import (
     _display_name,
     _series_is_empty,
 )
-from starpost.gui.views.selection_panel import _SceneTree
+from starpost.gui.views.selection_panel import _ScreenplayTree, _SceneTree
 from starpost.gui.widgets import (
     UniformTabBar,
     enable_check_range,
     enable_range_selection,
 )
 
-_TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Summary"]
+_TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Screenplays", "Summary"]
 
 
 def _header(text: str) -> QLabel:
@@ -473,6 +473,64 @@ class _SavedScenePropertiesDialog(QDialog):
         layout.addWidget(buttons)
 
 
+class _SavedScreenplayPropertiesDialog(QDialog):
+    """Read-only properties for a saved screenplay: its movie options
+    (resolution, format, frame rate, quality), the saved camera views it records
+    from, and the screenplays it records shown with their kept-visible
+    displayers."""
+
+    def __init__(self, name: str, data: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Properties — {name}")
+
+        def _or_dash(text: str) -> str:
+            return text if text else "—"
+
+        def _wrap(text: str) -> QLabel:
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setMaximumWidth(420)
+            return label
+
+        form = QFormLayout()
+        form.setHorizontalSpacing(24)
+        form.addRow(
+            "Movie resolution:", QLabel(_or_dash(data.get("resolution", "")))
+        )
+        form.addRow(
+            "Movie format:", QLabel((data.get("format") or "").upper() or "—")
+        )
+        fps = data.get("fps")
+        form.addRow("Frame rate:", QLabel(str(fps) if fps else "—"))
+        form.addRow(
+            "Quality:", QLabel((data.get("quality") or "").capitalize() or "—")
+        )
+        views = data.get("views") or []
+        form.addRow("Saved views:", _wrap(", ".join(views) if views else "—"))
+
+        displayers = data.get("displayers") or {}
+        if displayers:
+            for screenplay, shown in displayers.items():
+                form.addRow("Screenplay:", _wrap(screenplay))
+                if shown:
+                    for d in shown:
+                        form.addRow("Vector/Scalar name:", _wrap(d))
+                else:
+                    form.addRow("Vector/Scalar name:", _wrap("(all displayers)"))
+        else:
+            form.addRow(QLabel("—"))
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.button(QDialogButtonBox.StandardButton.Close).setToolTip(
+            "Close this window"
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class _ExtractWorker(QObject):
     """Runs a single .sim extraction off the GUI thread so the setup progress
     dialog keeps painting (and its bar animating) while STAR-CCM+ works."""
@@ -815,8 +873,10 @@ class BatchRunDialog(QDialog):
         self._residual_groups = set(residual_groups or [])  # auto-select groups
         self._results = list(results or [])       # SimResults, for the plot preview
         self._settings = settings
-        # Scenes tab data, derived from the loaded results (union across sims).
+        # Scenes / Screenplays tab data, derived from the loaded results (union
+        # across sims).
         self._scene_groups = self._scene_groups_union(self._results)
+        self._screenplay_groups = self._screenplay_groups_union(self._results)
         self._saved_views = sorted({v for r in self._results for v in r.views})
         # The .sim already extracted to set up the tabs (via "Has similar format"),
         # so re-pressing Continue doesn't re-check out a license for the same file.
@@ -836,6 +896,8 @@ class BatchRunDialog(QDialog):
         self._tabs.addTab(self._plots_tab, "Plots")
         self._scenes_tab = self._build_scenes_tab()
         self._tabs.addTab(self._scenes_tab, "Scenes")
+        self._screenplays_tab = self._build_screenplays_tab()
+        self._tabs.addTab(self._screenplays_tab, "Screenplays")
         self._summary_tab = self._build_summary_tab()
         self._tabs.addTab(self._summary_tab, "Summary")
         # Keep the button label in step with the active tab, however it changed.
@@ -858,6 +920,11 @@ class BatchRunDialog(QDialog):
         self._save_scene = QPushButton("Save Scene")
         self._save_scene.setVisible(False)
         self._save_scene.clicked.connect(self._on_save_scene)
+        # "Save Screenplay" saves the current screenplay setup; only shown on the
+        # Screenplays tab.
+        self._save_screenplay = QPushButton("Save Screenplay")
+        self._save_screenplay.setVisible(False)
+        self._save_screenplay.clicked.connect(self._on_save_screenplay)
         self._next = QPushButton()
         self._next.clicked.connect(self._advance)
         row = QHBoxLayout()
@@ -865,6 +932,7 @@ class BatchRunDialog(QDialog):
         row.addStretch(1)
         row.addWidget(self._add_plot)
         row.addWidget(self._save_scene)
+        row.addWidget(self._save_screenplay)
         row.addWidget(self._next)
 
         layout = QVBoxLayout(self)
@@ -926,7 +994,7 @@ class BatchRunDialog(QDialog):
 
     def _build_profile(self, name: str) -> BatchProfile:
         """Capture the current batch setup — the ticked reports and the saved
-        plots/scenes (name + characteristics) — into a profile."""
+        plots/scenes/screenplays (name + characteristics) — into a profile."""
         return BatchProfile(
             name=name,
             selected_reports=[
@@ -936,6 +1004,7 @@ class BatchRunDialog(QDialog):
             ],
             saved_plots=self._saved_entries(self._saved_plots),
             saved_scenes=self._saved_entries(self._saved_scenes),
+            saved_screenplays=self._saved_entries(self._saved_screenplays),
             report_format=self._report_format.currentText(),
             include_units=self._report_include_units.isChecked(),
             combined_report=self._report_combined.isChecked(),
@@ -954,7 +1023,7 @@ class BatchRunDialog(QDialog):
 
     def _apply_profile(self, profile: BatchProfile) -> None:
         """Apply a loaded profile: tick its reports (within those available) and
-        replace the saved plots/scenes with the profile's."""
+        replace the saved plots/scenes/screenplays with the profile's."""
         selected = set(profile.selected_reports)
         for i in range(self._reports_window.count()):
             item = self._reports_window.item(i)
@@ -964,6 +1033,7 @@ class BatchRunDialog(QDialog):
             )
         self._restore_saved(self._saved_plots, profile.saved_plots)
         self._restore_saved(self._saved_scenes, profile.saved_scenes)
+        self._restore_saved(self._saved_screenplays, profile.saved_screenplays)
         idx = self._report_format.findText(profile.report_format)
         if idx >= 0:
             self._report_format.setCurrentIndex(idx)
@@ -1086,6 +1156,11 @@ class BatchRunDialog(QDialog):
         self._saved_views = sorted(result.views)
         self._scene_tree.set_items(self._scene_groups)
         self._set_views_items(self._saved_views)
+
+        # Screenplays tab: rebuild its tree and saved-views list from this sim.
+        self._screenplay_groups = self._screenplay_groups_union([result])
+        self._screenplay_tree.set_items(self._screenplay_groups)
+        self._set_sp_views_items(self._saved_views)
 
     def _monitor_groups_union(self, results) -> dict[str, list[str]]:
         """``{plot group: [monitor series, ...]}`` across ``results``, dropping
@@ -1256,6 +1331,20 @@ class BatchRunDialog(QDialog):
                         names.append(d.name)
         return groups
 
+    @staticmethod
+    def _screenplay_groups_union(results) -> dict[str, list[str]]:
+        """``{screenplay: [displayer, ...]}`` union across ``results`` — mirrors
+        the main window's screenplay-choice builder (a screenplay's displayers
+        are its scene's scalar/vector displayers)."""
+        groups: dict[str, list[str]] = {}
+        for r in results:
+            for sp in r.screenplays:
+                names = groups.setdefault(sp.name, [])
+                for d in sp.displayers:
+                    if d.name not in names:
+                        names.append(d.name)
+        return groups
+
     def _set_views_items(self, views) -> None:
         """Fill the Saved Views checklist (rendering from a view is opt-in, so
         each starts unchecked)."""
@@ -1265,6 +1354,101 @@ class BatchRunDialog(QDialog):
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Unchecked)
             self._views_window.addItem(item)
+
+    # --- Screenplays tab --------------------------------------------------
+    def _build_screenplays_tab(self) -> QWidget:
+        """Mirrors the Scenes tab, for recording screenplay movies: movie options
+        on the left (resolution/format/fps/quality, seeded from settings); a tree
+        of screenplays whose displayers appear (checkable) when the screenplay is
+        checked; a checklist of the sim's saved camera views; and the Saved
+        Screenplays the user has captured with "Save Screenplay" on the right."""
+        tab = QWidget()
+
+        # Options: the movie-record options, seeded from settings.
+        self._sp_resolution = QComboBox()
+        self._sp_resolution.addItem("1080p", "1080p")
+        self._sp_resolution.addItem("2160p", "2160p")
+        self._sp_format = QComboBox()
+        self._sp_format.addItem("MP4", "mp4")
+        self._sp_format.addItem("AVI", "avi")
+        self._sp_format.addItem("MOV", "mov")
+        self._sp_fps = QSpinBox()
+        self._sp_fps.setRange(1, 240)
+        self._sp_fps.setValue(30)
+        self._sp_quality = QComboBox()
+        self._sp_quality.addItem("Low", "low")
+        self._sp_quality.addItem("Medium", "medium")
+        self._sp_quality.addItem("High", "high")
+        if self._settings is not None:
+            media = self._settings.media
+            ri = self._sp_resolution.findData(media.movie_resolution)
+            if ri >= 0:
+                self._sp_resolution.setCurrentIndex(ri)
+            fi = self._sp_format.findData(media.movie_format)
+            if fi >= 0:
+                self._sp_format.setCurrentIndex(fi)
+            self._sp_fps.setValue(media.movie_fps)
+            qi = self._sp_quality.findData(media.movie_quality)
+            if qi >= 0:
+                self._sp_quality.setCurrentIndex(qi)
+
+        options = QVBoxLayout()
+        options.addWidget(self._header("Options"))
+        options.addWidget(QLabel("Movie resolution"))
+        options.addWidget(self._sp_resolution)
+        options.addWidget(QLabel("Movie format"))
+        options.addWidget(self._sp_format)
+        options.addWidget(QLabel("Frame rate"))
+        options.addWidget(self._sp_fps)
+        options.addWidget(QLabel("Quality"))
+        options.addWidget(self._sp_quality)
+        options.addStretch(1)
+
+        # Screenplays: a tree of screenplays whose scene displayers appear
+        # (checkable) when the screenplay is checked.
+        self._screenplay_tree = _ScreenplayTree()
+        self._screenplay_tree.set_items(self._screenplay_groups)
+        screenplays = QVBoxLayout()
+        screenplays.addWidget(self._header("Screenplays"))
+        screenplays.addWidget(self._screenplay_tree)
+
+        # Saved views: a checklist of the sim's saved camera views (opt-in).
+        self._sp_views_window = _CheckableList()
+        self._set_sp_views_items(self._saved_views)
+        views = QVBoxLayout()
+        views.addWidget(self._header("Saved Views"))
+        views.addWidget(self._sp_views_window)
+
+        # Saved Screenplays: setups captured with "Save Screenplay". Right-click a
+        # screenplay for Properties / Delete.
+        self._saved_screenplays = QListWidget()
+        enable_range_selection(self._saved_screenplays)
+        self._saved_screenplays.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._saved_screenplays.customContextMenuRequested.connect(
+            self._on_saved_screenplay_menu
+        )
+        saved = QVBoxLayout()
+        saved.addWidget(self._header("Saved Screenplays"))
+        saved.addWidget(self._saved_screenplays)
+
+        row = QHBoxLayout(tab)
+        row.addLayout(options, 1)
+        row.addLayout(screenplays, 2)
+        row.addLayout(views, 1)
+        row.addLayout(saved, 1)
+        return tab
+
+    def _set_sp_views_items(self, views) -> None:
+        """Fill the Screenplays tab's Saved Views checklist (recording from a view
+        is opt-in, so each starts unchecked)."""
+        self._sp_views_window.clear()
+        for name in views:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Unchecked)
+            self._sp_views_window.addItem(item)
 
     # --- Summary tab ------------------------------------------------------
     def _build_summary_tab(self) -> QWidget:
@@ -1324,17 +1508,30 @@ class BatchRunDialog(QDialog):
         scenes.addWidget(self._header("Scenes"))
         scenes.addWidget(self._summary_scenes)
 
+        self._summary_screenplays = QListWidget()
+        enable_range_selection(self._summary_screenplays)
+        self._summary_screenplays.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self._summary_screenplays.customContextMenuRequested.connect(
+            self._on_summary_screenplay_menu
+        )
+        screenplays = QVBoxLayout()
+        screenplays.addWidget(self._header("Screenplays"))
+        screenplays.addWidget(self._summary_screenplays)
+
         row = QHBoxLayout(tab)
         row.addLayout(options, 1)
         row.addLayout(reports, 1)
         row.addLayout(plots, 1)
         row.addLayout(scenes, 1)
+        row.addLayout(screenplays, 1)
         return tab
 
     def _refresh_summary(self, *_args) -> None:
         """Repopulate the Summary lists from the other tabs: the currently checked
-        reports, the saved plots and the saved scenes. A no-op unless the Summary
-        tab is in front."""
+        reports, the saved plots, the saved scenes and the saved screenplays. A
+        no-op unless the Summary tab is in front."""
         if self._tabs.currentWidget() is not self._summary_tab:
             return
         self._summary_reports.clear()
@@ -1347,6 +1544,7 @@ class BatchRunDialog(QDialog):
         # tab's Properties menu can render them and rows map 1:1 to their source.
         self._mirror_saved(self._saved_plots, self._summary_plots)
         self._mirror_saved(self._saved_scenes, self._summary_scenes)
+        self._mirror_saved(self._saved_screenplays, self._summary_screenplays)
 
     @staticmethod
     def _mirror_saved(src: QListWidget, dst: QListWidget) -> None:
@@ -1555,11 +1753,14 @@ class BatchRunDialog(QDialog):
 
     def _update_preview(self, *_args) -> None:
         """Show the preview window (and the Add Plot button) while the Plots tab
-        is in front; hide them otherwise. The Save Scene button likewise shows
-        only on the Scenes tab."""
+        is in front; hide them otherwise. The Save Scene and Save Screenplay
+        buttons likewise show only on the Scenes and Screenplays tabs."""
         on_plots = self._tabs.currentWidget() is self._plots_tab
         self._add_plot.setVisible(on_plots)
         self._save_scene.setVisible(self._tabs.currentWidget() is self._scenes_tab)
+        self._save_screenplay.setVisible(
+            self._tabs.currentWidget() is self._screenplays_tab
+        )
         if on_plots:
             frame = self.frameGeometry()
             self._preview_window.move(frame.right() + 8, frame.top())
@@ -1695,6 +1896,40 @@ class BatchRunDialog(QDialog):
         item.setData(Qt.ItemDataRole.UserRole, self._capture_scene())
         self._saved_scenes.addItem(item)
 
+    def _checked_sp_views(self) -> list[str]:
+        """The checked saved camera views on the Screenplays tab, in list order."""
+        return [
+            self._sp_views_window.item(i).text()
+            for i in range(self._sp_views_window.count())
+            if self._sp_views_window.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    def _capture_screenplay(self) -> dict:
+        """Snapshot the current screenplay setup for a saved screenplay: the
+        checked screenplays and their displayers, the chosen views, and the movie
+        options."""
+        return {
+            "displayers": self._screenplay_tree.checked_displayers(),
+            "views": self._checked_sp_views(),
+            "resolution": self._sp_resolution.currentData(),
+            "format": self._sp_format.currentData(),
+            "fps": self._sp_fps.value(),
+            "quality": self._sp_quality.currentData(),
+        }
+
+    def _on_save_screenplay(self) -> None:
+        """Prompt for a name and add the current screenplay setup to Saved
+        Screenplays."""
+        name, ok = QInputDialog.getText(
+            self, "Save screenplay", "Saved screenplay name:"
+        )
+        name = name.strip() if ok else ""
+        if not name:
+            return
+        item = QListWidgetItem(name)
+        item.setData(Qt.ItemDataRole.UserRole, self._capture_screenplay())
+        self._saved_screenplays.addItem(item)
+
     def _on_saved_plot_menu(self, pos) -> None:
         """Right-click a saved plot: Properties (its captured settings) or Delete."""
         item = self._saved_plots.itemAt(pos)
@@ -1740,6 +1975,28 @@ class BatchRunDialog(QDialog):
         """Remove a saved scene from the list."""
         self._saved_scenes.takeItem(self._saved_scenes.row(item))
 
+    def _on_saved_screenplay_menu(self, pos) -> None:
+        """Right-click a saved screenplay: Properties (its captured settings) or
+        Delete."""
+        item = self._saved_screenplays.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._saved_screenplays)
+        menu.addAction(
+            "Properties", lambda: self._show_saved_screenplay_properties(item)
+        )
+        menu.addAction("Delete", lambda: self._delete_saved_screenplay(item))
+        menu.exec(self._saved_screenplays.viewport().mapToGlobal(pos))
+
+    def _show_saved_screenplay_properties(self, item) -> None:
+        """Open the read-only properties window for a saved screenplay."""
+        data = item.data(Qt.ItemDataRole.UserRole) or {}
+        _SavedScreenplayPropertiesDialog(item.text(), data, self).exec()
+
+    def _delete_saved_screenplay(self, item) -> None:
+        """Remove a saved screenplay from the list."""
+        self._saved_screenplays.takeItem(self._saved_screenplays.row(item))
+
     def _on_summary_plot_menu(self, pos) -> None:
         """Right-click a Summary-tab plot: Properties or Delete (mirrors the
         Plots tab; deleting also removes it from Saved Plots)."""
@@ -1770,6 +2027,25 @@ class BatchRunDialog(QDialog):
     def _delete_summary_scene(self, item) -> None:
         """Delete a scene from Saved Scenes via the Summary tab, then refresh."""
         self._saved_scenes.takeItem(self._summary_scenes.row(item))
+        self._refresh_summary()
+
+    def _on_summary_screenplay_menu(self, pos) -> None:
+        """Right-click a Summary-tab screenplay: Properties or Delete (mirrors the
+        Screenplays tab; deleting also removes it from Saved Screenplays)."""
+        item = self._summary_screenplays.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self._summary_screenplays)
+        menu.addAction(
+            "Properties", lambda: self._show_saved_screenplay_properties(item)
+        )
+        menu.addAction("Delete", lambda: self._delete_summary_screenplay(item))
+        menu.exec(self._summary_screenplays.viewport().mapToGlobal(pos))
+
+    def _delete_summary_screenplay(self, item) -> None:
+        """Delete a screenplay from Saved Screenplays via the Summary tab, then
+        refresh."""
+        self._saved_screenplays.takeItem(self._summary_screenplays.row(item))
         self._refresh_summary()
 
     def _render_preview(self) -> None:
@@ -1920,10 +2196,10 @@ class BatchRunDialog(QDialog):
 
     # --- the run ----------------------------------------------------------
     def _run_batch(self) -> None:
-        """Batch run: write each data set's reports, saved-plot images and
-        saved-scene stills into a per-data-set folder, packed into one archive
-        (ZIP or 7Z) in the chosen output folder. Runs on a worker thread behind a
-        progress dialog."""
+        """Batch run: write each data set's reports, saved-plot images,
+        saved-scene stills and saved-screenplay movies into a per-data-set folder,
+        packed into one archive (ZIP or 7Z) in the chosen output folder. Runs on a
+        worker thread behind a progress dialog."""
         from starpost.batch.run import BatchConfig
 
         sources = self._source_panel.sources()
@@ -1937,18 +2213,22 @@ class BatchRunDialog(QDialog):
         }
         saved_plots = self._saved_entries(self._saved_plots)
         saved_scenes = self._saved_entries(self._saved_scenes)
+        saved_screenplays = self._saved_entries(self._saved_screenplays)
         include_dataset_csv = self._include_dataset_csv.isChecked()
         if (not reports and not saved_plots and not saved_scenes
-                and not include_dataset_csv):
+                and not saved_screenplays and not include_dataset_csv):
             QMessageBox.warning(
                 self, "Run batch",
-                "Nothing to output — select reports or save a plot/scene first.",
+                "Nothing to output — select reports or save a "
+                "plot/scene/screenplay first.",
             )
             return
 
-        # STAR-CCM+ is needed to extract .sim sources or render any scenes.
+        # STAR-CCM+ is needed to extract .sim sources, render any scenes or
+        # record any screenplays.
         needs_exe = any(s.result is None for s in sources) or (
-            bool(saved_scenes) and any(s.sim_file for s in sources)
+            bool(saved_scenes or saved_screenplays)
+            and any(s.sim_file for s in sources)
         )
         if needs_exe and (self._settings is None or not self._settings.starccm_path):
             QMessageBox.warning(
@@ -1969,6 +2249,7 @@ class BatchRunDialog(QDialog):
             include_units=self._report_include_units.isChecked(),
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
+            saved_screenplays=saved_screenplays,
             include_dataset_csv=include_dataset_csv,
             combined_report=self._report_combined.isChecked(),
             archive_format=fmt,

@@ -98,8 +98,10 @@ class ExpressBatchDialog(QDialog):
         reports = set(profile.selected_reports)
         saved_plots = list(profile.saved_plots)
         saved_scenes = list(profile.saved_scenes)
+        saved_screenplays = list(profile.saved_screenplays)
         include_dataset_csv = self._include_dataset_csv.isChecked()
-        if not reports and not saved_plots and not saved_scenes and not include_dataset_csv:
+        if (not reports and not saved_plots and not saved_scenes
+                and not saved_screenplays and not include_dataset_csv):
             QMessageBox.warning(
                 self, "Express batch",
                 "Nothing to output — the selected profile is empty.",
@@ -107,7 +109,8 @@ class ExpressBatchDialog(QDialog):
             return
 
         needs_exe = any(s.result is None for s in sources) or (
-            bool(saved_scenes) and any(s.sim_file for s in sources)
+            bool(saved_scenes or saved_screenplays)
+            and any(s.sim_file for s in sources)
         )
         if needs_exe and (self._settings is None or not self._settings.starccm_path):
             QMessageBox.warning(
@@ -128,6 +131,7 @@ class ExpressBatchDialog(QDialog):
             include_units=profile.include_units,
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
+            saved_screenplays=saved_screenplays,
             include_dataset_csv=include_dataset_csv,
             combined_report=profile.combined_report,
             archive_format=fmt,
