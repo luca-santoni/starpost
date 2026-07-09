@@ -446,12 +446,13 @@ def delete_profile(name: str) -> None:
 class BatchProfile:
     """A saved batch-run configuration, kept entirely separate from the
     report/plot Profiles and stored under its own directory. Captures the
-    Run-batch dialog's selection: which reports are ticked, and the saved plots
-    and saved scenes (each ``{"name": str, "data": dict}``)."""
+    Run-batch dialog's selection: which reports are ticked, and the saved plots,
+    saved scenes and saved screenplays (each ``{"name": str, "data": dict}``)."""
     name: str
     selected_reports: list[str] = field(default_factory=list)
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
+    saved_screenplays: list[dict] = field(default_factory=list)
     report_format: str = "CSV"       # CSV | TSV | XLSX | ODS
     include_units: bool = True
     combined_report: bool = True
@@ -465,6 +466,7 @@ class BatchProfile:
             "selected_reports": list(self.selected_reports),
             "saved_plots": [_plot_entry_to_yaml(e) for e in self.saved_plots],
             "saved_scenes": list(self.saved_scenes),
+            "saved_screenplays": list(self.saved_screenplays),
             "report_format": self.report_format,
             "include_units": self.include_units,
             "combined_report": self.combined_report,
@@ -485,6 +487,7 @@ class BatchProfile:
                 _plot_entry_from_yaml(e) for e in data.get("saved_plots", [])
             ],
             saved_scenes=list(data.get("saved_scenes", [])),
+            saved_screenplays=list(data.get("saved_screenplays", [])),
             report_format=str(data.get("report_format", "CSV")),
             include_units=bool(data.get("include_units", True)),
             combined_report=bool(data.get("combined_report", True)),

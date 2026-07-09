@@ -146,3 +146,18 @@ def test_batch_profile_defaults_when_keys_absent():
     assert loaded.report_format == "CSV"
     assert loaded.include_units is True
     assert loaded.combined_report is True
+    assert loaded.saved_screenplays == []
+
+
+def test_batch_profile_round_trips_saved_screenplays():
+    import starpost.core.settings as cfg
+
+    entries = [{
+        "name": "Flythrough",
+        "data": {"displayers": {"Iso": ["Static Pressure"]}, "views": ["Top"],
+                 "resolution": "2160p", "format": "mp4", "fps": 60,
+                 "quality": "high"},
+    }]
+    cfg.BatchProfile(name="Movies", saved_screenplays=entries).save()
+    loaded = cfg.BatchProfile.load("Movies")
+    assert loaded.saved_screenplays == entries
