@@ -1578,6 +1578,118 @@ def test_build_batch_archive(app, tmp_path, monkeypatch):
     assert any("Packaging" in m for m in messages)
 
 
+def test_build_batch_archive_records_screenplays(app, tmp_path, monkeypatch):
+    """A saved screenplay records a movie per data set into its folder, at the
+    per-entry movie options (resolution/format/fps/quality), with the checked
+    displayers and views passed through as the record's show-map and views."""
+    import zipfile
+    from pathlib import Path
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(
+            name="caseA", result=result, sim_file=Path("/c/caseA.sim")
+        )],
+        saved_screenplays=[{
+            "name": "Flythrough",
+            "data": {"displayers": {"Iso": ["Static Pressure"]},
+                     "views": ["Top"], "resolution": "2160p",
+                     "format": "mov", "fps": 60, "quality": "medium"},
+        }],
+    )
+
+    seen = {}
+
+    def fake_record(self, sim_file, output_dir, screenplay_show,
+                    view_names=None, log_sink=None):
+        seen["show"] = screenplay_show
+        seen["views"] = view_names
+        seen["media"] = self.settings.media
+        (Path(output_dir) / "caseA-Flythrough.mov").write_bytes(b"MOV")
+        return []
+    monkeypatch.setattr(run.StarRunner, "record_screenplays", fake_record)
+
+    dest = tmp_path / "out" / "batch.zip"
+    messages = []
+    run.build_batch_archive(
+        config, Settings(), run.StarRunner(Settings()), dest,
+        log=messages.append,
+        progress=lambda f, m: messages.append(m),
+    )
+
+    assert seen["show"] == {"Iso": ["Static Pressure"]}
+    assert seen["views"] == ["Top"]
+    # The per-entry movie options are applied to the recording runner's media.
+    assert seen["media"].movie_resolution == "2160p"
+    assert seen["media"].movie_format == "mov"
+    assert seen["media"].movie_fps == 60
+    assert seen["media"].movie_quality == "medium"
+    with zipfile.ZipFile(dest) as zf:
+        assert "caseA/caseA-Flythrough.mov" in set(zf.namelist())
+    assert any("Recording screenplay" in m for m in messages)
+
+
+def test_build_batch_archive_screenplay_failure_does_not_abort(
+    app, tmp_path, monkeypatch
+):
+    """A screenplay that fails to record is logged and skipped; the rest of the
+    archive (here the report) is still produced."""
+    import zipfile
+    from pathlib import Path
+
+    import starpost.batch.run as run
+    from starpost.core.starccm_runner import StarRunError
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[run.BatchSource(
+            name="caseA", result=result, sim_file=Path("/c/caseA.sim")
+        )],
+        reports={"Drag"},
+        saved_screenplays=[{
+            "name": "Bad",
+            "data": {"displayers": {"Iso": ["P"]}, "views": []},
+        }],
+    )
+
+    def boom(self, *a, **k):
+        raise StarRunError("starccm+ exited with code 1")
+    monkeypatch.setattr(run.StarRunner, "record_screenplays", boom)
+
+    messages = []
+    dest = tmp_path / "batch.zip"
+    run.build_batch_archive(
+        config, Settings(), run.StarRunner(Settings()), dest,
+        log=messages.append,
+    )
+
+    with zipfile.ZipFile(dest) as zf:
+        assert "caseA/reports.csv" in set(zf.namelist())
+    assert any("Bad" in m and "failed" in m for m in messages)
+
+
+def test_source_steps_counts_screenplays_only_with_sim(app):
+    """A saved screenplay contributes a progress step only when the source has a
+    .sim (screenplay recording needs STAR-CCM+), like saved scenes."""
+    from pathlib import Path
+
+    import starpost.batch.run as run
+
+    result = _sim_result_with_data()
+    config = run.BatchConfig(
+        sources=[],
+        saved_screenplays=[{"name": "A", "data": {}}, {"name": "B", "data": {}}],
+    )
+    with_sim = run.BatchSource(
+        name="c", result=result, sim_file=Path("/c/c.sim")
+    )
+    without_sim = run.BatchSource(name="c", result=result)
+    assert run._source_steps(config, with_sim) == 2
+    assert run._source_steps(config, without_sim) == 0
+
+
 def test_build_batch_archive_includes_dataset_csv(app, tmp_path):
     """With include_dataset_csv, each data-set folder also gets the portable CSV
     (the Data tab's Export Data file), which round-trips through read_sim_csv."""

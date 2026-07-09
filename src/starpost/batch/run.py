@@ -2,10 +2,11 @@
 
 For each selected data set / .sim the batch produces, into a folder named after
 that data set: the selected report table, an image of each saved plot, the
-saved-scene stills and, optionally, the data set's portable CSV (the same file
-the Data tab's Export Data button writes). A single report combining every data
-set is also written at the archive root (optional). All the per-data-set folders
-are then packed into a single archive (ZIP or 7Z) written to the user's output folder.
+saved-scene stills, the saved-screenplay movies and, optionally, the data set's
+portable CSV (the same file the Data tab's Export Data button writes). A single
+report combining every data set is also written at the archive root (optional).
+All the per-data-set folders are then packed into a single archive (ZIP or 7Z)
+written to the user's output folder.
 
 Plots are rendered with a real :class:`PlotView`, so this runs on the GUI thread
 (Qt widgets can't be created off it). Extraction and scene rendering shell out to
@@ -62,6 +63,7 @@ class BatchConfig:
     include_units: bool = True
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
+    saved_screenplays: list[dict] = field(default_factory=list)
     include_dataset_csv: bool = False   # write the portable data-set CSV per folder
     combined_report: bool = True        # also write one all-sims report at the root
     archive_format: str = "zip"         # zip | 7z (the packed output format)
@@ -150,6 +152,27 @@ def _scene_runner(settings, scene_data: dict, base: StarRunner) -> StarRunner:
     return StarRunner(dataclasses.replace(settings, media=media))
 
 
+def _screenplay_runner(settings, entry_data: dict, base: StarRunner) -> StarRunner:
+    """A runner whose media settings use the saved screenplay's per-entry movie
+    options (resolution/format/fps/quality), so each screenplay records at the
+    settings captured on the Screenplays tab. Falls back to ``base`` when there
+    is nothing to override."""
+    res = entry_data.get("resolution")
+    fmt = entry_data.get("format")
+    fps = entry_data.get("fps")
+    quality = entry_data.get("quality")
+    if settings is None or not (res or fmt or fps or quality):
+        return base
+    media = dataclasses.replace(
+        settings.media,
+        movie_resolution=res or settings.media.movie_resolution,
+        movie_format=fmt or settings.media.movie_format,
+        movie_fps=fps or settings.media.movie_fps,
+        movie_quality=quality or settings.media.movie_quality,
+    )
+    return StarRunner(dataclasses.replace(settings, media=media))
+
+
 def _zip_dir(src_dir: Path, dest_zip: Path) -> None:
     """Zip every file under ``src_dir`` into ``dest_zip`` (paths relative to
     ``src_dir``, so the archive's top level is the per-data-set folders)."""
@@ -198,6 +221,7 @@ def _source_steps(config: BatchConfig, source: BatchSource) -> int:
     n += len(config.saved_plots)
     if source.sim_file is not None:
         n += len(config.saved_scenes)
+        n += len(config.saved_screenplays)
     return n
 
 
@@ -235,8 +259,9 @@ def build_batch_archive(
     plot_renderer: Optional[Callable[[SimResult, dict, Path], bool]] = None,
 ) -> Path:
     """Produce ``dest`` from ``config``: one folder per data set holding its
-    reports, saved-plot images and saved-scene stills, plus (when
-    ``config.combined_report``) a single all-sims report at the archive root.
+    reports, saved-plot images, saved-scene stills and saved-screenplay movies,
+    plus (when ``config.combined_report``) a single all-sims report at the
+    archive root.
     Reports a 0..1 fraction and the current action to ``progress``. Returns
     ``dest``.
 
@@ -321,6 +346,26 @@ def build_batch_archive(
                             source.sim_file, folder, show,
                             sdata.get("views") or [], log_sink=log,
                         )
+                    steps.advance()
+
+                for entry in config.saved_screenplays:
+                    name = entry.get("name", "screenplay")
+                    steps.at(f"Recording screenplay “{name}” for {source.name}…")
+                    sdata = entry.get("data") or {}
+                    show = sdata.get("displayers") or {}
+                    if show:
+                        # Recording is RAM-heavy and the most failure-prone step;
+                        # a single screenplay failing (or STAR exiting non-zero)
+                        # must not abort the whole archive.
+                        try:
+                            _screenplay_runner(
+                                settings, sdata, runner
+                            ).record_screenplays(
+                                source.sim_file, folder, show,
+                                sdata.get("views") or [], log_sink=log,
+                            )
+                        except Exception as e:  # noqa: BLE001 - keep the run going
+                            log(f"  screenplay “{name}” failed: {e}")
                     steps.advance()
 
         # One report at the archive root combining every data set (columns are
