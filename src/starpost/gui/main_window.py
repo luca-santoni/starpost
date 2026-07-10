@@ -345,9 +345,9 @@ class MainWindow(QMainWindow):
         box.setIcon(QMessageBox.Warning)
         box.setWindowTitle("Screenplays")
         box.setText(
-            "Recording screenplays is very computationally expensive — a "
-            "movie takes far longer than a still image.\n\n"
-            "It is not recommended on systems with less than 16 GB of system "
+            "Recording screenplays is very computationally expensive. A "
+            "movie can take several minutes to fully render.\n\n"
+            "It is not recommended on systems with less than 32 GB of system "
             "memory. Closing other programs on your computer first is "
             "recommended to prevent memory related errors."
         )

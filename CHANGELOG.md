@@ -3,6 +3,13 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [Unreleased]
+
+### Improvements
+- **Screenplays first-time warning** — reworded to state that a movie can take
+  several minutes to fully render, and raised the recommended memory floor to
+  **32 GB**.
+
 ## [2.4.0] — 2026-07-08
 
 ### New Features
