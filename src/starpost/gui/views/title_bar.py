@@ -126,21 +126,21 @@ class TitleBar(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # A left spacer the width of the three buttons balances them, so the
-        # version label sits at the true centre of the window.
-        left_pad = QWidget()
-        left_pad.setFixedWidth(3 * _BTN_W)
-        lay.addWidget(left_pad)
+        # The version sits at the far right, just left of the window buttons, so
+        # the whole cluster lines up above the right-hand panel (Profile). The
+        # empty stretch on the left is the draggable region.
         lay.addStretch(1)
 
         self.version = QLabel(version_text)
         self.version.setObjectName("titleVersion")
-        self.version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.version.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         # Let clicks on the label fall through to the bar so it stays draggable.
         self.version.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(self.version)
+        lay.addSpacing(12)
 
-        lay.addStretch(1)
         self.btn_min = CaptionButton("min")
         self.btn_min.setObjectName("winMin")
         self.btn_max = CaptionButton("max")

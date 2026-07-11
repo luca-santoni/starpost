@@ -7,9 +7,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ### Improvements
 - **Custom title bar** — the main window is now frameless with an integrated
-  title bar (STAR-CCM+ style): the StarPost version is centred and the
-  minimise / maximise / close buttons are built into the window (close turns red
-  on hover), on the dark/light theme background. Dragging the bar moves the
+  title bar (STAR-CCM+ style): the StarPost version and the minimise / maximise
+  / close buttons form a cluster at the top-right (version just left of
+  minimise, close turns red on hover), above the right-hand panel, on the
+  dark/light theme background. Dragging the bar moves the
   window, double-clicking it maximises, and pressing near an edge resizes —
   all via the window manager, so native snapping is preserved. The version moved
   out of the toolbar corner into this bar.
