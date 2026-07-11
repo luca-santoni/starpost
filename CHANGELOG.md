@@ -6,6 +6,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
+- **Menu-bar-style toolbar** — the main toolbar is restyled after a classic
+  application menu bar: the StarPost badge sits in the corner, the items are
+  flat with a roomier row height and a subtle hover fill (no chrome fill), on
+  the dark/light theme background.
 - **Toolbar version corner adapts to vertical docks** — the main toolbar can be
   docked on any edge (top/bottom/left/right); its version and "New update
   available" text now centres and word-wraps when the toolbar is vertical

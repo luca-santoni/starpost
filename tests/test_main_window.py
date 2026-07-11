@@ -24,6 +24,15 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+def test_toolbar_has_logo_badge(app):
+    """The main toolbar carries the StarPost badge in the corner and an object
+    name the theme targets for its menu-bar styling."""
+    win = mw.MainWindow(Settings())
+    assert win._toolbar.objectName() == "mainToolBar"
+    assert not win._toolbar_logo.pixmap().isNull()
+    win.close()
+
+
 def test_toolbar_corner_horizontal_layout(app):
     """In a horizontal toolbar the version corner right-aligns and its spacer
     expands sideways (pushing the corner to the far right)."""

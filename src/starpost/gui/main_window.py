@@ -38,7 +38,7 @@ from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
-from starpost.gui.icons import app_icon
+from starpost.gui.icons import app_icon, logo_pixmap
 from starpost.gui.widgets import HoverMenu, HoverMenuToolButton, UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
@@ -372,8 +372,19 @@ class MainWindow(QMainWindow):
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
+        tb.setObjectName("mainToolBar")
         self._toolbar = tb
         self.addToolBar(tb)
+
+        # StarPost badge in the corner, echoing STAR-CCM+'s menu-bar logo. Scaled
+        # to the menu-item height so it sits flush with the row.
+        self._toolbar_logo = QLabel()
+        self._toolbar_logo.setObjectName("toolbarLogo")
+        self._toolbar_logo.setPixmap(
+            logo_pixmap().scaledToHeight(30, Qt.TransformationMode.SmoothTransformation)
+        )
+        self._toolbar_logo.setContentsMargins(4, 0, 10, 0)
+        tb.addWidget(self._toolbar_logo)
 
         self._run_button = HoverMenuToolButton()
         self._run_button.setText("Run batch")
@@ -389,7 +400,6 @@ class MainWindow(QMainWindow):
         run_menu.addAction("Express batch", self._run_express_batch)
         self._run_button.setMenu(run_menu)
         tb.addWidget(self._run_button)
-        tb.addSeparator()
         export_action = tb.addAction("Export…", self._export)
         export_action.setToolTip("Export the selected reports and plots to files")
         settings_action = tb.addAction("Settings…", self._open_settings)

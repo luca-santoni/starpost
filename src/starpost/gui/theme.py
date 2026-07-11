@@ -263,6 +263,28 @@ QGroupBox::title {
 QToolBar { background: $toolbar_bg; border-bottom: 1px solid $border; spacing: 4px; }
 QLabel { color: $text; }
 
+/* Main menu-style toolbar: the StarPost badge followed by flat menu items,
+   modelled on a classic application menu bar (STAR-CCM+'s). Generous vertical
+   padding for the roomy row height, a subtle hover fill, no blue chrome — it
+   keeps the dark/light theme background. */
+QToolBar#mainToolBar {
+    background: $toolbar_bg;
+    border-bottom: 1px solid $border;
+    spacing: 2px;
+    padding: 3px 4px;
+}
+QToolBar#mainToolBar QToolButton {
+    background: transparent;
+    color: $text;
+    border: none;
+    border-radius: 4px;
+    padding: 9px 14px;
+    margin: 0;
+}
+QToolBar#mainToolBar QToolButton:hover { background: $btn_hover; }
+QToolBar#mainToolBar QToolButton:pressed { background: $btn_pressed; }
+QLabel#toolbarLogo { background: transparent; }
+
 /* Destructive buttons ("Clear data", profile "Delete"): themed background
    (follows dark/light mode), but fixed red text+border independent of the
    user's accent colour. */
