@@ -263,6 +263,25 @@ QGroupBox::title {
 QToolBar { background: $toolbar_bg; border-bottom: 1px solid $border; spacing: 4px; }
 QLabel { color: $text; }
 
+/* Frameless-window title bar: dark strip with the version centred and the
+   window buttons on the right. The caption-button glyph/hover colours are Qt
+   properties so they follow the theme (close goes red on hover). */
+QWidget#titleBar { background: $toolbar_bg; }
+/* Its direct children (balance spacer, version label, buttons) are transparent
+   so they show the bar's colour — the global QWidget background would otherwise
+   paint them window_bg and leave seams. */
+QWidget#titleBar > QWidget { background: transparent; }
+QLabel#titleVersion { color: $subtle; font-weight: 600; }
+CaptionButton {
+    qproperty-glyphColor: $subtle;
+    qproperty-hoverGlyph: $text;
+    qproperty-hoverBg: $btn_hover;
+}
+CaptionButton#winClose {
+    qproperty-hoverGlyph: #ffffff;
+    qproperty-hoverBg: #c42b1c;
+}
+
 /* Main menu-style toolbar: the StarPost badge followed by flat menu items,
    modelled on a classic application menu bar (STAR-CCM+'s). Generous vertical
    padding for the roomy row height, a subtle hover fill, no blue chrome — it
