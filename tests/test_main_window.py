@@ -45,6 +45,29 @@ def test_vertical_docked_toolbar_bounces_to_bottom(app, vertical_area):
     win.close()
 
 
+def test_toolbar_not_relocated_mid_drag(app, monkeypatch):
+    """The toolbar goes vertical transiently while being dragged; it must not
+    bounce to the bottom until the drag finishes (the mouse button releases),
+    otherwise a mere nudge relocates it."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    win = mw.MainWindow(Settings())
+    tb = win._toolbar
+    win.addToolBar(Qt.ToolBarArea.LeftToolBarArea, tb)
+
+    # Drag in progress: left button held down -> leave the toolbar alone.
+    monkeypatch.setattr(QApplication, "mouseButtons", lambda: Qt.MouseButton.LeftButton)
+    win._move_toolbar_to_bottom()
+    assert win.toolBarArea(tb) == Qt.ToolBarArea.LeftToolBarArea
+
+    # Drag finished: button released -> now it relocates to the bottom.
+    monkeypatch.setattr(QApplication, "mouseButtons", lambda: Qt.MouseButton.NoButton)
+    win._move_toolbar_to_bottom()
+    assert win.toolBarArea(tb) == Qt.ToolBarArea.BottomToolBarArea
+    win.close()
+
+
 def test_run_batch_opens_dialog(app, monkeypatch):
     """Run batch opens the tabbed batch-run dialog (no folder prompt)."""
     import starpost.gui.views.batch_run_dialog as brd

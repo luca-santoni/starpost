@@ -16,6 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QLabel,
@@ -430,14 +431,23 @@ class MainWindow(QMainWindow):
         bottom — the version corner is built for a horizontal bar and formats
         incorrectly in either vertical dock.
 
-        The check is deferred: this signal fires mid-relayout, before the area
-        has settled, so the actual decision is made once it has."""
+        The decision is deferred until the drag ends (see
+        :meth:`_move_toolbar_to_bottom`)."""
         if orientation == Qt.Orientation.Vertical:
             QTimer.singleShot(0, self._move_toolbar_to_bottom)
 
     def _move_toolbar_to_bottom(self) -> None:
-        """Re-dock the toolbar at the bottom, if it is still in a vertical
-        (left or right) dock."""
+        """Re-dock the toolbar at the bottom if it has *settled* in a vertical
+        (left or right) dock.
+
+        Qt flips the toolbar's orientation to vertical transiently while it is
+        being dragged past a side area, so acting on the orientation change alone
+        would bounce a toolbar the user is merely nudging. Wait until the mouse
+        button is released — i.e. the drag has actually finished — before
+        deciding; re-check shortly while it is still held."""
+        if QApplication.mouseButtons() & Qt.MouseButton.LeftButton:
+            QTimer.singleShot(50, self._move_toolbar_to_bottom)  # still dragging
+            return
         if self.toolBarArea(self._toolbar) in (
             Qt.ToolBarArea.LeftToolBarArea,
             Qt.ToolBarArea.RightToolBarArea,
