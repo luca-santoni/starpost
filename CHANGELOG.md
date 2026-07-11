@@ -6,6 +6,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
+- **Toolbar left-dock bounces to the bottom** — the main toolbar's version
+  corner is laid out for a horizontal bar and formatted incorrectly when the
+  toolbar was docked on the left; docking it there now relocates it to the
+  bottom instead.
 - **Run batch dropdown auto-closes** — the hover-opened Full Batch / Express
   batch menu now closes itself once the pointer moves well away from it, instead
   of lingering until clicked; moving onto another toolbar item (Export, Settings,

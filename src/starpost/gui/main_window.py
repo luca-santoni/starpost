@@ -372,7 +372,11 @@ class MainWindow(QMainWindow):
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
+        self._toolbar = tb
         self.addToolBar(tb)
+        # The version corner is laid out for a horizontal bar, so a left/right
+        # (vertical) dock renders it wrong. Bounce a left dock down to the bottom.
+        tb.orientationChanged.connect(self._on_toolbar_orientation_changed)
 
         self._run_button = HoverMenuToolButton()
         self._run_button.setText("Run batch")
@@ -420,6 +424,21 @@ class MainWindow(QMainWindow):
         self._update_label.setVisible(False)
         corner_layout.addWidget(self._update_label)
         tb.addWidget(corner)
+
+    def _on_toolbar_orientation_changed(self, orientation) -> None:
+        """When the toolbar docks vertically on the *left*, relocate it to the
+        bottom — the version corner is built for a horizontal bar and formats
+        incorrectly on the left. (Right docking is left as-is.)
+
+        The check is deferred: this signal fires mid-relayout, before the area
+        has settled, so the actual left/bottom decision is made once it has."""
+        if orientation == Qt.Orientation.Vertical:
+            QTimer.singleShot(0, self._move_toolbar_to_bottom)
+
+    def _move_toolbar_to_bottom(self) -> None:
+        """Re-dock the toolbar at the bottom, if it is still on the left."""
+        if self.toolBarArea(self._toolbar) == Qt.ToolBarArea.LeftToolBarArea:
+            self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self._toolbar)
 
     def show_update_available(self) -> None:
         """Reveal the toolbar's "New update available" note, shown beneath the
