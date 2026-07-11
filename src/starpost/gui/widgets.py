@@ -318,6 +318,11 @@ class HoverMenu(QMenu):
     a menu is open it holds the mouse grab and keeps receiving move events even
     when the pointer is outside it, so we watch those and close once the cursor
     leaves the menu (plus its owning widget) by more than ``CLOSE_MARGIN`` px.
+
+    One exception overrides the margin: moving onto ``sibling_bar`` (the toolbar
+    the owner lives on) — e.g. hovering Export or Settings — closes the menu at
+    once, so those neighbours feel reachable even though the open menu holds the
+    mouse grab.
     """
 
     #: How far (px) the pointer may move beyond the menu — and its owner widget —
@@ -325,24 +330,47 @@ class HoverMenu(QMenu):
     #: while crossing the gap between the button and the popup.
     CLOSE_MARGIN = 50
 
-    def __init__(self, parent=None, owner: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        owner: QWidget | None = None,
+        sibling_bar: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         # The widget the menu belongs to (e.g. the toolbar button). Kept inside
         # the safe region so moving back onto it never closes the menu.
         self._owner = owner
+        # The bar holding the owner (e.g. the main toolbar). Moving onto any of
+        # its *other* items closes the menu immediately, bypassing the margin.
+        self._sibling_bar = sibling_bar
+
+    @staticmethod
+    def _global_rect(w: QWidget) -> QRect:
+        return QRect(w.mapToGlobal(w.rect().topLeft()), w.size())
 
     def mouseMoveEvent(self, event) -> None:
         super().mouseMoveEvent(event)
         pos = event.globalPosition().toPoint()
-        m = self.CLOSE_MARGIN
-        safe = self.frameGeometry().adjusted(-m, -m, m, m)
-        if safe.contains(pos):
+        # On the owner button itself: always keep the menu open.
+        if self._owner is not None and self._global_rect(self._owner).contains(pos):
             return
-        if self._owner is not None:
-            top_left = self._owner.mapToGlobal(self._owner.rect().topLeft())
-            owner_rect = QRect(top_left, self._owner.size()).adjusted(-m, -m, m, m)
-            if owner_rect.contains(pos):
-                return
+        # Exception: onto a neighbour in the same bar (Export, Settings, …) —
+        # close now, ahead of the margin forgiveness below.
+        if (
+            self._sibling_bar is not None
+            and self._global_rect(self._sibling_bar).contains(pos)
+        ):
+            self.close()
+            return
+        # Otherwise forgive small overshoots: keep open until the pointer leaves
+        # the menu (or the owner) by more than the margin.
+        m = self.CLOSE_MARGIN
+        if self.frameGeometry().adjusted(-m, -m, m, m).contains(pos):
+            return
+        if self._owner is not None and self._global_rect(self._owner).adjusted(
+            -m, -m, m, m
+        ).contains(pos):
+            return
         self.close()
 
 

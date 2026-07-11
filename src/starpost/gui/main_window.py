@@ -383,7 +383,7 @@ class MainWindow(QMainWindow):
             "Run a batch export: Full Batch (full wizard) or Express batch "
             "(run a saved profile)"
         )
-        run_menu = HoverMenu(self._run_button, owner=self._run_button)
+        run_menu = HoverMenu(self._run_button, owner=self._run_button, sibling_bar=tb)
         run_menu.addAction("Full Batch", self._run_batch)
         run_menu.addAction("Express batch", self._run_express_batch)
         self._run_button.setMenu(run_menu)

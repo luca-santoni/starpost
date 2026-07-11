@@ -244,6 +244,52 @@ def test_hover_menu_stays_open_within_margin(app):
     menu.deleteLater()
 
 
+def test_hover_menu_closes_when_moving_onto_sibling_bar(app):
+    """Moving onto another item of the owner's bar (e.g. Export/Settings) closes
+    the menu at once, overriding the margin forgiveness."""
+    from PySide6.QtCore import QPointF, QRect
+    from PySide6.QtWidgets import QToolButton, QWidget
+
+    from starpost.gui.widgets import HoverMenu
+
+    bar = QWidget()
+    bar.setGeometry(QRect(0, 0, 400, 30))
+    btn = QToolButton(bar)
+    btn.setGeometry(QRect(0, 0, 80, 30))
+    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
+    menu.addAction("A")
+    menu.setGeometry(QRect(0, 200, 120, 60))
+    menu.show()
+    assert menu.isVisible()
+
+    # A neighbour on the same bar (x=200 is past the button, still on the bar).
+    _move_to(menu, QPointF(200, 15))
+    assert not menu.isVisible()
+    bar.deleteLater()
+
+
+def test_hover_menu_sibling_bar_does_not_close_over_owner(app):
+    """The owning button sits on the bar too, but hovering it must keep the menu
+    open — the owner check wins over the sibling-bar exception."""
+    from PySide6.QtCore import QPointF, QRect
+    from PySide6.QtWidgets import QToolButton, QWidget
+
+    from starpost.gui.widgets import HoverMenu
+
+    bar = QWidget()
+    bar.setGeometry(QRect(0, 0, 400, 30))
+    btn = QToolButton(bar)
+    btn.setGeometry(QRect(0, 0, 80, 30))
+    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
+    menu.addAction("A")
+    menu.setGeometry(QRect(0, 200, 120, 60))
+    menu.show()
+
+    _move_to(menu, QPointF(40, 15))  # over the owner button
+    assert menu.isVisible()
+    bar.deleteLater()
+
+
 def test_enable_range_selection_sets_extended(app):
     """enable_range_selection turns a default (single-select) list into an
     extended-selection one, so Shift/Ctrl+click select multiple items."""

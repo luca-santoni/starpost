@@ -8,7 +8,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 ### Improvements
 - **Run batch dropdown auto-closes** — the hover-opened Full Batch / Express
   batch menu now closes itself once the pointer moves well away from it, instead
-  of lingering until clicked.
+  of lingering until clicked; moving onto another toolbar item (Export, Settings,
+  …) closes it immediately.
 - **Screenplays first-time warning** — reworded to state that a movie can take
   several minutes to fully render, and raised the recommended memory floor to
   **32 GB**.
