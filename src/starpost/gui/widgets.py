@@ -1,7 +1,14 @@
 """Small shared Qt widgets reused across the GUI."""
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, Qt
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QRect,
+    Qt,
+)
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -9,6 +16,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLineEdit,
+    QMenu,
     QProxyStyle,
     QStyle,
     QStyleFactory,
@@ -302,10 +310,49 @@ def install_combo_accent(app) -> None:
         app.installEventFilter(_combo_installer)
 
 
+class HoverMenu(QMenu):
+    """A menu that closes itself when the pointer strays too far from it.
+
+    A menu popped open on hover (see :class:`HoverMenuToolButton`) has no click
+    to dismiss it, so it would otherwise linger after the user moves away. While
+    a menu is open it holds the mouse grab and keeps receiving move events even
+    when the pointer is outside it, so we watch those and close once the cursor
+    leaves the menu (plus its owning widget) by more than ``CLOSE_MARGIN`` px.
+    """
+
+    #: How far (px) the pointer may move beyond the menu — and its owner widget —
+    #: before the menu auto-closes. Generous enough to forgive small overshoots
+    #: while crossing the gap between the button and the popup.
+    CLOSE_MARGIN = 50
+
+    def __init__(self, parent=None, owner: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # The widget the menu belongs to (e.g. the toolbar button). Kept inside
+        # the safe region so moving back onto it never closes the menu.
+        self._owner = owner
+
+    def mouseMoveEvent(self, event) -> None:
+        super().mouseMoveEvent(event)
+        pos = event.globalPosition().toPoint()
+        m = self.CLOSE_MARGIN
+        safe = self.frameGeometry().adjusted(-m, -m, m, m)
+        if safe.contains(pos):
+            return
+        if self._owner is not None:
+            top_left = self._owner.mapToGlobal(self._owner.rect().topLeft())
+            owner_rect = QRect(top_left, self._owner.size()).adjusted(-m, -m, m, m)
+            if owner_rect.contains(pos):
+                return
+        self.close()
+
+
 class HoverMenuToolButton(QToolButton):
     """A toolbar button whose attached menu drops on hover (mouse-enter) as well
     as on click. Qt has no native hover-popup mode, so we pop the menu from
-    ``enterEvent``; the guard stops it re-opening while it is already showing."""
+    ``enterEvent``; the guard stops it re-opening while it is already showing.
+
+    Use a :class:`HoverMenu` as the attached menu so it also closes itself when
+    the pointer wanders away."""
 
     def enterEvent(self, event):
         super().enterEvent(event)

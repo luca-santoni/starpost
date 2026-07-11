@@ -184,6 +184,66 @@ def test_combo_delegate_adds_vertical_row_spacing(app):
     combo.deleteLater()
 
 
+def _move_to(menu, global_pt):
+    """Deliver a synthetic mouse-move at ``global_pt`` (a QPointF, in screen
+    coords) to ``menu``, the way its live mouse grab would while it is open."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    ev = QMouseEvent(
+        QEvent.Type.MouseMove,
+        QPointF(0, 0),
+        global_pt,
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    menu.mouseMoveEvent(ev)
+
+
+def _shown_hover_menu():
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QToolButton
+
+    from starpost.gui.widgets import HoverMenu
+
+    btn = QToolButton()
+    btn.setGeometry(QRect(0, 0, 80, 24))
+    menu = HoverMenu(btn, owner=btn)
+    menu.addAction("A")
+    menu.setGeometry(QRect(200, 200, 120, 60))
+    menu.show()
+    return btn, menu
+
+
+def test_hover_menu_closes_when_pointer_strays_far(app):
+    """Moving the pointer well beyond the menu (and its owner) auto-closes it."""
+    from PySide6.QtCore import QPointF
+
+    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
+    assert menu.isVisible()
+    _move_to(menu, QPointF(1000, 1000))
+    assert not menu.isVisible()
+    menu.deleteLater()
+
+
+def test_hover_menu_stays_open_within_margin(app):
+    """A small overshoot past the menu edge (within CLOSE_MARGIN) keeps it open,
+    and so does moving back over the owning button."""
+    from PySide6.QtCore import QPointF
+
+    from starpost.gui.widgets import HoverMenu
+
+    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
+    # Just outside the menu's right edge (320), still within the 50 px margin.
+    _move_to(menu, QPointF(320 + HoverMenu.CLOSE_MARGIN - 5, 230))
+    assert menu.isVisible()
+    # Back over the owning button's area — never closes.
+    _move_to(menu, QPointF(40, 12))
+    assert menu.isVisible()
+    menu.deleteLater()
+
+
 def test_enable_range_selection_sets_extended(app):
     """enable_range_selection turns a default (single-select) list into an
     extended-selection one, so Shift/Ctrl+click select multiple items."""

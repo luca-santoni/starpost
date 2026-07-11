@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
-    QMenu,
     QMessageBox,
     QSizePolicy,
     QSplitter,
@@ -40,7 +39,7 @@ from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon
-from starpost.gui.widgets import HoverMenuToolButton, UniformTabBar
+from starpost.gui.widgets import HoverMenu, HoverMenuToolButton, UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
@@ -384,7 +383,7 @@ class MainWindow(QMainWindow):
             "Run a batch export: Full Batch (full wizard) or Express batch "
             "(run a saved profile)"
         )
-        run_menu = QMenu(self._run_button)
+        run_menu = HoverMenu(self._run_button, owner=self._run_button)
         run_menu.addAction("Full Batch", self._run_batch)
         run_menu.addAction("Express batch", self._run_express_batch)
         self._run_button.setMenu(run_menu)
