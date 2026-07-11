@@ -24,47 +24,46 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-@pytest.mark.parametrize(
-    "vertical_area",
-    ["LeftToolBarArea", "RightToolBarArea"],
-)
-def test_vertical_docked_toolbar_bounces_to_bottom(app, vertical_area):
-    """Docking the toolbar on either side (where the version corner formats
-    wrong) relocates it to the bottom once the area change settles."""
+def test_toolbar_corner_horizontal_layout(app):
+    """In a horizontal toolbar the version corner right-aligns and its spacer
+    expands sideways (pushing the corner to the far right)."""
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QSizePolicy
 
-    area = getattr(Qt.ToolBarArea, vertical_area)
     win = mw.MainWindow(Settings())
-    tb = win._toolbar
-    win.addToolBar(area, tb)  # as a drag-drop would
-    # The relocation is deferred, so it is briefly still in the vertical dock.
-    assert win.toolBarArea(tb) == area
-    QApplication.processEvents()  # run the queued singleShot(0)
-    assert win.toolBarArea(tb) == Qt.ToolBarArea.BottomToolBarArea
+    win._sync_toolbar_corner(Qt.Orientation.Horizontal)
+    assert win._version_label.alignment() & Qt.AlignRight
+    assert win._update_label.alignment() & Qt.AlignRight
+    assert win._toolbar_spacer.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     win.close()
 
 
-def test_toolbar_not_relocated_mid_drag(app, monkeypatch):
-    """The toolbar goes vertical transiently while being dragged; it must not
-    bounce to the bottom until the drag finishes (the mouse button releases),
-    otherwise a mere nudge relocates it."""
+def test_toolbar_corner_vertical_layout(app):
+    """Docked vertically the corner centres its text and the spacer expands
+    downward, so the long version/update labels are not right-aligned in a
+    narrow bar."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QSizePolicy
+
+    win = mw.MainWindow(Settings())
+    win._sync_toolbar_corner(Qt.Orientation.Vertical)
+    assert win._version_label.alignment() & Qt.AlignHCenter
+    assert win._update_label.alignment() & Qt.AlignHCenter
+    assert win._toolbar_spacer.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+    win.close()
+
+
+def test_toolbar_can_dock_on_the_side(app):
+    """The toolbar is no longer bounced away from a vertical dock — it stays on
+    the left, laid out for that orientation."""
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
     win = mw.MainWindow(Settings())
     tb = win._toolbar
     win.addToolBar(Qt.ToolBarArea.LeftToolBarArea, tb)
-
-    # Drag in progress: left button held down -> leave the toolbar alone.
-    monkeypatch.setattr(QApplication, "mouseButtons", lambda: Qt.MouseButton.LeftButton)
-    win._move_toolbar_to_bottom()
+    QApplication.processEvents()
     assert win.toolBarArea(tb) == Qt.ToolBarArea.LeftToolBarArea
-
-    # Drag finished: button released -> now it relocates to the bottom.
-    monkeypatch.setattr(QApplication, "mouseButtons", lambda: Qt.MouseButton.NoButton)
-    win._move_toolbar_to_bottom()
-    assert win.toolBarArea(tb) == Qt.ToolBarArea.BottomToolBarArea
     win.close()
 
 

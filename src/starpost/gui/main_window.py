@@ -16,7 +16,6 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QFileDialog,
     QLabel,
@@ -375,9 +374,6 @@ class MainWindow(QMainWindow):
         tb = QToolBar("Main")
         self._toolbar = tb
         self.addToolBar(tb)
-        # The version corner is laid out for a horizontal bar, so a left/right
-        # (vertical) dock renders it wrong. Bounce a vertical dock to the bottom.
-        tb.orientationChanged.connect(self._on_toolbar_orientation_changed)
 
         self._run_button = HoverMenuToolButton()
         self._run_button.setText("Run batch")
@@ -399,14 +395,16 @@ class MainWindow(QMainWindow):
         settings_action = tb.addAction("Settings…", self._open_settings)
         settings_action.setToolTip("Open the application settings")
 
-        # An expanding spacer pushes the version corner to the toolbar's far right.
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb.addWidget(spacer)
+        # A spacer pushes the version corner to the toolbar's far end (the right
+        # when horizontal, the bottom when vertical). Its expand axis is switched
+        # to match the orientation in _sync_toolbar_corner.
+        self._toolbar_spacer = QWidget()
+        tb.addWidget(self._toolbar_spacer)
 
-        # Right-aligned vertical stack: the version on top, with a "New update
-        # available" note beneath it that stays hidden until the startup update
-        # check finds a newer release (see show_update_available).
+        # A stack: the version on top, with a "New update available" note beneath
+        # it that stays hidden until the startup update check finds a newer
+        # release (see show_update_available). Word-wrap keeps the long text from
+        # forcing a wide toolbar when docked vertically.
         corner = QWidget()
         corner_layout = QVBoxLayout(corner)
         corner_layout.setContentsMargins(0, 0, 8, 0)
@@ -414,45 +412,44 @@ class MainWindow(QMainWindow):
         # Grayed-out version, tied to the single version source used by the
         # About settings tab so both always agree. A faint, theme-neutral gray
         # (mid-gray with low alpha reads as muted on both light and dark).
-        version_label = QLabel(f"StarPost v{__version__}")
-        version_label.setStyleSheet("color: rgba(127, 127, 127, 0.55);")
-        version_label.setAlignment(Qt.AlignRight)
-        corner_layout.addWidget(version_label)
+        self._version_label = QLabel(f"StarPost v{__version__}")
+        self._version_label.setStyleSheet("color: rgba(127, 127, 127, 0.55);")
+        self._version_label.setWordWrap(True)
+        corner_layout.addWidget(self._version_label)
         # Tinted with the user's accent via the theme (objectName "updateAvailable").
         self._update_label = QLabel("New update available")
         self._update_label.setObjectName("updateAvailable")
-        self._update_label.setAlignment(Qt.AlignRight)
+        self._update_label.setWordWrap(True)
         self._update_label.setVisible(False)
         corner_layout.addWidget(self._update_label)
         tb.addWidget(corner)
 
-    def _on_toolbar_orientation_changed(self, orientation) -> None:
-        """When the toolbar docks vertically (left or right), relocate it to the
-        bottom — the version corner is built for a horizontal bar and formats
-        incorrectly in either vertical dock.
+        # Lay the corner out for the toolbar's current orientation, and re-lay it
+        # whenever the toolbar is docked to a different edge.
+        self._sync_toolbar_corner(tb.orientation())
+        tb.orientationChanged.connect(self._sync_toolbar_corner)
 
-        The decision is deferred until the drag ends (see
-        :meth:`_move_toolbar_to_bottom`)."""
-        if orientation == Qt.Orientation.Vertical:
-            QTimer.singleShot(0, self._move_toolbar_to_bottom)
+    def _sync_toolbar_corner(self, orientation) -> None:
+        """Adapt the version corner to the toolbar's orientation.
 
-    def _move_toolbar_to_bottom(self) -> None:
-        """Re-dock the toolbar at the bottom if it has *settled* in a vertical
-        (left or right) dock.
-
-        Qt flips the toolbar's orientation to vertical transiently while it is
-        being dragged past a side area, so acting on the orientation change alone
-        would bounce a toolbar the user is merely nudging. Wait until the mouse
-        button is released — i.e. the drag has actually finished — before
-        deciding; re-check shortly while it is still held."""
-        if QApplication.mouseButtons() & Qt.MouseButton.LeftButton:
-            QTimer.singleShot(50, self._move_toolbar_to_bottom)  # still dragging
-            return
-        if self.toolBarArea(self._toolbar) in (
-            Qt.ToolBarArea.LeftToolBarArea,
-            Qt.ToolBarArea.RightToolBarArea,
-        ):
-            self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self._toolbar)
+        Horizontal: the spacer expands sideways to push the corner to the far
+        right, where the version/update text sits right-aligned. Vertical: the
+        spacer expands downward so the corner sinks to the bottom, and the text
+        centres (right-aligning a long label in a narrow vertical bar reads
+        wrong)."""
+        vertical = orientation == Qt.Orientation.Vertical
+        if vertical:
+            self._toolbar_spacer.setSizePolicy(
+                QSizePolicy.Preferred, QSizePolicy.Expanding
+            )
+            align = Qt.AlignHCenter
+        else:
+            self._toolbar_spacer.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Preferred
+            )
+            align = Qt.AlignRight
+        self._version_label.setAlignment(align)
+        self._update_label.setAlignment(align)
 
     def show_update_available(self) -> None:
         """Reveal the toolbar's "New update available" note, shown beneath the
