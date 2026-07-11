@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
         self._toolbar = tb
         self.addToolBar(tb)
         # The version corner is laid out for a horizontal bar, so a left/right
-        # (vertical) dock renders it wrong. Bounce a left dock down to the bottom.
+        # (vertical) dock renders it wrong. Bounce a vertical dock to the bottom.
         tb.orientationChanged.connect(self._on_toolbar_orientation_changed)
 
         self._run_button = HoverMenuToolButton()
@@ -426,18 +426,22 @@ class MainWindow(QMainWindow):
         tb.addWidget(corner)
 
     def _on_toolbar_orientation_changed(self, orientation) -> None:
-        """When the toolbar docks vertically on the *left*, relocate it to the
+        """When the toolbar docks vertically (left or right), relocate it to the
         bottom — the version corner is built for a horizontal bar and formats
-        incorrectly on the left. (Right docking is left as-is.)
+        incorrectly in either vertical dock.
 
         The check is deferred: this signal fires mid-relayout, before the area
-        has settled, so the actual left/bottom decision is made once it has."""
+        has settled, so the actual decision is made once it has."""
         if orientation == Qt.Orientation.Vertical:
             QTimer.singleShot(0, self._move_toolbar_to_bottom)
 
     def _move_toolbar_to_bottom(self) -> None:
-        """Re-dock the toolbar at the bottom, if it is still on the left."""
-        if self.toolBarArea(self._toolbar) == Qt.ToolBarArea.LeftToolBarArea:
+        """Re-dock the toolbar at the bottom, if it is still in a vertical
+        (left or right) dock."""
+        if self.toolBarArea(self._toolbar) in (
+            Qt.ToolBarArea.LeftToolBarArea,
+            Qt.ToolBarArea.RightToolBarArea,
+        ):
             self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self._toolbar)
 
     def show_update_available(self) -> None:

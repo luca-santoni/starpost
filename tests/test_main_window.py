@@ -24,32 +24,24 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def test_left_docked_toolbar_bounces_to_bottom(app):
-    """Docking the toolbar on the left (where the version corner formats wrong)
-    relocates it to the bottom once the area change settles."""
+@pytest.mark.parametrize(
+    "vertical_area",
+    ["LeftToolBarArea", "RightToolBarArea"],
+)
+def test_vertical_docked_toolbar_bounces_to_bottom(app, vertical_area):
+    """Docking the toolbar on either side (where the version corner formats
+    wrong) relocates it to the bottom once the area change settles."""
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
+    area = getattr(Qt.ToolBarArea, vertical_area)
     win = mw.MainWindow(Settings())
     tb = win._toolbar
-    win.addToolBar(Qt.ToolBarArea.LeftToolBarArea, tb)  # as a drag-drop would
-    # The relocation is deferred, so it is briefly still on the left.
-    assert win.toolBarArea(tb) == Qt.ToolBarArea.LeftToolBarArea
+    win.addToolBar(area, tb)  # as a drag-drop would
+    # The relocation is deferred, so it is briefly still in the vertical dock.
+    assert win.toolBarArea(tb) == area
     QApplication.processEvents()  # run the queued singleShot(0)
     assert win.toolBarArea(tb) == Qt.ToolBarArea.BottomToolBarArea
-    win.close()
-
-
-def test_right_docked_toolbar_is_left_in_place(app):
-    """Only the left dock is redirected; a right dock is deliberately kept."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication
-
-    win = mw.MainWindow(Settings())
-    tb = win._toolbar
-    win.addToolBar(Qt.ToolBarArea.RightToolBarArea, tb)
-    QApplication.processEvents()
-    assert win.toolBarArea(tb) == Qt.ToolBarArea.RightToolBarArea
     win.close()
 
 
