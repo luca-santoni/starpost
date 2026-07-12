@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QStyle,
     QStyleOptionGroupBox,
     QStyleOptionViewItem,
@@ -647,14 +648,28 @@ class SelectionPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
         layout.addLayout(prof_row)
-        # Stretch so the shown checklist fills the panel. On the Scenes/
-        # Screenplays tabs the space is split between the tree (top, larger)
-        # and Saved views (bottom); the other tabs show a single full-height list.
-        layout.addWidget(self._reports_group, 2)
-        layout.addWidget(self._plots_group, 2)
-        layout.addWidget(self._scenes_group, 2)
-        layout.addWidget(self._screenplays_group, 2)
-        layout.addWidget(self._saved_views_group, 1)
+
+        # The active main group (only one of Reports/Plots/Scenes/Screenplays is
+        # shown at a time) sits in the top pane; the shared Saved views list is
+        # the bottom pane. A vertical splitter between them lets the user drag to
+        # rebalance the two on the Scenes/Screenplays tabs (where both show); on
+        # the other tabs Saved views is hidden and the top pane fills.
+        top = QWidget()
+        top_layout = QVBoxLayout(top)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.addWidget(self._reports_group, 1)
+        top_layout.addWidget(self._plots_group, 1)
+        top_layout.addWidget(self._scenes_group, 1)
+        top_layout.addWidget(self._screenplays_group, 1)
+
+        self._split = QSplitter(Qt.Vertical)
+        self._split.setChildrenCollapsible(False)
+        self._split.addWidget(top)
+        self._split.addWidget(self._saved_views_group)
+        self._split.setStretchFactor(0, 2)
+        self._split.setStretchFactor(1, 1)
+        self._split.setSizes([300, 150])  # initial ~2:1, as before
+        layout.addWidget(self._split, 1)
         # Default to the Reports section (the centre opens on the Reports tab).
         self.set_active_section("reports")
 

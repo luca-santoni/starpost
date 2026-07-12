@@ -33,6 +33,28 @@ def test_toolbar_has_logo_badge(app):
     win.close()
 
 
+def test_selection_panel_scenes_saved_views_splitter(app):
+    """A draggable vertical splitter sits between the main group and Saved views;
+    both panes show on Scenes/Screenplays, and Saved views is hidden (collapsed)
+    on Reports/Plots."""
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    from PySide6.QtCore import Qt
+
+    panel = SelectionPanel()
+    panel.show()
+    # Saved views is the second pane of a vertical splitter, so a draggable
+    # handle sits between it and the top (main-group) pane.
+    assert panel._split.orientation() == Qt.Vertical
+    assert panel._split.count() == 2
+    assert panel._split.indexOf(panel._saved_views_group) == 1
+    panel.set_active_section("scenes")
+    assert panel._saved_views_group.isVisible()
+    panel.set_active_section("reports")
+    assert not panel._saved_views_group.isVisible()
+    panel.close()
+
+
 def test_selection_panel_width_consistent_across_sections(app):
     """The right panel must be the same width on every centre tab — a wider
     button (e.g. "Clear screenplays") must not make the Screenplays tab bulge."""
