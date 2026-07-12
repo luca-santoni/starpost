@@ -1658,17 +1658,35 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def reject(self) -> None:  # noqa: D401 (Qt override)
-        # Cancel: undo any live appearance preview before closing.
-        apply_theme(
-            QApplication.instance(),
+        # Cancel: undo any live appearance preview before closing. Re-applying
+        # the theme re-polishes the whole app (a few hundred ms), so only do it
+        # when the theme was actually previewed away from the original — the
+        # common case (Cancel without touching Appearance) skips it entirely.
+        # The comparison also covers "changed, then changed back".
+        theme_changed = (
+            self._current_mode(),
+            self._accent,
+            self._effective_checkmark(),
+            self._text_scale,
+        ) != (
             self._orig_mode,
             self._orig_accent,
             self._orig_checkmark,
             self._orig_text_scale,
         )
-        if self._orig_mode != self._last_preview_mode:
-            self._last_preview_mode = self._orig_mode
-            self.preview_changed.emit(self._orig_mode)
+        if theme_changed:
+            apply_theme(
+                QApplication.instance(),
+                self._orig_mode,
+                self._orig_accent,
+                self._orig_checkmark,
+                self._orig_text_scale,
+            )
+            if self._orig_mode != self._last_preview_mode:
+                self._last_preview_mode = self._orig_mode
+                self.preview_changed.emit(self._orig_mode)
+        # Folder/node reverts are cheap (a small icon rebuild) and idempotent
+        # when unchanged, so emit them unconditionally.
         self.folder_color_changed.emit(self._orig_folder_color)
         self.node_color_changed.emit(self._orig_node_color)
         super().reject()

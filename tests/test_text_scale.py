@@ -140,6 +140,23 @@ def test_dialog_change_and_save_persists_text_scale(app):
         dlg.deleteLater()
 
 
+def test_dialog_cancel_without_appearance_change_skips_restyle(app, monkeypatch):
+    """Cancelling without touching Appearance must not re-apply the theme (the
+    costly whole-app restyle); it only runs when a preview actually changed it."""
+    import starpost.gui.views.settings_dialog as sd
+    from starpost.gui.views.settings_dialog import SettingsDialog
+
+    apply_theme(app, "dark", "#ffc829", None, 1.0)
+    calls = []
+    monkeypatch.setattr(sd, "apply_theme", lambda *a, **k: calls.append(1))
+    dlg = SettingsDialog(Settings.from_dict({}))
+    try:
+        dlg.reject()  # Cancel, nothing changed
+        assert calls == []
+    finally:
+        dlg.deleteLater()
+
+
 def test_dialog_cancel_reverts_live_preview(app):
     from starpost.gui.views.settings_dialog import SettingsDialog
 

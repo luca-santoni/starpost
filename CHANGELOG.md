@@ -6,6 +6,9 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
+- **Faster Settings close** — cancelling the Settings dialog no longer re-applies
+  the app theme (a few-hundred-ms whole-app restyle) when you didn't change the
+  appearance; the revert now runs only when a live preview actually changed it.
 - **Faster close** — closing the app no longer freezes while it re-saves the
   crash-recovery cache; the save now runs off the GUI thread (the window closes
   immediately and the write finishes in the background). For a large workspace
