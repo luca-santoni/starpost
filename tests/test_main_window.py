@@ -80,6 +80,26 @@ def test_scenes_screenplays_split_independent(app):
     panel.close()
 
 
+def test_saved_view_splits_persist_on_close(app):
+    """Closing the window writes the Scenes/Screenplays divider positions into
+    settings, and a fresh window restores them."""
+    settings = Settings()
+    win = mw.MainWindow(settings)
+    win.resize(400, 800)
+    win.show()
+    win.selection.set_active_section("scenes")
+    win.selection._split.setSizes([500, 90])
+    win.close()  # closeEvent persists into settings.saved_view_splits
+
+    assert "scenes" in settings.saved_view_splits
+    saved = settings.saved_view_splits["scenes"]
+
+    # A new window restores them into the panel.
+    win2 = mw.MainWindow(settings)
+    assert win2.selection._split_sizes["scenes"] == saved
+    win2.close()
+
+
 def test_selection_panel_width_consistent_across_sections(app):
     """The right panel must be the same width on every centre tab — a wider
     button (e.g. "Clear screenplays") must not make the Screenplays tab bulge."""

@@ -161,3 +161,25 @@ def test_batch_profile_round_trips_saved_screenplays():
     cfg.BatchProfile(name="Movies", saved_screenplays=entries).save()
     loaded = cfg.BatchProfile.load("Movies")
     assert loaded.saved_screenplays == entries
+
+
+def test_round_trips_saved_view_splits():
+    import starpost.core.settings as cfg
+
+    s = cfg.Settings()
+    s.saved_view_splits = {"scenes": [400, 120], "screenplays": [150, 360]}
+    restored = cfg.Settings.from_dict(s.to_dict())
+    assert restored.saved_view_splits == {
+        "scenes": [400, 120],
+        "screenplays": [150, 360],
+    }
+
+
+def test_saved_view_splits_drops_malformed():
+    import starpost.core.settings as cfg
+
+    s = cfg.Settings.from_dict(
+        {"saved_view_splits": {"scenes": "oops", "screenplays": [1, 2, 3],
+                               "junk": [1, 2]}}
+    )
+    assert s.saved_view_splits == {}

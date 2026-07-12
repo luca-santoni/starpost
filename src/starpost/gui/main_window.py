@@ -135,6 +135,8 @@ class MainWindow(QMainWindow):
             folder_color=settings.appearance.resolved_folder_color()
         )
         self.selection = SelectionPanel()
+        # Restore the remembered Scenes/Screenplays "Saved views" divider splits.
+        self.selection.set_saved_view_splits(settings.saved_view_splits)
         self.report_table = ReportTable(
             decimals=settings.report_decimals,
             zero_threshold=settings.zero_threshold,
@@ -1643,4 +1645,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.store.save_cache()
+        # Persist the Scenes/Screenplays divider positions across restarts.
+        self.settings.saved_view_splits = self.selection.saved_view_splits()
+        self.settings.save()
         super().closeEvent(event)

@@ -9,7 +9,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 - **Resizable Saved views pane** — on the Scenes and Screenplays tabs, a
   draggable divider now sits between the scene/screenplay list and the Saved
   views list, so you can rebalance how much height each gets. The two tabs
-  remember their divider position independently.
+  remember their divider position independently, and it persists across
+  restarts.
 - **Consistent right-panel width** — the selection panel no longer widens
   slightly on the Screenplays tab; the destructive "Clear scenes / Clear
   screenplays" button moved to its own row so its longer label doesn't stretch

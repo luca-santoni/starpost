@@ -37,6 +37,23 @@ def clamp_text_scale(value: float) -> float:
     return max(MIN_TEXT_SCALE, min(MAX_TEXT_SCALE, scale))
 
 
+def _clean_view_splits(value) -> dict:
+    """Validate the persisted Scenes/Screenplays divider positions, keeping only
+    well-formed ``section -> [top, saved_views]`` int pairs (the file is
+    user-editable, so guard against anything malformed)."""
+    out: dict[str, list[int]] = {}
+    if isinstance(value, dict):
+        for key in ("scenes", "screenplays"):
+            v = value.get(key)
+            if (
+                isinstance(v, list)
+                and len(v) == 2
+                and all(isinstance(n, (int, float)) and n >= 0 for n in v)
+            ):
+                out[key] = [int(v[0]), int(v[1])]
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
@@ -201,6 +218,10 @@ class Settings:
     export_plot_format: str = "PNG"     # PNG | JPG | TIFF | PDF
     export_plot_theme: str = "dark"     # "dark" | "light"
 
+    # Remembered Scenes/Screenplays "Saved views" divider positions — a map of
+    # section -> [top, saved_views] pixel sizes. Pure UI state; restored on launch.
+    saved_view_splits: dict = field(default_factory=dict)
+
     # --- persistence -----------------------------------------------------
     @classmethod
     def load(cls) -> "Settings":
@@ -305,6 +326,7 @@ class Settings:
             export_report_format=str(d.get("export_report_format", "CSV")),
             export_plot_format=str(d.get("export_plot_format", "PNG")),
             export_plot_theme=str(d.get("export_plot_theme", "dark")),
+            saved_view_splits=_clean_view_splits(d.get("saved_view_splits")),
         )
 
     def to_dict(self) -> dict:
@@ -359,6 +381,7 @@ class Settings:
             "export_report_format": self.export_report_format,
             "export_plot_format": self.export_plot_format,
             "export_plot_theme": self.export_plot_theme,
+            "saved_view_splits": self.saved_view_splits,
         }
 
     def save(self) -> None:

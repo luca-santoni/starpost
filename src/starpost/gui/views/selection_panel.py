@@ -708,6 +708,31 @@ class SelectionPanel(QWidget):
             self._split.setSizes(self._split_sizes[section])
         self._active_section = section
 
+    def saved_view_splits(self) -> dict[str, list[int]]:
+        """The remembered Scenes/Screenplays divider positions, including the
+        live position of whichever tab is currently shown. For persistence."""
+        sizes = {k: list(v) for k, v in self._split_sizes.items()}
+        if self._active_section in sizes and self._saved_views_group.isVisible():
+            sizes[self._active_section] = self._split.sizes()
+        return sizes
+
+    def set_saved_view_splits(self, splits: dict) -> None:
+        """Restore remembered Scenes/Screenplays divider positions (from
+        settings). Ignores missing/other sections; applies immediately if the
+        matching tab is already shown."""
+        if not isinstance(splits, dict):
+            return
+        for section in ("scenes", "screenplays"):
+            value = splits.get(section)
+            if (
+                isinstance(value, list)
+                and len(value) == 2
+                and all(isinstance(n, int) and n >= 0 for n in value)
+            ):
+                self._split_sizes[section] = list(value)
+        if self._active_section in self._split_sizes:
+            self._split.setSizes(self._split_sizes[self._active_section])
+
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.
         box = _SortableGroupBox(
