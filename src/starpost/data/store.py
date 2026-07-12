@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import threading
 from dataclasses import asdict
 from pathlib import Path
@@ -80,9 +82,23 @@ class ResultStore:
             # compact form is smaller, so it writes and (re)loads faster.
             # load_cache reads any JSON form.
             encoder = json.JSONEncoder(separators=(",", ":"))
-            with path.open("w", encoding="utf-8") as fh:
-                for chunk in encoder.iterencode(payload):
-                    fh.write(chunk)
+            # Write to a temp file in the same directory, then atomically replace
+            # the target, so a reader (e.g. a quickly relaunched app reading the
+            # cache while a background save from the closing app is still writing)
+            # never sees a half-written file.
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+            )
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    for chunk in encoder.iterencode(payload):
+                        fh.write(chunk)
+                os.replace(tmp, path)
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
 
     def save_cache(self, path: Optional[Path] = None) -> None:
         path = path or results_cache_path()

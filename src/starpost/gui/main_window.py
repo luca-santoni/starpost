@@ -1644,7 +1644,11 @@ class MainWindow(QMainWindow):
         return None
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
-        self.store.save_cache()
+        # Save the crash-recovery cache off the GUI thread so a large workspace
+        # doesn't freeze the window on close. The snapshot is taken synchronously
+        # (so it reflects the final state) and the write runs on a non-daemon
+        # thread that the interpreter joins before the process exits.
+        self.store.save_cache_async()
         # Persist the Scenes/Screenplays divider positions across restarts.
         self.settings.saved_view_splits = self.selection.saved_view_splits()
         self.settings.save()

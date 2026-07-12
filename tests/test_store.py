@@ -76,6 +76,31 @@ def test_save_cache_async_writes_the_same_file(tmp_path):
     assert async_path.read_text() == sync_path.read_text()
 
 
+def test_save_cache_is_atomic_no_temp_leftovers(tmp_path):
+    """The cache is written via a temp file + atomic replace: the target is
+    always complete/valid JSON and no stray temp files are left behind."""
+    store = ResultStore()
+    store.put(_full_result())
+    path = tmp_path / "cache.json"
+    store.save_cache(path)
+    # Target exists and is complete, parseable JSON (never torn).
+    assert "/cases/caseA.sim" in json.loads(path.read_text())
+    # Only the cache file remains — the temp file was replaced, not left over.
+    assert [p.name for p in tmp_path.iterdir()] == ["cache.json"]
+
+
+def test_save_cache_overwrites_existing_atomically(tmp_path):
+    """A second save replaces the first cleanly, leaving one valid file."""
+    store = ResultStore()
+    store.put(_full_result())
+    path = tmp_path / "cache.json"
+    store.save_cache(path)
+    store.remove("/cases/caseA.sim")
+    store.save_cache(path)
+    assert json.loads(path.read_text()) == {}
+    assert [p.name for p in tmp_path.iterdir()] == ["cache.json"]
+
+
 def test_stale_async_write_is_skipped(tmp_path):
     """A save that was snapshotted before a newer one must never overwrite the
     newer one's file (the generation check in _write_cache)."""

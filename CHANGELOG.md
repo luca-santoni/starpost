@@ -6,6 +6,11 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
+- **Faster close** — closing the app no longer freezes while it re-saves the
+  crash-recovery cache; the save now runs off the GUI thread (the window closes
+  immediately and the write finishes in the background). For a large workspace
+  this removes a multi-second stall. The cache is also written atomically (temp
+  file + replace), so a quick relaunch never reads a half-written file.
 - **Resizable Saved views pane** — on the Scenes and Screenplays tabs, a
   draggable divider now sits between the scene/screenplay list and the Saved
   views list, so you can rebalance how much height each gets. The two tabs
