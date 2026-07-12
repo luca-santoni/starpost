@@ -3,7 +3,18 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
-## [Unreleased]
+## [2.4.0] — 2026-07-12
+
+### New Features
+- **Screenplays in Run batch** — the Run-batch wizard gains a **Screenplays** tab
+  (Source → Reports → Plots → Scenes → Screenplays → Summary). Capture one or more
+  screenplay setups — the checked screenplays and their scene displayers, saved
+  camera views, and per-entry movie options (resolution, format, frame rate,
+  quality) — with **Save Screenplay**; each is recorded to a movie per data set,
+  landing in that data set's folder in the archive alongside its reports, plots
+  and scene stills. Batch profiles remember the saved screenplays, and **Express
+  batch** records them too. A screenplay that fails to record is logged and
+  skipped without aborting the rest of the archive.
 
 ### Improvements
 - **Faster Settings dialog** — the dialog is now built once and reused, so every
@@ -43,21 +54,6 @@ All notable changes to StarPost are recorded here. Versions follow the
 - **Screenplays first-time warning** — reworded to state that a movie can take
   several minutes to fully render, and raised the recommended memory floor to
   **32 GB**.
-
-## [2.4.0] — 2026-07-08
-
-### New Features
-- **Screenplays in Run batch** — the Run-batch wizard gains a **Screenplays** tab
-  (Source → Reports → Plots → Scenes → Screenplays → Summary). Capture one or more
-  screenplay setups — the checked screenplays and their scene displayers, saved
-  camera views, and per-entry movie options (resolution, format, frame rate,
-  quality) — with **Save Screenplay**; each is recorded to a movie per data set,
-  landing in that data set's folder in the archive alongside its reports, plots
-  and scene stills. Batch profiles remember the saved screenplays, and **Express
-  batch** records them too. A screenplay that fails to record is logged and
-  skipped without aborting the rest of the archive.
-
-### Improvements
 - **Recording feedback on the fast path** — during a screenplay's native
   STAR-CCM+ record, the progress bar now shows an indeterminate
   "Recording <name>…" busy animation, so the app clearly signals it is working.
