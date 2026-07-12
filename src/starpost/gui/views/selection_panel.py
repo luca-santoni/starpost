@@ -670,6 +670,14 @@ class SelectionPanel(QWidget):
         self._split.setStretchFactor(1, 1)
         self._split.setSizes([300, 150])  # initial ~2:1, as before
         layout.addWidget(self._split, 1)
+        # The Scenes and Screenplays tabs share one splitter but remember their
+        # divider position independently: each starts at the default and is saved
+        # on leaving / restored on returning.
+        self._active_section: str | None = None
+        self._split_sizes: dict[str, list[int]] = {
+            "scenes": [300, 150],
+            "screenplays": [300, 150],
+        }
         # Default to the Reports section (the centre opens on the Reports tab).
         self.set_active_section("reports")
 
@@ -678,6 +686,13 @@ class SelectionPanel(QWidget):
         Reports list, ``"scenes"`` the Scenes tree, ``"screenplays"`` the
         Screenplays tree (each with the shared Saved views list below),
         anything else the Monitor plots list."""
+        # Remember the outgoing tab's divider position so Scenes and Screenplays
+        # keep independent splits.
+        if self._active_section in self._split_sizes and (
+            self._saved_views_group.isVisible()
+        ):
+            self._split_sizes[self._active_section] = self._split.sizes()
+
         scenes = section == "scenes"
         screenplays = section == "screenplays"
         self._reports_group.setVisible(section == "reports")
@@ -687,6 +702,11 @@ class SelectionPanel(QWidget):
         self._plots_group.setVisible(
             section not in ("reports", "scenes", "screenplays")
         )
+
+        # Restore the incoming tab's own divider position.
+        if section in self._split_sizes:
+            self._split.setSizes(self._split_sizes[section])
+        self._active_section = section
 
     def _group(self, title: str, lst: _CheckList) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.

@@ -55,6 +55,31 @@ def test_selection_panel_scenes_saved_views_splitter(app):
     panel.close()
 
 
+def test_scenes_screenplays_split_independent(app):
+    """The Scenes and Screenplays tabs remember their divider position
+    independently — dragging one does not move the other."""
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    panel = SelectionPanel()
+    panel.resize(300, 600)
+    panel.show()
+
+    panel.set_active_section("scenes")
+    panel._split.setSizes([460, 60])  # give the scene tree more room
+    scenes_sizes = panel._split.sizes()
+
+    panel.set_active_section("screenplays")
+    assert panel._split.sizes() != scenes_sizes  # not carried over
+    panel._split.setSizes([120, 400])  # give Saved views more room here
+    screenplays_sizes = panel._split.sizes()
+
+    panel.set_active_section("scenes")
+    assert panel._split.sizes() == scenes_sizes  # scenes restored
+    panel.set_active_section("screenplays")
+    assert panel._split.sizes() == screenplays_sizes  # screenplays restored
+    panel.close()
+
+
 def test_selection_panel_width_consistent_across_sections(app):
     """The right panel must be the same width on every centre tab — a wider
     button (e.g. "Clear screenplays") must not make the Screenplays tab bulge."""
