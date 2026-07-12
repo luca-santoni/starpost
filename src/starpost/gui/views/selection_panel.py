@@ -715,7 +715,10 @@ class SelectionPanel(QWidget):
             lambda: (lst.set_all(False), self.selection_changed.emit())
         )
         # Destructive: drops the rendered artifacts (not just the selection).
-        # Styled red via the shared dangerButton object name.
+        # Styled red via the shared dangerButton object name. On its own full-width
+        # row (not beside Select all / Clear) so its longer label — "Clear
+        # screenplays" vs "Clear scenes" — doesn't widen the panel and make the
+        # Screenplays tab a few px wider than the others.
         clear_rendered = QPushButton(clear_text)
         clear_rendered.setObjectName("dangerButton")
         clear_rendered.setToolTip(clear_tip)
@@ -723,10 +726,10 @@ class SelectionPanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(all_on)
         row.addWidget(all_off)
-        row.addWidget(clear_rendered)
         v = QVBoxLayout(box)
         v.addWidget(run)
         v.addLayout(row)
+        v.addWidget(clear_rendered)
         v.addWidget(lst)
         return box
 

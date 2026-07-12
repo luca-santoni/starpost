@@ -33,6 +33,21 @@ def test_toolbar_has_logo_badge(app):
     win.close()
 
 
+def test_selection_panel_width_consistent_across_sections(app):
+    """The right panel must be the same width on every centre tab — a wider
+    button (e.g. "Clear screenplays") must not make the Screenplays tab bulge."""
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    panel = SelectionPanel()
+    panel.show()
+    widths = set()
+    for section in ("reports", "plots", "scenes", "screenplays"):
+        panel.set_active_section(section)
+        widths.add((panel.sizeHint().width(), panel.minimumSizeHint().width()))
+    assert len(widths) == 1, f"panel width varies by section: {widths}"
+    panel.close()
+
+
 def test_leaf_dot_has_contrasting_selected_variant(app):
     """The file-tree leaf dot carries a Selected-mode pixmap in the given
     contrast colour, so a selected row's dot doesn't blend into the accent
