@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStyle,
     QTabWidget,
-    QToolBar,
     QToolButton,
     QWidget,
     QVBoxLayout,
@@ -48,7 +47,11 @@ from starpost.gui.views.report_table import ReportTable
 from starpost.gui.views.scene_view import SceneView
 from starpost.gui.views.screenplay_view import ScreenplayView
 from starpost.gui.views.selection_panel import SelectionPanel
-from starpost.gui.views.title_bar import FramelessResizeFilter, TitleBar
+from starpost.gui.views.title_bar import (
+    CaptionButton,
+    FramelessResizeFilter,
+    TitleToolBar,
+)
 from starpost.utils.logging import get_logger
 
 log = get_logger("ui")
@@ -159,10 +162,6 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._build_toolbar()
 
-        # Custom caption strip for the frameless window: version centred, window
-        # buttons on the right. Placed in the menu-bar slot, above the toolbar.
-        self._title_bar = TitleBar(self, f"StarPost v{__version__}")
-        self.setMenuWidget(self._title_bar)
         # Resize the frameless window by pressing near an edge (app-wide filter,
         # since child widgets otherwise swallow the edge mouse events).
         self._resize_filter = FramelessResizeFilter(self)
@@ -385,7 +384,10 @@ class MainWindow(QMainWindow):
             self.data_list.show_sort_menu(bar.mapToGlobal(pos))
 
     def _build_toolbar(self) -> None:
-        tb = QToolBar("Main")
+        # A single fixed top bar (STAR-CCM+ style): the badge + menu items on the
+        # left, then the version and the window buttons on the right, all in one
+        # line. The bar is also the frameless window's drag handle (TitleToolBar).
+        tb = TitleToolBar(self, "Main")
         tb.setObjectName("mainToolBar")
         self._toolbar = tb
         self.addToolBar(tb)
@@ -419,61 +421,55 @@ class MainWindow(QMainWindow):
         settings_action = tb.addAction("Settings…", self._open_settings)
         settings_action.setToolTip("Open the application settings")
 
-        # A spacer pushes the version corner to the toolbar's far end (the right
-        # when horizontal, the bottom when vertical). Its expand axis is switched
-        # to match the orientation in _sync_toolbar_corner.
-        self._toolbar_spacer = QWidget()
-        tb.addWidget(self._toolbar_spacer)
+        # An expanding spacer pushes the right-hand cluster (update note, version,
+        # window buttons) to the far end of the bar.
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
 
-        # The "New update available" note, pushed to the far end by the spacer.
-        # Hidden until the startup update check finds a newer release (see
-        # show_update_available). Word-wrap keeps the long text from forcing a
-        # wide toolbar when docked vertically. (The version itself lives in the
-        # title bar — see TitleBar.)
-        corner = QWidget()
-        corner_layout = QVBoxLayout(corner)
-        corner_layout.setContentsMargins(0, 0, 8, 0)
-        corner_layout.setSpacing(0)
-        # Tinted with the user's accent via the theme (objectName "updateAvailable").
+        # "New update available" note (accent-tinted via the theme), hidden until
+        # the startup update check finds a newer release (see show_update_available).
         self._update_label = QLabel("New update available")
         self._update_label.setObjectName("updateAvailable")
-        self._update_label.setWordWrap(True)
         self._update_label.setVisible(False)
-        corner_layout.addWidget(self._update_label)
-        tb.addWidget(corner)
+        tb.addWidget(self._update_label)
 
-        # Lay the corner out for the toolbar's current orientation, and re-lay it
-        # whenever the toolbar is docked to a different edge.
-        self._sync_toolbar_corner(tb.orientation())
-        tb.orientationChanged.connect(self._sync_toolbar_corner)
+        # Version, just left of the window buttons so the cluster lines up above
+        # the right-hand panel.
+        self._version_label = QLabel(f"StarPost v{__version__}")
+        self._version_label.setObjectName("titleVersion")
+        self._version_label.setContentsMargins(12, 0, 12, 0)
+        tb.addWidget(self._version_label)
 
-    def _sync_toolbar_corner(self, orientation) -> None:
-        """Adapt the toolbar's update-note corner to the toolbar's orientation.
+        # Integrated minimise / maximise / close, flush to the right edge.
+        self._btn_min = CaptionButton("min")
+        self._btn_min.setObjectName("winMin")
+        self._btn_min.setToolTip("Minimise")
+        self._btn_max = CaptionButton("max")
+        self._btn_max.setObjectName("winMax")
+        self._btn_max.setToolTip("Maximise")
+        self._btn_close = CaptionButton("close")
+        self._btn_close.setObjectName("winClose")
+        self._btn_close.setToolTip("Close")
+        for b in (self._btn_min, self._btn_max, self._btn_close):
+            tb.addWidget(b)
+        self._btn_min.clicked.connect(self.showMinimized)
+        self._btn_max.clicked.connect(self._toggle_maximized)
+        self._btn_close.clicked.connect(self.close)
 
-        Horizontal: the spacer expands sideways to push the note to the far
-        right, right-aligned. Vertical: the spacer expands downward so the note
-        sinks to the bottom and centres (right-aligning a long label in a narrow
-        vertical bar reads wrong)."""
-        vertical = orientation == Qt.Orientation.Vertical
-        if vertical:
-            self._toolbar_spacer.setSizePolicy(
-                QSizePolicy.Preferred, QSizePolicy.Expanding
-            )
-            align = Qt.AlignHCenter
+    def _toggle_maximized(self) -> None:
+        if self.isMaximized():
+            self.showNormal()
         else:
-            self._toolbar_spacer.setSizePolicy(
-                QSizePolicy.Expanding, QSizePolicy.Preferred
-            )
-            align = Qt.AlignRight
-        self._update_label.setAlignment(align)
+            self.showMaximized()
 
     def changeEvent(self, event) -> None:
-        """Keep the title bar's maximise button in sync with the window state."""
+        """Keep the maximise button's glyph in sync with the window state."""
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange and hasattr(
-            self, "_title_bar"
+            self, "_btn_max"
         ):
-            self._title_bar.set_maximized(self.isMaximized())
+            self._btn_max.set_kind("restore" if self.isMaximized() else "max")
 
     def show_update_available(self) -> None:
         """Reveal the toolbar's "New update available" note. Called when the

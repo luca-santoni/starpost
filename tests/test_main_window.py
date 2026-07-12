@@ -33,71 +33,37 @@ def test_toolbar_has_logo_badge(app):
     win.close()
 
 
-def test_toolbar_corner_horizontal_layout(app):
-    """In a horizontal toolbar the update note right-aligns and its spacer
-    expands sideways (pushing the note to the far right)."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QSizePolicy
-
-    win = mw.MainWindow(Settings())
-    win._sync_toolbar_corner(Qt.Orientation.Horizontal)
-    assert win._update_label.alignment() & Qt.AlignRight
-    assert win._toolbar_spacer.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
-    win.close()
-
-
-def test_toolbar_corner_vertical_layout(app):
-    """Docked vertically the corner centres its text and the spacer expands
-    downward, so the long update note is not right-aligned in a narrow bar."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QSizePolicy
-
-    win = mw.MainWindow(Settings())
-    win._sync_toolbar_corner(Qt.Orientation.Vertical)
-    assert win._update_label.alignment() & Qt.AlignHCenter
-    assert win._toolbar_spacer.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
-    win.close()
-
-
-def test_frameless_title_bar(app):
-    """The window is frameless and carries a custom title bar: the version
-    centred (where a vendor name sits) and integrated window buttons."""
+def test_single_top_bar_has_menu_and_window_buttons(app):
+    """One fixed top bar holds the badge and menu items on the left and the
+    version plus integrated window buttons on the right (STAR-CCM+ style)."""
     from PySide6.QtCore import Qt
 
     from starpost import __version__
 
     win = mw.MainWindow(Settings())
     assert win.windowFlags() & Qt.WindowType.FramelessWindowHint
-    tb = win._title_bar
-    assert tb.version.text() == f"StarPost v{__version__}"
-    assert tb.btn_min.objectName() == "winMin"
-    assert tb.btn_max.objectName() == "winMax"
-    assert tb.btn_close.objectName() == "winClose"
+    # The single top bar is not movable (it is the fixed caption / drag handle).
+    assert not win._toolbar.isMovable()
+    assert not win._toolbar_logo.pixmap().isNull()
+    assert win._version_label.text() == f"StarPost v{__version__}"
+    assert win._btn_min.objectName() == "winMin"
+    assert win._btn_max.objectName() == "winMax"
+    assert win._btn_close.objectName() == "winClose"
     win.close()
 
 
-def test_title_bar_maximize_button_tracks_state(app):
-    """The maximise button swaps to the restore glyph when the window is
-    maximised, and back again when restored."""
-    win = mw.MainWindow(Settings())
-    win._title_bar.set_maximized(True)
-    assert win._title_bar.btn_max._kind == "restore"
-    win._title_bar.set_maximized(False)
-    assert win._title_bar.btn_max._kind == "max"
-    win.close()
-
-
-def test_toolbar_can_dock_on_the_side(app):
-    """The toolbar is no longer bounced away from a vertical dock — it stays on
-    the left, laid out for that orientation."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication
+def test_maximize_button_tracks_window_state(app, monkeypatch):
+    """A window-state change swaps the maximise button to the restore glyph and
+    back (driven by changeEvent)."""
+    from PySide6.QtCore import QEvent
 
     win = mw.MainWindow(Settings())
-    tb = win._toolbar
-    win.addToolBar(Qt.ToolBarArea.LeftToolBarArea, tb)
-    QApplication.processEvents()
-    assert win.toolBarArea(tb) == Qt.ToolBarArea.LeftToolBarArea
+    monkeypatch.setattr(win, "isMaximized", lambda: True)
+    win.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert win._btn_max._kind == "restore"
+    monkeypatch.setattr(win, "isMaximized", lambda: False)
+    win.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert win._btn_max._kind == "max"
     win.close()
 
 

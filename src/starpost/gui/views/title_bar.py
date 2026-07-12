@@ -1,8 +1,11 @@
-"""Custom window title bar for the frameless main window.
+"""Window-caption pieces for the frameless main window.
 
-The main window is frameless (no OS-drawn title bar), so this widget supplies
-the caption: the StarPost version centred (where a vendor name sits in a classic
-title bar) and integrated minimise / maximise / close buttons on the right.
+The main window is frameless (no OS-drawn title bar). Its single top bar — the
+menu-style toolbar — doubles as the caption: menu items on the left, the version
+and integrated minimise / maximise / close buttons on the right, all in one line
+(STAR-CCM+ style). :class:`TitleToolBar` is that bar; it is also the window's
+drag handle. :class:`CaptionButton` paints the window buttons and
+:class:`FramelessResizeFilter` handles edge resizing.
 
 Dragging the bar moves the window and pressing near a window edge resizes it;
 both defer to the window manager via ``startSystemMove`` / ``startSystemResize``
@@ -16,12 +19,11 @@ from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QHBoxLayout,
-    QLabel,
+    QToolBar,
     QWidget,
 )
 
-TITLEBAR_HEIGHT = 32
+CAPTION_HEIGHT = 32
 _BTN_W = 46
 
 
@@ -37,7 +39,7 @@ class CaptionButton(QAbstractButton):
         self._glyph = QColor("#cfcfcf")
         self._hover_bg = QColor("#353535")
         self._hover_glyph = QColor("#e6e6e6")
-        self.setFixedSize(_BTN_W, TITLEBAR_HEIGHT)
+        self.setFixedSize(_BTN_W, CAPTION_HEIGHT)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
@@ -113,69 +115,37 @@ class CaptionButton(QAbstractButton):
         p.end()
 
 
-class TitleBar(QWidget):
-    """The frameless window's caption strip: centred version, window buttons."""
+class TitleToolBar(QToolBar):
+    """The frameless window's single top bar: menu items on the left, version and
+    window buttons on the right. Non-movable (it is the fixed caption), and its
+    empty area is the window's drag handle — press to move, double-click to
+    maximise/restore. The window buttons themselves are added by the main window.
+    """
 
-    def __init__(self, window: QWidget, version_text: str) -> None:
-        super().__init__()
+    def __init__(self, window: QWidget, title: str = "Main") -> None:
+        super().__init__(title)
         self._win = window
-        self.setObjectName("titleBar")
-        self.setFixedHeight(TITLEBAR_HEIGHT)
-
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-
-        # The version sits at the far right, just left of the window buttons, so
-        # the whole cluster lines up above the right-hand panel (Profile). The
-        # empty stretch on the left is the draggable region.
-        lay.addStretch(1)
-
-        self.version = QLabel(version_text)
-        self.version.setObjectName("titleVersion")
-        self.version.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        # Let clicks on the label fall through to the bar so it stays draggable.
-        self.version.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        lay.addWidget(self.version)
-        lay.addSpacing(12)
-
-        self.btn_min = CaptionButton("min")
-        self.btn_min.setObjectName("winMin")
-        self.btn_max = CaptionButton("max")
-        self.btn_max.setObjectName("winMax")
-        self.btn_close = CaptionButton("close")
-        self.btn_close.setObjectName("winClose")
-        for b in (self.btn_min, self.btn_max, self.btn_close):
-            lay.addWidget(b)
-
-        self.btn_min.setToolTip("Minimise")
-        self.btn_max.setToolTip("Maximise")
-        self.btn_close.setToolTip("Close")
-        self.btn_min.clicked.connect(self._win.showMinimized)
-        self.btn_max.clicked.connect(self.toggle_maximized)
-        self.btn_close.clicked.connect(self._win.close)
-
-    def toggle_maximized(self) -> None:
-        if self._win.isMaximized():
-            self._win.showNormal()
-        else:
-            self._win.showMaximized()
-
-    def set_maximized(self, is_max: bool) -> None:
-        """Swap the maximise button between the maximise and restore glyphs."""
-        self.btn_max.set_kind("restore" if is_max else "max")
+        self.setMovable(False)
+        self.setFloatable(False)
 
     def mousePressEvent(self, event) -> None:
+        # Presses that reach the bar (not one of its buttons) start a window move
+        # so the whole bar drags the window, like a native title bar.
         if event.button() == Qt.MouseButton.LeftButton:
             handle = self._win.windowHandle()
             if handle is not None:
                 handle.startSystemMove()
+                return
+        super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self.toggle_maximized()
+            if self._win.isMaximized():
+                self._win.showNormal()
+            else:
+                self._win.showMaximized()
+            return
+        super().mouseDoubleClickEvent(event)
 
 
 class FramelessResizeFilter(QObject):

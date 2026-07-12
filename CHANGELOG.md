@@ -6,22 +6,15 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
-- **Custom title bar** — the main window is now frameless with an integrated
-  title bar (STAR-CCM+ style): the StarPost version and the minimise / maximise
-  / close buttons form a cluster at the top-right (version just left of
-  minimise, close turns red on hover), above the right-hand panel, on the
-  dark/light theme background. Dragging the bar moves the
-  window, double-clicking it maximises, and pressing near an edge resizes —
-  all via the window manager, so native snapping is preserved. The version moved
-  out of the toolbar corner into this bar.
-- **Menu-bar-style toolbar** — the main toolbar is restyled after a classic
-  application menu bar: the StarPost badge sits in the corner, the items are
-  flat with a roomier row height and a subtle hover fill (no chrome fill), on
-  the dark/light theme background.
-- **Toolbar version corner adapts to vertical docks** — the main toolbar can be
-  docked on any edge (top/bottom/left/right); its version and "New update
-  available" text now centres and word-wraps when the toolbar is vertical
-  instead of formatting incorrectly, so left/right docking looks right.
+- **Single menu/title bar (STAR-CCM+ style)** — the main window is frameless
+  with one fixed top bar: the StarPost badge and menu items (Run batch, Export,
+  Settings) on the left, and the version plus integrated minimise / maximise /
+  close buttons on the right, all in one line. The bar is menu-bar styled (flat
+  items, subtle hover, no chrome fill) on the dark/light theme background; the
+  window buttons sit flush in the corner and close turns red on hover. Dragging
+  the bar moves the window, double-clicking it maximises, and pressing near an
+  edge resizes — all via the window manager, so native snapping is preserved.
+  The version wordmark is a muted gray, as before.
 - **Run batch dropdown auto-closes** — the hover-opened Full Batch / Express
   batch menu now closes itself once the pointer moves well away from it, instead
   of lingering until clicked; moving onto another toolbar item (Export, Settings,

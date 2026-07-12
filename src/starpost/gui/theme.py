@@ -263,16 +263,17 @@ QGroupBox::title {
 QToolBar { background: $toolbar_bg; border-bottom: 1px solid $border; spacing: 4px; }
 QLabel { color: $text; }
 
-/* Frameless-window title bar: dark strip with the version centred and the
-   window buttons on the right. The caption-button glyph/hover colours are Qt
-   properties so they follow the theme (close goes red on hover). */
-QWidget#titleBar { background: $toolbar_bg; }
-/* Its direct children (balance spacer, version label, buttons) are transparent
-   so they show the bar's colour — the global QWidget background would otherwise
-   paint them window_bg and leave seams. */
-QWidget#titleBar > QWidget { background: transparent; }
-QLabel#titleVersion { color: $subtle; font-weight: 600; }
+/* Frameless-window caption pieces living in the top bar: the version label and
+   the integrated window buttons on the right. Labels are transparent so they
+   show the bar's colour (the global QWidget background would otherwise paint
+   them window_bg and leave seams). The caption-button glyph/hover colours are
+   Qt properties so they follow the theme (close goes red on hover). */
+QToolBar#mainToolBar QLabel { background: transparent; }
+/* Muted, theme-neutral gray (mid-gray at low alpha reads faint on dark and
+   light alike), as the version wordmark was in earlier versions. */
+QLabel#titleVersion { color: rgba(127, 127, 127, 0.55); }
 CaptionButton {
+    background: transparent;
     qproperty-glyphColor: $subtle;
     qproperty-hoverGlyph: $text;
     qproperty-hoverBg: $btn_hover;
@@ -290,7 +291,8 @@ QToolBar#mainToolBar {
     background: $toolbar_bg;
     border-bottom: 1px solid $border;
     spacing: 2px;
-    padding: 3px 4px;
+    /* No right padding so the window buttons sit flush to the corner. */
+    padding: 3px 0 3px 4px;
 }
 QToolBar#mainToolBar QToolButton {
     background: transparent;
