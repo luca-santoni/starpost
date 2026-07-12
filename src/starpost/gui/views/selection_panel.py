@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QStackedWidget,
     QStyle,
     QStyleOptionGroupBox,
     QStyleOptionViewItem,
@@ -649,22 +650,29 @@ class SelectionPanel(QWidget):
         layout.addWidget(QLabel("Profile"))
         layout.addLayout(prof_row)
 
-        # The active main group (only one of Reports/Plots/Scenes/Screenplays is
-        # shown at a time) sits in the top pane; the shared Saved views list is
-        # the bottom pane. A vertical splitter between them lets the user drag to
-        # rebalance the two on the Scenes/Screenplays tabs (where both show); on
-        # the other tabs Saved views is hidden and the top pane fills.
-        top = QWidget()
-        top_layout = QVBoxLayout(top)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.addWidget(self._reports_group, 1)
-        top_layout.addWidget(self._plots_group, 1)
-        top_layout.addWidget(self._scenes_group, 1)
-        top_layout.addWidget(self._screenplays_group, 1)
+        # The active main group (one of Reports/Plots/Scenes/Screenplays) sits in
+        # the top pane; the shared Saved views list is the bottom pane. A vertical
+        # splitter between them lets the user drag to rebalance the two on the
+        # Scenes/Screenplays tabs (where both show); on the other tabs Saved views
+        # is hidden and the top pane fills.
+        #
+        # The four main groups live in a QStackedWidget so the panel always
+        # reserves the *widest* group's width (Screenplays, whose "Clear
+        # screenplays" button is longest) — keeping every tab the same width.
+        self._main_stack = QStackedWidget()
+        self._section_pages = {}
+        for section, group in (
+            ("reports", self._reports_group),
+            ("plots", self._plots_group),
+            ("scenes", self._scenes_group),
+            ("screenplays", self._screenplays_group),
+        ):
+            self._main_stack.addWidget(group)
+            self._section_pages[section] = group
 
         self._split = QSplitter(Qt.Vertical)
         self._split.setChildrenCollapsible(False)
-        self._split.addWidget(top)
+        self._split.addWidget(self._main_stack)
         self._split.addWidget(self._saved_views_group)
         self._split.setStretchFactor(0, 2)
         self._split.setStretchFactor(1, 1)
@@ -693,15 +701,12 @@ class SelectionPanel(QWidget):
         ):
             self._split_sizes[self._active_section] = self._split.sizes()
 
-        scenes = section == "scenes"
-        screenplays = section == "screenplays"
-        self._reports_group.setVisible(section == "reports")
-        self._scenes_group.setVisible(scenes)
-        self._screenplays_group.setVisible(screenplays)
-        self._saved_views_group.setVisible(scenes or screenplays)
-        self._plots_group.setVisible(
-            section not in ("reports", "scenes", "screenplays")
+        # Raise the matching main group (unknown sections fall back to Plots, as
+        # before). The stack keeps the panel at the widest group's width.
+        self._main_stack.setCurrentWidget(
+            self._section_pages.get(section, self._plots_group)
         )
+        self._saved_views_group.setVisible(section in ("scenes", "screenplays"))
 
         # Restore the incoming tab's own divider position.
         if section in self._split_sizes:
@@ -775,10 +780,9 @@ class SelectionPanel(QWidget):
             lambda: (lst.set_all(False), self.selection_changed.emit())
         )
         # Destructive: drops the rendered artifacts (not just the selection).
-        # Styled red via the shared dangerButton object name. On its own full-width
-        # row (not beside Select all / Clear) so its longer label — "Clear
-        # screenplays" vs "Clear scenes" — doesn't widen the panel and make the
-        # Screenplays tab a few px wider than the others.
+        # Styled red via the shared dangerButton object name. Sits to the right of
+        # Clear; the panel reserves the widest tab's width (see the QStackedWidget
+        # in __init__) so this longer button keeps every tab the same width.
         clear_rendered = QPushButton(clear_text)
         clear_rendered.setObjectName("dangerButton")
         clear_rendered.setToolTip(clear_tip)
@@ -786,10 +790,10 @@ class SelectionPanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(all_on)
         row.addWidget(all_off)
+        row.addWidget(clear_rendered)
         v = QVBoxLayout(box)
         v.addWidget(run)
         v.addLayout(row)
-        v.addWidget(clear_rendered)
         v.addWidget(lst)
         return box
 

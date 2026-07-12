@@ -11,10 +11,10 @@ All notable changes to StarPost are recorded here. Versions follow the
   views list, so you can rebalance how much height each gets. The two tabs
   remember their divider position independently, and it persists across
   restarts.
-- **Consistent right-panel width** — the selection panel no longer widens
-  slightly on the Screenplays tab; the destructive "Clear scenes / Clear
-  screenplays" button moved to its own row so its longer label doesn't stretch
-  the panel, keeping all four centre tabs the same width.
+- **Consistent right-panel width** — all four centre tabs share one panel
+  width, reserved for the widest tab (Screenplays), so switching tabs never
+  nudges the divider. The destructive "Clear scenes / Clear screenplays" button
+  sits beside Clear.
 - **Selected file dot stays visible** — a selected row in the Files tree now
   draws its leaf node dot in the accent's contrast colour instead of the same
   hue, so it no longer blends into the selection highlight.
