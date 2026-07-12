@@ -422,9 +422,11 @@ class MainWindow(QMainWindow):
         settings_action.setToolTip("Open the application settings")
 
         # An expanding spacer pushes the right-hand cluster (update note, version,
-        # window buttons) to the far end of the bar.
+        # window buttons) to the far end of the bar. Transparent so it shows the
+        # bar colour, not the (slightly lighter) global window background.
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        spacer.setStyleSheet("background: transparent;")
         tb.addWidget(spacer)
 
         # "New update available" note (accent-tinted via the theme), hidden until
