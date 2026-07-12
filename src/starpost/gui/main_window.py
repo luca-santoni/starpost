@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
             show_full_names=settings.show_full_file_names,
             folder_color=settings.appearance.resolved_folder_color(),
             node_color=settings.appearance.resolved_node(),
+            accent=settings.appearance.accent,
         )
         self.data_list = DataListPanel(
             folder_color=settings.appearance.resolved_folder_color()
@@ -1606,6 +1607,7 @@ class MainWindow(QMainWindow):
         self.file_list.set_folder_color(folder_color)
         self.data_list.set_folder_color(folder_color)
         self.file_list.set_node_color(self.settings.appearance.resolved_node())
+        self.file_list.set_accent(self.settings.appearance.accent)
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
         self.plot_view.set_filter(

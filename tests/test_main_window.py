@@ -33,6 +33,23 @@ def test_toolbar_has_logo_badge(app):
     win.close()
 
 
+def test_leaf_dot_has_contrasting_selected_variant(app):
+    """The file-tree leaf dot carries a Selected-mode pixmap in the given
+    contrast colour, so a selected row's dot doesn't blend into the accent
+    highlight."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon
+
+    from starpost.gui.views.file_list import _dot_icon
+
+    icon = _dot_icon("#ffc829", "#1e1e1e")
+    size = QSize(32, 32)
+    normal = icon.pixmap(size, QIcon.Mode.Normal).toImage().pixelColor(16, 16)
+    selected = icon.pixmap(size, QIcon.Mode.Selected).toImage().pixelColor(16, 16)
+    assert (normal.red(), normal.green(), normal.blue()) == (0xFF, 0xC8, 0x29)
+    assert (selected.red(), selected.green(), selected.blue()) == (0x1E, 0x1E, 0x1E)
+
+
 def test_single_top_bar_has_menu_and_window_buttons(app):
     """One fixed top bar holds the badge and menu items on the left and the
     version plus integrated window buttons on the right (STAR-CCM+ style)."""

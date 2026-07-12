@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from starpost.gui.theme import DEFAULT_ACCENT, contrast_color
+
 from starpost.gui.widgets import clear_item_view_hover, enable_range_selection
 from starpost.utils.paths import file_list_cache_path
 
@@ -75,9 +77,8 @@ def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
 _LEAF_COLOR = "#4a90d9"
 
 
-def _dot_icon(color: str, size: int = 32) -> QIcon:
-    """A small filled circle icon for a tree's leaf items, like STAR-CCM+'s
-    node icons."""
+def _dot_pixmap(color: str, size: int) -> QPixmap:
+    """A small filled circle of ``color`` on a transparent square."""
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -87,7 +88,19 @@ def _dot_icon(color: str, size: int = 32) -> QIcon:
     margin = round(size * 0.3)  # a compact dot, ~40% of the icon box
     painter.drawEllipse(pixmap.rect().adjusted(margin, margin, -margin, -margin))
     painter.end()
-    return QIcon(pixmap)
+    return pixmap
+
+
+def _dot_icon(color: str, selected_color: str | None = None, size: int = 32) -> QIcon:
+    """A small filled circle icon for a tree's leaf items, like STAR-CCM+'s node
+    icons. When ``selected_color`` is given, the icon also carries a Selected-mode
+    pixmap in that colour, so a selected row shows a contrasting dot instead of
+    one that blends into the accent highlight (Qt's default selected tint leaves a
+    same-hue dot barely visible)."""
+    icon = QIcon(_dot_pixmap(color, size))
+    if selected_color:
+        icon.addPixmap(_dot_pixmap(selected_color, size), QIcon.Mode.Selected)
+    return icon
 
 
 # Colour of the tree connector lines that link nested items to their parent.
@@ -202,6 +215,7 @@ class FileListPanel(QWidget):
         show_full_names: bool = False,
         folder_color: str = "",
         node_color: str = "",
+        accent: str = DEFAULT_ACCENT,
     ) -> None:
         super().__init__(parent)
         # Each file item stores its full path; the displayed text is either that
@@ -216,9 +230,12 @@ class FileListPanel(QWidget):
         )
         self._folder_color = folder_color or ""
         self._folder_icon = self._build_folder_icon()
-        # Leaf node dot: coloured to a chosen colour ("" = the STAR-CCM+ blue).
+        # Leaf node dot: coloured to a chosen colour ("" = the STAR-CCM+ blue),
+        # with a contrasting variant (the accent's contrast colour) for the
+        # selected row so the dot stays visible on the accent highlight.
         self._node_color = node_color or _LEAF_COLOR
-        self._file_icon = _dot_icon(self._node_color)
+        self._accent = accent or DEFAULT_ACCENT
+        self._file_icon = _dot_icon(self._node_color, contrast_color(self._accent))
 
         self._tree = _FileTree()
         self._tree.setHeaderHidden(True)
@@ -349,7 +366,20 @@ class FileListPanel(QWidget):
         if color == self._node_color:
             return
         self._node_color = color
-        self._file_icon = _dot_icon(color)
+        self._rebuild_file_icon()
+
+    def set_accent(self, accent: str) -> None:
+        """Update the accent so the selected-row dot keeps a contrasting colour."""
+        accent = accent or DEFAULT_ACCENT
+        if accent == self._accent:
+            return
+        self._accent = accent
+        self._rebuild_file_icon()
+
+    def _rebuild_file_icon(self) -> None:
+        """Rebuild the leaf dot icon (normal + selected variants) and re-apply it
+        to every file item."""
+        self._file_icon = _dot_icon(self._node_color, contrast_color(self._accent))
         for item in self._iter_all():
             if not _is_folder(item):
                 item.setIcon(0, self._file_icon)

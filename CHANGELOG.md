@@ -6,6 +6,9 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Improvements
+- **Selected file dot stays visible** — a selected row in the Files tree now
+  draws its leaf node dot in the accent's contrast colour instead of the same
+  hue, so it no longer blends into the selection highlight.
 - **Single menu/title bar (STAR-CCM+ style)** — the main window is frameless
   with one fixed top bar: the StarPost badge and menu items (Run batch, Export,
   Settings) on the left, and the version plus integrated minimise / maximise /
