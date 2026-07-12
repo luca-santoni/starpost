@@ -149,6 +149,9 @@ class MainWindow(QMainWindow):
         # placeholder; the warm-up timer below builds the real view right after
         # the window first paints, long before a human can reach the Plots tab.
         self._plot_view = None
+        # The Settings dialog is built lazily on first open and then reused (its
+        # ~12 pages are costly to construct); see _open_settings.
+        self._settings_dialog = None
         # Let profiles persist which region statistics are shown. (A lambda, so
         # merely wiring the provider doesn't build the plot view.)
         self.selection.set_region_stats_provider(
@@ -1579,20 +1582,29 @@ class MainWindow(QMainWindow):
         self.plot_view.set_region_stats(self.settings.region_stats)
 
     def _open_settings(self) -> None:
-        from starpost.gui.views.settings_dialog import SettingsDialog
         from starpost.utils.paths import settings_path
 
-        dlg = SettingsDialog(self.settings, self)
-        # Live-preview the light/dark switch on the plot too (Cancel reverts it).
-        dlg.preview_changed.connect(self.plot_view.apply_theme)
-        # Live-preview the folder colour on the Files and Data tabs (Cancel reverts it).
-        dlg.folder_color_changed.connect(self.file_list.set_folder_color)
-        dlg.folder_color_changed.connect(self.data_list.set_folder_color)
-        # Live-preview the leaf node-dot colour on the Files tab (Cancel reverts it).
-        dlg.node_color_changed.connect(self.file_list.set_node_color)
-        # Resetting settings is applied + saved immediately (independent of
-        # Save/Cancel): push it to the views and reload the Default profile.
-        dlg.defaults_reset.connect(self._on_settings_reset)
+        # The dialog is built once and reused: its ~12 pages are expensive to
+        # construct, so reopening re-syncs the existing instance (see reload)
+        # instead of rebuilding it, keeping every open after the first instant.
+        dlg = self._settings_dialog
+        if dlg is None:
+            from starpost.gui.views.settings_dialog import SettingsDialog
+
+            dlg = SettingsDialog(self.settings, self)
+            # Live-preview the light/dark switch on the plot (Cancel reverts it).
+            dlg.preview_changed.connect(self.plot_view.apply_theme)
+            # Live-preview the folder colour on the Files/Data tabs (Cancel reverts).
+            dlg.folder_color_changed.connect(self.file_list.set_folder_color)
+            dlg.folder_color_changed.connect(self.data_list.set_folder_color)
+            # Live-preview the leaf node-dot colour on the Files tab (Cancel reverts).
+            dlg.node_color_changed.connect(self.file_list.set_node_color)
+            # Resetting settings is applied + saved immediately (independent of
+            # Save/Cancel): push it to the views and reload the Default profile.
+            dlg.defaults_reset.connect(self._on_settings_reset)
+            self._settings_dialog = dlg
+        else:
+            dlg.reload()
         accepted = dlg.exec()
         # Profile deletions in the dialog take effect immediately (independent of
         # Save/Cancel), so resync the profile dropdown either way.

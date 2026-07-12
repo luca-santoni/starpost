@@ -140,6 +140,26 @@ def test_dialog_change_and_save_persists_text_scale(app):
         dlg.deleteLater()
 
 
+def test_dialog_reload_resyncs_for_reuse(app):
+    """The reused dialog's reload() re-syncs controls and the appearance revert
+    snapshot from the current settings (so a reopened dialog is not stale and
+    Cancel reverts to the state as of that open)."""
+    from starpost.gui.views.settings_dialog import SettingsDialog
+
+    settings = Settings.from_dict({})
+    dlg = SettingsDialog(settings)
+    try:
+        # Simulate settings changing between opens.
+        settings.report_decimals = 7
+        settings.appearance.accent = "#4e79a7"
+        dlg.reload()
+        assert dlg._decimals.value() == 7
+        assert dlg._accent == "#4e79a7"
+        assert dlg._orig_accent == "#4e79a7"  # revert snapshot re-captured
+    finally:
+        dlg.deleteLater()
+
+
 def test_dialog_cancel_without_appearance_change_skips_restyle(app, monkeypatch):
     """Cancelling without touching Appearance must not re-apply the theme (the
     costly whole-app restyle); it only runs when a preview actually changed it."""

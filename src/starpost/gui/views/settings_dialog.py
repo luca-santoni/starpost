@@ -304,25 +304,7 @@ class SettingsDialog(QDialog):
         self._loading = True
 
         # Remember the live appearance so Cancel can revert the preview.
-        self._orig_mode = settings.appearance.mode
-        self._orig_accent = settings.appearance.accent
-        self._accent = normalize_accent(settings.appearance.accent)
-        self._last_preview_mode = self._orig_mode
-        # Checkmark colour (live + revert state).
-        self._checkmark_color = normalize_accent(settings.appearance.checkmark_color)
-        self._checkmark_match = settings.appearance.checkmark_match_theme
-        self._orig_checkmark = settings.appearance.resolved_checkmark()
-        # Leaf node-dot colour (live + revert state).
-        self._node_color = normalize_accent(settings.appearance.node_color)
-        self._node_match = settings.appearance.node_match_theme
-        self._orig_node_color = settings.appearance.resolved_node()
-        # Folder colour (live + revert state).
-        self._folder_color = normalize_accent(settings.appearance.folder_color)
-        self._folder_default = settings.appearance.folder_use_default
-        self._orig_folder_color = settings.appearance.resolved_folder_color()
-        # Text-size multiplier (live + revert state).
-        self._text_scale = settings.appearance.text_scale
-        self._orig_text_scale = settings.appearance.text_scale
+        self._capture_original_appearance()
 
         # Left nav (groups) drives the right stack (individual settings).
         self._nav = QListWidget()
@@ -368,6 +350,45 @@ class SettingsDialog(QDialog):
 
         self._load_from_settings()
         self._sync_license_mode()
+        self._loading = False
+
+    def _capture_original_appearance(self) -> None:
+        """Snapshot the live appearance (so Cancel can revert a preview) and seed
+        the current-state fields. Re-run on each reopen when the dialog is reused
+        so Cancel reverts to the appearance as of *this* open."""
+        s = self._settings
+        self._orig_mode = s.appearance.mode
+        self._orig_accent = s.appearance.accent
+        self._accent = normalize_accent(s.appearance.accent)
+        self._last_preview_mode = self._orig_mode
+        # Checkmark colour (live + revert state).
+        self._checkmark_color = normalize_accent(s.appearance.checkmark_color)
+        self._checkmark_match = s.appearance.checkmark_match_theme
+        self._orig_checkmark = s.appearance.resolved_checkmark()
+        # Leaf node-dot colour (live + revert state).
+        self._node_color = normalize_accent(s.appearance.node_color)
+        self._node_match = s.appearance.node_match_theme
+        self._orig_node_color = s.appearance.resolved_node()
+        # Folder colour (live + revert state).
+        self._folder_color = normalize_accent(s.appearance.folder_color)
+        self._folder_default = s.appearance.folder_use_default
+        self._orig_folder_color = s.appearance.resolved_folder_color()
+        # Text-size multiplier (live + revert state).
+        self._text_scale = s.appearance.text_scale
+        self._orig_text_scale = s.appearance.text_scale
+
+    def reload(self) -> None:
+        """Re-sync the dialog from the current settings for reuse (it is built
+        once and reopened). Refreshes every control, the appearance revert
+        snapshot, and the (possibly changed) profile lists — cheap compared to
+        rebuilding the whole dialog."""
+        self._loading = True
+        self._capture_original_appearance()
+        self._load_from_settings()
+        self._sync_license_mode()
+        self._rebuild_profiles_list()
+        self._rebuild_batch_profiles_list()
+        self._nav.setCurrentRow(0)
         self._loading = False
 
     # --- page construction ----------------------------------------------
