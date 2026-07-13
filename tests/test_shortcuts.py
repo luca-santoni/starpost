@@ -58,3 +58,49 @@ def test_no_duplicate_keys():
     filekeys = [k for sid, (k, _) in shortcuts.SHORTCUTS.items() if sid in file_ids]
     assert len(appwide) == len(set(appwide))
     assert len(filekeys) == len(set(filekeys))
+
+
+def _make_window():
+    """A shown, active MainWindow with the scenes/screenplays warning dialog off
+    (it's modal and would hang a test that switches to those tabs)."""
+    import starpost.gui.main_window as mw
+    from PySide6.QtWidgets import QApplication
+    from starpost.core.settings import Settings
+
+    s = Settings()
+    s.show_scenes_warning = False
+    win = mw.MainWindow(s)
+    win.show()
+    win.activateWindow()
+    QApplication.processEvents()
+    return win
+
+
+def test_tab_keys_switch_tabs(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    win = _make_window()
+    try:
+        for qtkey, index in (
+            (Qt.Key_F2, 1), (Qt.Key_F3, 2), (Qt.Key_F4, 3), (Qt.Key_F1, 0),
+        ):
+            QTest.keyClick(win, qtkey)
+            assert win._center_tabs.currentIndex() == index
+        QTest.keyClick(win, Qt.Key_2)
+        assert win._left_tabs.currentIndex() == 1
+        QTest.keyClick(win, Qt.Key_1)
+        assert win._left_tabs.currentIndex() == 0
+    finally:
+        win.close()
+
+
+def test_tab_tooltips_show_keys(app):
+    win = _make_window()
+    try:
+        for i, key_text in enumerate(("(F1)", "(F2)", "(F3)", "(F4)")):
+            assert key_text in win._center_tabs.tabToolTip(i)
+        assert "(1)" in win._left_tabs.tabToolTip(0)
+        assert "(2)" in win._left_tabs.tabToolTip(1)
+    finally:
+        win.close()

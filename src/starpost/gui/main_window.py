@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QThread, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -41,6 +42,7 @@ from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon, logo_pixmap
 from starpost.gui.widgets import BarMenu, BarMenuButton, UniformTabBar
+from starpost.gui import shortcuts
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
@@ -168,6 +170,7 @@ class MainWindow(QMainWindow):
 
         self._build_layout()
         self._build_toolbar()
+        self._init_shortcuts()
 
         # Resize the frameless window by pressing near an edge (app-wide filter,
         # since child widgets otherwise swallow the edge mouse events).
@@ -252,6 +255,10 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._plot_tab, "Plots")
         tabs.addTab(self.scene_view, "Scenes")
         tabs.addTab(self.screenplay_view, "Screenplays")
+        tabs.setTabToolTip(0, shortcuts.hint("Switch to Reports", "tab_reports"))
+        tabs.setTabToolTip(1, shortcuts.hint("Switch to Plots", "tab_plots"))
+        tabs.setTabToolTip(2, shortcuts.hint("Switch to Scenes", "tab_scenes"))
+        tabs.setTabToolTip(3, shortcuts.hint("Switch to Screenplays", "tab_screenplays"))
         # The selection panel shows only the checklist for the active centre tab:
         # Reports list on Reports, Monitor plots on Plots, Scenes on Scenes.
         self._center_tabs = tabs
@@ -262,6 +269,9 @@ class MainWindow(QMainWindow):
         left_tabs.setTabBar(UniformTabBar())
         left_tabs.addTab(self.file_list, "Files")
         left_tabs.addTab(self.data_list, "Data")
+        left_tabs.setTabToolTip(0, shortcuts.hint("Switch to Files", "tab_files"))
+        left_tabs.setTabToolTip(1, shortcuts.hint("Switch to Data", "tab_data"))
+        self._left_tabs = left_tabs
         # Preserve right-click-to-sort, now on the Files tab itself.
         left_bar = left_tabs.tabBar()
         left_bar.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -293,6 +303,22 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(outer)
         self.setCentralWidget(container)
+
+    def _init_shortcuts(self) -> None:
+        """App-wide keyboard shortcuts. Tab keys always fire; the contextual
+        keys act on the active centre tab. The Run-batch menu actions carry
+        their own shortcuts (see _build_toolbar), so they are not bound here."""
+        def bind(shortcut_id: str, slot) -> None:
+            sc = QShortcut(QKeySequence(shortcuts.key(shortcut_id)), self)
+            sc.setContext(Qt.ShortcutContext.WindowShortcut)
+            sc.activated.connect(slot)
+
+        bind("tab_files", lambda: self._left_tabs.setCurrentIndex(0))
+        bind("tab_data", lambda: self._left_tabs.setCurrentIndex(1))
+        bind("tab_reports", lambda: self._center_tabs.setCurrentIndex(0))
+        bind("tab_plots", lambda: self._center_tabs.setCurrentIndex(1))
+        bind("tab_scenes", lambda: self._center_tabs.setCurrentIndex(2))
+        bind("tab_screenplays", lambda: self._center_tabs.setCurrentIndex(3))
 
     def _on_center_tab_changed(self, index: int) -> None:
         """Sync the selection panel to the active centre tab: the Reports
