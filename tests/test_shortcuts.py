@@ -104,3 +104,32 @@ def test_tab_tooltips_show_keys(app):
         assert "(2)" in win._left_tabs.tabToolTip(1)
     finally:
         win.close()
+
+
+def test_batch_shortcuts_trigger_and_display(app, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    import starpost.gui.main_window as mw
+
+    calls = []
+    # Patch on the class BEFORE construction: the menu binds the bound methods
+    # at addAction time.
+    monkeypatch.setattr(mw.MainWindow, "_run_batch", lambda self: calls.append("full"))
+    monkeypatch.setattr(
+        mw.MainWindow, "_run_express_batch", lambda self: calls.append("express")
+    )
+    win = _make_window()
+    try:
+        QTest.keyClick(win, Qt.Key_B, Qt.ControlModifier | Qt.ShiftModifier)
+        QTest.keyClick(win, Qt.Key_E, Qt.ControlModifier | Qt.ShiftModifier)
+        assert calls == ["full", "express"]
+        # The menu entries display the keys (rendered right-aligned by Qt).
+        texts = {
+            a.text(): a.shortcut().toString()
+            for a in win._run_button.menu().actions()
+        }
+        assert texts["Full Batch"] == "Ctrl+Shift+B"
+        assert texts["Express batch"] == "Ctrl+Shift+E"
+    finally:
+        win.close()
