@@ -72,8 +72,17 @@ and rejected (QSS restyling + frameless drag-handle churn for the same result).
      runs — process events, or assert via a monkeypatched `showMenu`).
   4. Hover does not open a closed menu (deliver an enter event to the button;
      its menu must remain hidden).
-- `tests/test_main_window.py`: only the class-name references change (the
-  structure/wiring tests don't exercise hover semantics).
+- `tests/test_main_window.py`: `test_hover_menu_tool_button_respects_disabled_state`
+  is deleted (it tests the removed `enterEvent` hover-open; its underlying
+  concern — a disabled button must not open its menu mid-batch — is covered
+  more strongly by a new widgets test that the hover-switch handoff skips
+  disabled buttons). `test_hover_menu_tool_button_clears_leftover_hover`
+  survives (the helper it tests remains); it and the structure/wiring tests
+  only need class-name updates.
+- New widgets test 5: the hover-switch handoff skips a disabled menu button
+  (the open menu stays; the disabled button's menu is not opened).
+- New widgets test 6: hiding the menu clears the owner button's stuck hover
+  outline (the relocated `_clear_stuck_hover` trigger).
 
 ## Known consequences (accepted)
 
