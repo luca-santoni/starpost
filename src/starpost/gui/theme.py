@@ -298,7 +298,7 @@ QToolBar#mainToolBar QToolButton {
     background: transparent;
     color: $text;
     border: none;
-    border-radius: 4px;
+    border-radius: 0;
     padding: 13px 6px;
     margin: 0;
 }
