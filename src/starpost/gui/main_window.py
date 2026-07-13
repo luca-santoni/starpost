@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
         self._toolbar_logo = QLabel()
         self._toolbar_logo.setObjectName("toolbarLogo")
         self._toolbar_logo.setPixmap(
-            logo_pixmap().scaledToHeight(24, Qt.TransformationMode.SmoothTransformation)
+            logo_pixmap().scaledToHeight(32, Qt.TransformationMode.SmoothTransformation)
         )
         self._toolbar_logo.setContentsMargins(4, 0, 10, 0)
         tb.addWidget(self._toolbar_logo)
