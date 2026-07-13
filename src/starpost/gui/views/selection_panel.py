@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
+from starpost.gui import shortcuts
 from starpost.gui.plot_style import _COLORS, _display_name
 from starpost.gui.widgets import enable_check_range
 
@@ -621,11 +622,15 @@ class SelectionPanel(QWidget):
         prof_row.addWidget(load_btn)
         prof_row.addWidget(save_btn)
 
+        # Per-section button references so keyboard shortcuts can press them
+        # (populated by _group / _run_group_box; "Saved views" has no section).
+        self._section_buttons: dict[str, dict[str, QPushButton]] = {}
+
         # Only one checklist is shown at a time, matching the active centre tab
         # (Reports table vs. Plots view); the visible one expands to fill the
         # panel. set_active_section toggles between them.
-        self._reports_group = self._group("Reports", self.reports)
-        self._plots_group = self._group("Monitor plots", self.plots)
+        self._reports_group = self._group("Reports", self.reports, section="reports")
+        self._plots_group = self._group("Monitor plots", self.plots, section="plots")
         self._scenes_group = self._run_group_box(
             "Scenes", self.scenes,
             run_text="Run",
@@ -634,6 +639,7 @@ class SelectionPanel(QWidget):
             clear_tip="Delete all rendered scene stills",
             on_run=self.run_scenes_requested,
             on_clear=self.clear_scenes_requested,
+            section="scenes",
         )
         self._screenplays_group = self._run_group_box(
             "Screenplays", self.screenplays,
@@ -643,6 +649,7 @@ class SelectionPanel(QWidget):
             clear_tip="Remove all recorded screenplay movies from the workspace",
             on_run=self.record_screenplays_requested,
             on_clear=self.clear_screenplays_requested,
+            section="screenplays",
         )
         self._saved_views_group = self._group("Saved views", self.views)
 
@@ -738,16 +745,43 @@ class SelectionPanel(QWidget):
         if self._active_section in self._split_sizes:
             self._split.setSizes(self._split_sizes[self._active_section])
 
-    def _group(self, title: str, lst: _CheckList) -> QGroupBox:
+    def click_select_all(self) -> None:
+        """Press the active section's Select all button (keyboard shortcut)."""
+        buttons = self._section_buttons.get(self._active_section)
+        if buttons:
+            buttons["select_all"].click()
+
+    def click_clear_selection(self) -> None:
+        """Press the active section's Clear (deselect) button (keyboard shortcut).
+        Never the destructive "Clear scenes/screenplays" button."""
+        buttons = self._section_buttons.get(self._active_section)
+        if buttons:
+            buttons["clear"].click()
+
+    def click_run(self) -> None:
+        """Press the active section's Run/Record button; no-op on sections
+        without one (Reports, Plots)."""
+        buttons = self._section_buttons.get(self._active_section)
+        if buttons and "run" in buttons:
+            buttons["run"].click()
+
+    def _group(
+        self, title: str, lst: _CheckList, section: str | None = None
+    ) -> QGroupBox:
         # Right-clicking the title sorts this list A–Z / Z–A.
         box = _SortableGroupBox(
             title, on_sort=lambda gp, lst=lst: self._show_sort_menu(lst, gp)
         )
         box.setToolTip("Right-click the title to sort A–Z / Z–A")
         all_on = QPushButton("Select all")
-        all_on.setToolTip(f"Select every entry under {title}")
         all_off = QPushButton("Clear")
-        all_off.setToolTip(f"Deselect every entry under {title}")
+        on_tip = f"Select every entry under {title}"
+        off_tip = f"Deselect every entry under {title}"
+        if section is not None:
+            on_tip = shortcuts.hint(on_tip, "select_all")
+            off_tip = shortcuts.hint(off_tip, "clear_selection")
+        all_on.setToolTip(on_tip)
+        all_off.setToolTip(off_tip)
         all_on.clicked.connect(lambda: (lst.set_all(True), self.selection_changed.emit()))
         all_off.clicked.connect(lambda: (lst.set_all(False), self.selection_changed.emit()))
         row = QHBoxLayout()
@@ -756,10 +790,23 @@ class SelectionPanel(QWidget):
         v = QVBoxLayout(box)
         v.addLayout(row)
         v.addWidget(lst)
+        if section is not None:
+            self._section_buttons[section] = {"select_all": all_on, "clear": all_off}
         return box
 
-    def _run_group_box(self, title, lst, run_text, run_tip, clear_text,
-                       clear_tip, on_run, on_clear) -> QGroupBox:
+    def _run_group_box(
+        self,
+        title,
+        lst,
+        run_text,
+        run_tip,
+        clear_text,
+        clear_tip,
+        on_run,
+        on_clear,
+        *,
+        section: str,
+    ) -> QGroupBox:
         """Like ``_group`` but with a prominent action button at the top (Run /
         Record) plus a destructive clear button, emitting the given signals."""
         box = _SortableGroupBox(
@@ -767,12 +814,16 @@ class SelectionPanel(QWidget):
         )
         box.setToolTip("Right-click the title to sort A–Z / Z–A")
         run = QPushButton(run_text)
-        run.setToolTip(run_tip)
+        run.setToolTip(shortcuts.hint(run_tip, "run_render"))
         run.clicked.connect(lambda: on_run.emit())
         all_on = QPushButton("Select all")
-        all_on.setToolTip(f"Select every entry under {title}")
         all_off = QPushButton("Clear")
-        all_off.setToolTip(f"Deselect every entry under {title}")
+        on_tip = f"Select every entry under {title}"
+        off_tip = f"Deselect every entry under {title}"
+        on_tip = shortcuts.hint(on_tip, "select_all")
+        off_tip = shortcuts.hint(off_tip, "clear_selection")
+        all_on.setToolTip(on_tip)
+        all_off.setToolTip(off_tip)
         all_on.clicked.connect(
             lambda: (lst.set_all(True), self.selection_changed.emit())
         )
@@ -795,6 +846,9 @@ class SelectionPanel(QWidget):
         v.addWidget(run)
         v.addLayout(row)
         v.addWidget(lst)
+        self._section_buttons[section] = {
+            "select_all": all_on, "clear": all_off, "run": run,
+        }
         return box
 
     def _show_sort_menu(self, lst: _CheckList, global_pos) -> None:

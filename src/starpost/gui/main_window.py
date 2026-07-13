@@ -319,6 +319,9 @@ class MainWindow(QMainWindow):
         bind("tab_plots", lambda: self._center_tabs.setCurrentIndex(1))
         bind("tab_scenes", lambda: self._center_tabs.setCurrentIndex(2))
         bind("tab_screenplays", lambda: self._center_tabs.setCurrentIndex(3))
+        bind("select_all", self.selection.click_select_all)
+        bind("clear_selection", self.selection.click_clear_selection)
+        bind("run_render", self.selection.click_run)
 
     def _on_center_tab_changed(self, index: int) -> None:
         """Sync the selection panel to the active centre tab: the Reports

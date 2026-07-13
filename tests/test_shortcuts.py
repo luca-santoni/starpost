@@ -133,3 +133,77 @@ def test_batch_shortcuts_trigger_and_display(app, monkeypatch):
         assert texts["Express batch"] == "Ctrl+Shift+E"
     finally:
         win.close()
+
+
+def test_selection_panel_click_methods(app):
+    """click_select_all / click_clear_selection / click_run press the buttons of
+    whichever section is active; click_run is a no-op off Scenes/Screenplays."""
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    panel = SelectionPanel()
+    changed = []
+    panel.selection_changed.connect(lambda: changed.append("sel"))
+    runs = []
+    panel.run_scenes_requested.connect(lambda: runs.append("scenes"))
+    panel.record_screenplays_requested.connect(lambda: runs.append("screenplays"))
+
+    panel.set_active_section("reports")
+    panel.click_select_all()
+    panel.click_clear_selection()
+    assert changed == ["sel", "sel"]  # empty list, but the buttons still emit
+    panel.click_run()
+    assert runs == []  # Reports has no Run button
+
+    panel.set_active_section("scenes")
+    panel.click_run()
+    panel.set_active_section("screenplays")
+    panel.click_run()
+    assert runs == ["scenes", "screenplays"]
+    panel.close()
+
+
+def test_run_shortcut_contextual(app):
+    """Ctrl+R triggers Run on the Scenes tab, Record on Screenplays, nothing on
+    Reports; Ctrl+Shift+A/D reach the active panel's buttons."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    win = _make_window()
+    try:
+        runs = []
+        win.selection.run_scenes_requested.connect(lambda: runs.append("scenes"))
+        win.selection.record_screenplays_requested.connect(
+            lambda: runs.append("screenplays")
+        )
+        QTest.keyClick(win, Qt.Key_R, Qt.ControlModifier)  # Reports tab: no-op
+        assert runs == []
+
+        win._center_tabs.setCurrentIndex(2)  # Scenes
+        QApplication.processEvents()
+        QTest.keyClick(win, Qt.Key_R, Qt.ControlModifier)
+        win._center_tabs.setCurrentIndex(3)  # Screenplays
+        QApplication.processEvents()
+        QTest.keyClick(win, Qt.Key_R, Qt.ControlModifier)
+        assert runs == ["scenes", "screenplays"]
+
+        changed = []
+        win.selection.selection_changed.connect(lambda: changed.append(1))
+        win._center_tabs.setCurrentIndex(0)  # Reports
+        QApplication.processEvents()
+        QTest.keyClick(win, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
+        QTest.keyClick(win, Qt.Key_D, Qt.ControlModifier | Qt.ShiftModifier)
+        assert len(changed) == 2
+    finally:
+        win.close()
+
+
+def test_selection_tooltips_show_keys(app):
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    panel = SelectionPanel()
+    assert "(Ctrl+Shift+A)" in panel._section_buttons["reports"]["select_all"].toolTip()
+    assert "(Ctrl+Shift+D)" in panel._section_buttons["reports"]["clear"].toolTip()
+    assert "(Ctrl+R)" in panel._section_buttons["scenes"]["run"].toolTip()
+    assert "(Ctrl+R)" in panel._section_buttons["screenplays"]["run"].toolTip()
+    panel.close()
