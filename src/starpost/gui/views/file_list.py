@@ -790,11 +790,14 @@ class FileListPanel(QWidget):
                 sort_actions[act] = mode
             menu.addSeparator()
             rename_act = menu.addAction("Rename")
+            # Delete folder dissolves the folder but keeps its files, so it
+            # does not get the Del hint; that key actually runs Remove below.
             delete_act = menu.addAction("Delete folder")
+            remove_act = menu.addAction("Remove")
             menu.addSeparator()
             props_act = menu.addAction("Properties")
             for act, shortcut_id in (
-                (delete_act, "file_remove"),
+                (remove_act, "file_remove"),
                 (props_act, "file_props"),
             ):
                 act.setShortcut(QKeySequence(shortcuts.key(shortcut_id)))
@@ -810,6 +813,13 @@ class FileListPanel(QWidget):
                 self._rename_folder(item)
             elif chosen is delete_act:
                 self._delete_folder(item)
+            elif chosen is remove_act:
+                # Removing acts on the selection; make the right-clicked
+                # folder part of it when nothing was selected.
+                if not item.isSelected():
+                    self._tree.setCurrentItem(item)
+                    item.setSelected(True)
+                self._remove_selected()
             elif chosen is props_act:
                 self._folder_properties(item)
             return

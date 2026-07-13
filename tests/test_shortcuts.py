@@ -51,13 +51,11 @@ def test_expected_bindings():
 
 
 def test_no_duplicate_keys():
-    """App-wide keys must be unique among themselves; the file-list keys (their
-    own focus scope) must be unique among themselves."""
-    file_ids = {"file_load", "file_props", "file_remove"}
-    appwide = [k for sid, (k, _) in shortcuts.SHORTCUTS.items() if sid not in file_ids]
-    filekeys = [k for sid, (k, _) in shortcuts.SHORTCUTS.items() if sid in file_ids]
-    assert len(appwide) == len(set(appwide))
-    assert len(filekeys) == len(set(filekeys))
+    """Every key in the table must be globally unique: a file-list key that
+    equalled an app-wide key would be ambiguous (and dead) with the tree
+    focused, since both shortcut contexts would match."""
+    keys = [k for (k, _label) in shortcuts.SHORTCUTS.values()]
+    assert len(keys) == len(set(keys))
 
 
 def _make_window():
