@@ -311,10 +311,10 @@ def install_combo_accent(app) -> None:
         app.installEventFilter(_combo_installer)
 
 
-class HoverMenu(QMenu):
+class BarMenu(QMenu):
     """A menu-bar-style dropdown for the top bar's menu buttons.
 
-    Opened by clicking its :class:`HoverMenuToolButton` (via ``InstantPopup``),
+    Opened by clicking its :class:`BarMenuButton` (via ``InstantPopup``),
     it behaves like a menu on a traditional menu bar: it stays open no matter
     where the pointer goes, and only a click anywhere else (or Esc) dismisses
     it — both native QMenu popup behaviours.
@@ -349,7 +349,7 @@ class HoverMenu(QMenu):
         if self._sibling_bar is None:
             return
         pos = event.globalPosition().toPoint()
-        for btn in self._sibling_bar.findChildren(HoverMenuToolButton):
+        for btn in self._sibling_bar.findChildren(BarMenuButton):
             if (
                 btn is not self._owner
                 and btn.isEnabled()
@@ -366,15 +366,15 @@ class HoverMenu(QMenu):
         super().hideEvent(event)
         # The grab swallowed the owner's leave event; drop its stale hover
         # outline on every close path (outside click, Esc, handoff).
-        if isinstance(self._owner, HoverMenuToolButton):
+        if isinstance(self._owner, BarMenuButton):
             self._owner._clear_stuck_hover()
 
 
-class HoverMenuToolButton(QToolButton):
-    """A toolbar button for a :class:`HoverMenu` dropdown. Opens on click only
+class BarMenuButton(QToolButton):
+    """A toolbar button for a :class:`BarMenu` dropdown. Opens on click only
     (callers set ``InstantPopup``); hovering never opens a closed menu. Hover
     *does* switch menus while a sibling's menu is already open — that handoff
-    lives in :class:`HoverMenu`, which holds the mouse grab at that point."""
+    lives in :class:`BarMenu`, which holds the mouse grab at that point."""
 
     def _clear_stuck_hover(self) -> None:
         """After the popup closes, the button keeps its hover (auto-raise) outline:

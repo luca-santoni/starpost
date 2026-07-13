@@ -208,13 +208,13 @@ def _shown_bar_menu():
     from PySide6.QtCore import QRect
     from PySide6.QtWidgets import QWidget
 
-    from starpost.gui.widgets import HoverMenu, HoverMenuToolButton
+    from starpost.gui.widgets import BarMenu, BarMenuButton
 
     bar = QWidget()
     bar.setGeometry(QRect(0, 0, 400, 30))
-    btn = HoverMenuToolButton(bar)
+    btn = BarMenuButton(bar)
     btn.setGeometry(QRect(0, 0, 80, 30))
-    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
+    menu = BarMenu(btn, owner=btn, sibling_bar=bar)
     menu.addAction("A")
     menu.setGeometry(QRect(200, 200, 120, 60))
     menu.show()
@@ -226,9 +226,9 @@ def _other_menu_button(bar):
     from PySide6.QtCore import QRect
     from PySide6.QtWidgets import QMenu
 
-    from starpost.gui.widgets import HoverMenuToolButton
+    from starpost.gui.widgets import BarMenuButton
 
-    other = HoverMenuToolButton(bar)
+    other = BarMenuButton(bar)
     other.setGeometry(QRect(100, 0, 80, 30))
     other_menu = QMenu(other)
     other_menu.addAction("B")
@@ -302,9 +302,9 @@ def test_bar_menu_button_hover_does_not_open(app, monkeypatch):
     from PySide6.QtGui import QEnterEvent
     from PySide6.QtWidgets import QMenu
 
-    from starpost.gui.widgets import HoverMenuToolButton
+    from starpost.gui.widgets import BarMenuButton
 
-    btn = HoverMenuToolButton()
+    btn = BarMenuButton()
     menu = QMenu(btn)
     menu.addAction("A")
     btn.setMenu(menu)

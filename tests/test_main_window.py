@@ -2403,15 +2403,15 @@ def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):
     assert opened.get("express") is True
 
 
-def test_hover_menu_tool_button_clears_leftover_hover(app, monkeypatch):
+def test_bar_menu_button_clears_leftover_hover(app, monkeypatch):
     """After its menu closes, the button drops the stuck hover (auto-raise) outline
     when the pointer has left it, but keeps it while still hovered."""
     from PySide6.QtCore import QPoint, Qt
 
     import starpost.gui.widgets as widgets
-    from starpost.gui.widgets import HoverMenuToolButton
+    from starpost.gui.widgets import BarMenuButton
 
-    btn = HoverMenuToolButton()
+    btn = BarMenuButton()
     btn.resize(80, 24)
 
     # Pointer left the button → the leftover hover state is cleared.

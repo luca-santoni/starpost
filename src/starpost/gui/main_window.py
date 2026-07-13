@@ -40,7 +40,7 @@ from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
 from starpost.gui.icons import app_icon, logo_pixmap
-from starpost.gui.widgets import HoverMenu, HoverMenuToolButton, UniformTabBar
+from starpost.gui.widgets import BarMenu, BarMenuButton, UniformTabBar
 from starpost.gui.views.data_list import DataListPanel
 from starpost.gui.views.file_list import FileListPanel
 from starpost.gui.views.log_console import LogConsole
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         # File menu: toolbar-level access to the Files tab's add dialogs and
         # the Data tab's portable-CSV import/export — same slots, second entry
         # point. Click-opens like Run batch.
-        self._file_button = HoverMenuToolButton()
+        self._file_button = BarMenuButton()
         self._file_button.setText("File")
         self._file_button.setAutoRaise(True)
         self._file_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -420,7 +420,7 @@ class MainWindow(QMainWindow):
         self._file_button.setToolTip(
             "Add .sim files or folders, import or export portable data CSVs"
         )
-        file_menu = HoverMenu(self._file_button, owner=self._file_button, sibling_bar=tb)
+        file_menu = BarMenu(self._file_button, owner=self._file_button, sibling_bar=tb)
         # Built with an explicit QMenu(parent) + addMenu(menu) rather than the
         # addMenu(title) factory: the factory's returned QMenu has no Python
         # reference of its own, and PySide6 deletes its C++ object once the
@@ -436,7 +436,7 @@ class MainWindow(QMainWindow):
         self._file_menu = file_menu
         tb.addWidget(self._file_button)
 
-        self._run_button = HoverMenuToolButton()
+        self._run_button = BarMenuButton()
         self._run_button.setText("Run batch")
         self._run_button.setAutoRaise(True)
         self._run_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -445,7 +445,7 @@ class MainWindow(QMainWindow):
             "Run a batch export: Full Batch (full wizard) or Express batch "
             "(run a saved profile)"
         )
-        run_menu = HoverMenu(self._run_button, owner=self._run_button, sibling_bar=tb)
+        run_menu = BarMenu(self._run_button, owner=self._run_button, sibling_bar=tb)
         run_menu.addAction("Full Batch", self._run_batch)
         run_menu.addAction("Express batch", self._run_express_batch)
         self._run_button.setMenu(run_menu)
