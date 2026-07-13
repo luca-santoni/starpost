@@ -297,7 +297,8 @@ def test_bar_menu_handoff_skips_disabled_button(app, monkeypatch):
 
 def test_bar_menu_button_hover_does_not_open(app, monkeypatch):
     """Hovering a menu button never opens its closed menu — opening is
-    click-only (the button's InstantPopup mode, handled natively by Qt)."""
+    click-only (the button's InstantPopup mode, handled natively by Qt)
+    (regression guard against re-adding an enterEvent hover-open override)."""
     from PySide6.QtCore import QPointF
     from PySide6.QtGui import QEnterEvent
     from PySide6.QtWidgets import QMenu

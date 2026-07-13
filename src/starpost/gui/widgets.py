@@ -324,6 +324,11 @@ class BarMenu(QMenu):
     enabled menu button on ``sibling_bar``, the menu hands off: it closes and
     opens that button's menu, so the bar's dropdowns can be browsed with a
     single click, menu-bar style.
+
+    One limitation: while a child submenu (e.g. File ▸ Add) is the active
+    popup, Qt delivers the grabbed moves to it, not to this menu, so the
+    handoff pauses until the pointer re-crosses this menu (which closes the
+    submenu) — a fast move straight to the other button needs a click.
     """
 
     def __init__(
@@ -367,7 +372,10 @@ class BarMenu(QMenu):
         # The grab swallowed the owner's leave event; drop its stale hover
         # outline on every close path (outside click, Esc, handoff).
         if isinstance(self._owner, BarMenuButton):
-            self._owner._clear_stuck_hover()
+            try:
+                self._owner._clear_stuck_hover()
+            except RuntimeError:  # owner already destroyed (app teardown)
+                pass
 
 
 class BarMenuButton(QToolButton):

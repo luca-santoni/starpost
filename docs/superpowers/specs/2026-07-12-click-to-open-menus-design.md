@@ -91,6 +91,10 @@ and rejected (QSS restyling + frameless drag-handle churn for the same result).
 - Clicking a non-dropdown bar action (e.g. Export…) while a menu is open
   spends that click on dismissing the menu (native popup behavior); a second
   click activates the action.
+- While the File menu's "Add ▸" submenu is the active popup, Qt routes the
+  grabbed mouse moves to it, so the hover-switch handoff pauses until the
+  pointer re-crosses the parent menu (closing the submenu); a straight move
+  to the other menu button then needs a click.
 
 ## Changelog
 
