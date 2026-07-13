@@ -3,6 +3,21 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [Unreleased]
+
+### New Features
+- **Keyboard shortcuts** — the main views and actions now have hotkeys, shown
+  in menus and tooltips (hover a tab or button to see its key):
+  **1**/**2** switch the left panel to Files/Data; **F1**–**F4** switch the
+  centre tabs (Reports, Plots, Scenes, Screenplays); **Ctrl+Shift+B** /
+  **Ctrl+Shift+E** open Full Batch / Express batch; **Ctrl+Shift+A** /
+  **Ctrl+Shift+D** select-all / clear the current checklist; **Ctrl+R** runs
+  (Scenes) or records (Screenplays); **Alt+Shift+S** toggles Smooth data on
+  the Plots tab; and in the Files list **Ctrl+L** loads, **Ctrl+P** shows
+  properties, **Delete** removes (with the usual confirmation). The Files
+  right-click menu's **Open** is now **Load file**, and it gains a **Remove**
+  entry.
+
 ## [2.5.0] — 2026-07-13
 
 ### New Features
