@@ -1,5 +1,49 @@
 # Task: Fix the GUI test-suite slowdown / on-screen hang (2.4.0, Windows)
 
+> **RESOLVED** — see "Resolution" below. The original handoff's diagnosis of the
+> *symptom* was correct, but its recommended *fix* (adopt `pytest-qt`/`qtbot`)
+> does not work, and per-test widget disposal is not safe in this PySide6 build.
+> The rest of this document (from "Symptom" on) is the original handoff, kept for
+> context; read the Resolution first.
+
+## Resolution (implemented)
+
+**Fix: run each test file in its own process** — `scripts/run_tests.py` (and
+`python scripts/run_tests.py` is now the documented full-suite command). It runs
+the files in a bounded parallel pool. Result on Linux: the full suite drops from
+~70s (and pathological minutes / a Windows on-screen hang) to **~13s wall time**,
+with no widget deletion and no native crashes. Cross-platform (spawns
+subprocesses; no `fork`), so it fixes the Windows hang too.
+
+Why the handoff's `pytest-qt` approach was abandoned, and why disposal isn't
+safe here (all verified on Linux, `offscreen`):
+
+1. **`pytest-qt`/`qtbot` does not reduce the widget count.** Its teardown does
+   `close()` + `deleteLater()` + `processEvents()`, but Qt's `processEvents()`
+   deliberately never dispatches `DeferredDelete` events, so `deleteLater()`
+   frees nothing in a loop-less test run. Measured: `qtbot.addWidget` on 50
+   widgets left all 50 alive; on `test_main_window.py` it dropped the live count
+   only ~19.5k → ~13k, nowhere near flat.
+2. **The widgets can't be GC'd.** They're pinned by app-rooted references — the
+   2.4.0 frameless title bar installs `FramelessResizeFilter` on the
+   *application* (`main_window.py:174`), plus signal-connected bound methods — so
+   cyclic GC can't reclaim them. `gc.collect()` between tests changes nothing.
+3. **Actually destroying them crashes.** Freeing requires flushing deferred
+   deletes / spinning a real event loop. Plain dialogs (`SettingsDialog`) then
+   dispose cleanly (count → 0), but any window containing a **pyqtgraph** plot
+   (`MainWindow`, `BatchRunDialog`) **segfaults** on teardown — on Linux, both
+   `offscreen` and `minimal` platforms. This is the pyqtgraph-destroy fragility
+   the "Pitfalls" section already warned about; it is not a fixable teardown-code
+   bug. Even *selective* disposal that skips the plot windows still crashed
+   inside the real suite.
+
+Process isolation sidesteps all of this: no widget is ever deleted, and no single
+process lives long enough to accumulate a slow widget count.
+
+---
+
+_Original handoff follows (diagnosis accurate; recommended fix superseded)._
+
 > Handoff report. Self-contained — no prior conversation context needed.
 > Repo: `starpost` (PySide6 desktop app). **Implement and verify this on Linux**,
 > then confirm on Windows (offscreen). The mid-test widget teardown that fixes

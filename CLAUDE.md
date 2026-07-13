@@ -27,13 +27,24 @@ starpost                         # console entry point from pip install -e .
 
 Tests and lint:
 ```bash
-python -m pytest                             # full suite
+python scripts/run_tests.py                  # full suite (each file isolated; use this)
 python -m pytest tests/test_store.py         # one file
 python -m pytest tests/test_store.py::test_x # one test
 ruff check .                                 # lint (line-length 100, py311 target)
 ```
 GUI tests instantiate a real `QApplication`. On a headless machine, prefix with
 `QT_QPA_PLATFORM=offscreen`.
+
+**Run the full suite with `scripts/run_tests.py`, not a bare `python -m pytest`.**
+The GUI tests share one `QApplication` and never dispose their top-level widgets;
+in this PySide6 build the widgets can't be safely reclaimed mid-run (GC can't —
+they're pinned by app-level event filters and signal-bound methods — and
+destroying the pyqtgraph-backed windows segfaults). So a single in-process run
+accumulates widgets until `apply_theme`'s app-wide restyle is pathologically slow
+(minutes late in the run; an on-screen hang on Windows). The runner gives each
+file a fresh process, capping accumulation, and runs them in a bounded parallel
+pool (`STARPOST_TEST_JOBS` to cap). Single-file `pytest` is already one process,
+so it's fine directly. See `GUI_TEST_PERF_REPORT.md`.
 
 The version is the single source of truth in `__version__` in `src/starpost/__init__.py`;
 `pyproject.toml` derives its version from there via setuptools' dynamic `attr`. Packaging
