@@ -237,3 +237,64 @@ def test_smooth_shortcut_only_on_plots_tab(app):
         assert "(Alt+Shift+S)" in pv._smooth_check.toolTip()
     finally:
         win.close()
+
+
+@pytest.fixture()
+def file_panel(app, tmp_path):
+    """A shown FileListPanel holding two fake .sim files, first one selected."""
+    from PySide6.QtWidgets import QApplication
+    from starpost.gui.views.file_list import FileListPanel
+
+    sims = []
+    for name in ("a.sim", "b.sim"):
+        p = tmp_path / name
+        p.write_bytes(b"")
+        sims.append(p)
+    panel = FileListPanel()
+    panel._add_paths(sims)
+    panel.show()
+    panel.activateWindow()
+    panel._tree.setFocus()
+    QApplication.processEvents()
+    item = panel._tree.topLevelItem(0)
+    panel._tree.setCurrentItem(item)
+    item.setSelected(True)
+    yield panel
+    panel.close()
+
+
+def test_file_list_ctrl_l_loads_selected(file_panel):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    opened = []
+    file_panel.open_requested.connect(opened.extend)
+    QTest.keyClick(file_panel._tree, Qt.Key_L, Qt.ControlModifier)
+    assert [p.name for p in opened] == ["a.sim"]
+
+
+def test_file_list_ctrl_p_properties(file_panel):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    props = []
+    file_panel.properties_requested.connect(props.append)
+    QTest.keyClick(file_panel._tree, Qt.Key_P, Qt.ControlModifier)
+    assert len(props) == 1 and str(props[0]).endswith("a.sim")
+
+
+def test_file_list_delete_confirms_then_removes(file_panel, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMessageBox
+
+    import starpost.gui.views.file_list as fl
+
+    answers = iter([QMessageBox.No, QMessageBox.Yes])
+    monkeypatch.setattr(
+        fl.QMessageBox, "question", lambda *a, **k: next(answers)
+    )
+    QTest.keyClick(file_panel._tree, Qt.Key_Delete)  # answered No
+    assert len(file_panel.files()) == 2
+    QTest.keyClick(file_panel._tree, Qt.Key_Delete)  # answered Yes
+    assert [p.name for p in file_panel.files()] == ["b.sim"]

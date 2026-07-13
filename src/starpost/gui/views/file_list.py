@@ -12,7 +12,15 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPixmap,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -28,6 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from starpost.gui import shortcuts
 from starpost.gui.theme import DEFAULT_ACCENT, contrast_color
 
 from starpost.gui.widgets import clear_item_view_hover, enable_range_selection
@@ -255,6 +264,18 @@ class FileListPanel(QWidget):
         # the tree's signals, so they don't trigger a save).
         self._tree.itemExpanded.connect(self._on_expansion_changed)
         self._tree.itemCollapsed.connect(self._on_expansion_changed)
+
+        # Keyboard shortcuts, active only while the file tree has focus. The
+        # context menu displays the same keys, but its actions are rebuilt on
+        # every popup — these persistent bindings do the real work.
+        for shortcut_id, slot in (
+            ("file_load", self._load_selected),
+            ("file_props", self._properties_current),
+            ("file_remove", self._remove_selected),
+        ):
+            sc = QShortcut(QKeySequence(shortcuts.key(shortcut_id)), self._tree)
+            sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            sc.activated.connect(slot)
 
         add_files = QPushButton("Add files…")
         add_folder = QPushButton("Add folder…")
@@ -704,6 +725,31 @@ class FileListPanel(QWidget):
             if _is_folder(item):
                 yield from self._iter_all(item)
 
+    def _load_selected(self) -> None:
+        """Queue the selected files for extraction (Ctrl+L), falling back to the
+        current item when nothing is selected. Same signal as the context
+        menu's Load file entry."""
+        paths = [
+            Path(f.data(0, _PATH_ROLE)) for f in self._iter_files() if f.isSelected()
+        ]
+        if not paths:
+            item = self._tree.currentItem()
+            if item is not None and not _is_folder(item):
+                paths = [Path(item.data(0, _PATH_ROLE))]
+        if paths:
+            self.open_requested.emit(paths)
+
+    def _properties_current(self) -> None:
+        """Properties for the current item (Ctrl+P): the folder dialog for a
+        folder, the file-properties signal for a file."""
+        item = self._tree.currentItem()
+        if item is None:
+            return
+        if _is_folder(item):
+            self._folder_properties(item)
+        else:
+            self.properties_requested.emit(item.data(0, _PATH_ROLE))
+
     def _context_menu_at(self, pos) -> None:
         """Show the item context menu, then clear the row's leftover hover
         highlight — the menu grabbed the mouse, so the view never saw the pointer
@@ -747,6 +793,12 @@ class FileListPanel(QWidget):
             delete_act = menu.addAction("Delete folder")
             menu.addSeparator()
             props_act = menu.addAction("Properties")
+            for act, shortcut_id in (
+                (delete_act, "file_remove"),
+                (props_act, "file_props"),
+            ):
+                act.setShortcut(QKeySequence(shortcuts.key(shortcut_id)))
+                act.setShortcutVisibleInContextMenu(True)
             chosen = menu.exec(global_pos)
             if chosen is open_act:
                 self._open_folder(item)
@@ -762,18 +814,35 @@ class FileListPanel(QWidget):
                 self._folder_properties(item)
             return
 
-        # A file: Open acts on every selected file (top-to-bottom); Properties
+        # A file: Load acts on every selected file (top-to-bottom); Properties
         # on just the right-clicked one. With two or more files selected the
-        # action opens them all, so label it "Open All".
+        # action loads them all, so label it "Load files".
         paths = [Path(f.data(0, _PATH_ROLE)) for f in self._iter_files()
                  if f.isSelected()] or [Path(item.data(0, _PATH_ROLE))]
-        open_act = menu.addAction("Open All" if len(paths) >= 2 else "Open")
+        load_act = menu.addAction("Load files" if len(paths) >= 2 else "Load file")
         props_act = menu.addAction("Properties")
+        remove_act = menu.addAction("Remove")
+        for act, shortcut_id in (
+            (load_act, "file_load"),
+            (props_act, "file_props"),
+            (remove_act, "file_remove"),
+        ):
+            # Display only (Qt hides shortcuts in context menus by default);
+            # the always-active bindings are the tree's QShortcuts.
+            act.setShortcut(QKeySequence(shortcuts.key(shortcut_id)))
+            act.setShortcutVisibleInContextMenu(True)
         chosen = menu.exec(global_pos)
-        if chosen is open_act:
+        if chosen is load_act:
             self.open_requested.emit(paths)
         elif chosen is props_act:
             self.properties_requested.emit(item.data(0, _PATH_ROLE))
+        elif chosen is remove_act:
+            # Removing acts on the selection; make the right-clicked item part
+            # of it when nothing was selected.
+            if not item.isSelected():
+                self._tree.setCurrentItem(item)
+                item.setSelected(True)
+            self._remove_selected()
 
     def _clear_confirmed(self) -> None:
         """Clear the panel (files and folders) only after the user confirms."""
