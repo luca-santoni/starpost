@@ -162,12 +162,19 @@ def test_selection_panel_click_methods(app):
     panel.close()
 
 
-def test_run_shortcut_contextual(app):
+def test_run_shortcut_contextual(app, monkeypatch):
     """Ctrl+R triggers Run on the Scenes tab, Record on Screenplays, nothing on
     Reports; Ctrl+Shift+A/D reach the active panel's buttons."""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
+
+    import starpost.gui.main_window as mw
+
+    # The real handlers pop modal "select a scene first" dialogs; patch them
+    # out so the signal spies below observe the shortcut without blocking.
+    monkeypatch.setattr(mw.MainWindow, "_run_scenes", lambda self: None)
+    monkeypatch.setattr(mw.MainWindow, "_record_screenplays", lambda self: None)
 
     win = _make_window()
     try:
