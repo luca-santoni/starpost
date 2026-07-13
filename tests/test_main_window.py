@@ -2403,35 +2403,6 @@ def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):
     assert opened.get("express") is True
 
 
-def test_hover_menu_tool_button_respects_disabled_state(app, monkeypatch):
-    """A disabled HoverMenuToolButton must not pop its menu on enterEvent — hovering
-    over it during a running batch should not defeat the mid-run lockout."""
-    from PySide6.QtCore import QPointF
-    from PySide6.QtGui import QEnterEvent
-    from PySide6.QtWidgets import QMenu
-
-    from starpost.gui.widgets import HoverMenuToolButton
-
-    btn = HoverMenuToolButton()
-    menu = QMenu(btn)
-    menu.addAction("Full Batch")
-    btn.setMenu(menu)
-
-    calls = []
-    monkeypatch.setattr(btn, "showMenu", lambda: calls.append(1))
-
-    def make_enter_event():
-        return QEnterEvent(QPointF(1, 1), QPointF(1, 1), QPointF(1, 1))
-
-    btn.setEnabled(False)
-    btn.enterEvent(make_enter_event())
-    assert calls == []
-
-    btn.setEnabled(True)
-    btn.enterEvent(make_enter_event())
-    assert calls == [1]
-
-
 def test_hover_menu_tool_button_clears_leftover_hover(app, monkeypatch):
     """After its menu closes, the button drops the stuck hover (auto-raise) outline
     when the pointer has left it, but keeps it while still hovered."""

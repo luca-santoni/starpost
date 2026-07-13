@@ -8,6 +8,7 @@ from PySide6.QtCore import (
     QPersistentModelIndex,
     QRect,
     Qt,
+    QTimer,
 )
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
@@ -311,27 +312,19 @@ def install_combo_accent(app) -> None:
 
 
 class HoverMenu(QMenu):
-    """A menu that closes itself when the pointer strays too far from it.
+    """A menu-bar-style dropdown for the top bar's menu buttons.
 
-    A menu popped open on hover (see :class:`HoverMenuToolButton`) has no click
-    to dismiss it, so it would otherwise linger after the user moves away. While
-    a menu is open it holds the mouse grab and keeps receiving move events even
-    when the pointer is outside it, so we watch those and close once the cursor
-    leaves the menu (plus its owning widget) by more than ``CLOSE_MARGIN`` px.
+    Opened by clicking its :class:`HoverMenuToolButton` (via ``InstantPopup``),
+    it behaves like a menu on a traditional menu bar: it stays open no matter
+    where the pointer goes, and only a click anywhere else (or Esc) dismisses
+    it — both native QMenu popup behaviours.
 
-    One exception overrides the margin: moving onto ``sibling_bar`` (the toolbar
-    the owner lives on) — e.g. hovering Export or Settings — closes the menu at
-    once, so those neighbours feel reachable even though the open menu holds the
-    mouse grab.
-
-    A visible child submenu (added with ``addMenu``) is part of the safe
-    region as well, so moving deep into it never closes the parent.
+    While open it holds the mouse grab, so it — not the bar's buttons — sees
+    the pointer crossing the bar. When the pointer lands on a *different*
+    enabled menu button on ``sibling_bar``, the menu hands off: it closes and
+    opens that button's menu, so the bar's dropdowns can be browsed with a
+    single click, menu-bar style.
     """
-
-    #: How far (px) the pointer may move beyond the menu — and its owner widget —
-    #: before the menu auto-closes. Generous enough to forgive small overshoots
-    #: while crossing the gap between the button and the popup.
-    CLOSE_MARGIN = 50
 
     def __init__(
         self,
@@ -340,11 +333,11 @@ class HoverMenu(QMenu):
         sibling_bar: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        # The widget the menu belongs to (e.g. the toolbar button). Kept inside
-        # the safe region so moving back onto it never closes the menu.
+        # The button the menu belongs to: skipped when scanning for handoff
+        # targets, and cleared of its stuck hover outline when the menu hides.
         self._owner = owner
-        # The bar holding the owner (e.g. the main toolbar). Moving onto any of
-        # its *other* items closes the menu immediately, bypassing the margin.
+        # The bar holding the owner; its *other* menu buttons are hover-switch
+        # handoff targets while this menu is open.
         self._sibling_bar = sibling_bar
 
     @staticmethod
@@ -353,56 +346,35 @@ class HoverMenu(QMenu):
 
     def mouseMoveEvent(self, event) -> None:
         super().mouseMoveEvent(event)
+        if self._sibling_bar is None:
+            return
         pos = event.globalPosition().toPoint()
-        # On the owner button itself: always keep the menu open.
-        if self._owner is not None and self._global_rect(self._owner).contains(pos):
-            return
-        # Exception: onto a neighbour in the same bar (Export, Settings, …) —
-        # close now, ahead of the margin forgiveness below.
-        if (
-            self._sibling_bar is not None
-            and self._global_rect(self._sibling_bar).contains(pos)
-        ):
-            self.close()
-            return
-        # Otherwise forgive small overshoots: keep open until the pointer leaves
-        # the menu (or the owner) by more than the margin.
-        m = self.CLOSE_MARGIN
-        if self.frameGeometry().adjusted(-m, -m, m, m).contains(pos):
-            return
-        if self._owner is not None and self._global_rect(self._owner).adjusted(
-            -m, -m, m, m
-        ).contains(pos):
-            return
-        # An open child submenu (e.g. "Add ▸") is a separate popup window that
-        # can extend past the margin — while it is visible, it is safe too.
-        for action in self.actions():
-            sub = action.menu()
+        for btn in self._sibling_bar.findChildren(HoverMenuToolButton):
             if (
-                sub is not None
-                and sub.isVisible()
-                and sub.frameGeometry().adjusted(-m, -m, m, m).contains(pos)
+                btn is not self._owner
+                and btn.isEnabled()
+                and btn.menu() is not None
+                and self._global_rect(btn).contains(pos)
             ):
+                # Hand off: close this menu, then open the hovered button's.
+                # Deferred — showMenu blocks, so this close must unwind first.
+                self.close()
+                QTimer.singleShot(0, btn.showMenu)
                 return
-        self.close()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        # The grab swallowed the owner's leave event; drop its stale hover
+        # outline on every close path (outside click, Esc, handoff).
+        if isinstance(self._owner, HoverMenuToolButton):
+            self._owner._clear_stuck_hover()
 
 
 class HoverMenuToolButton(QToolButton):
-    """A toolbar button whose attached menu drops on hover (mouse-enter) as well
-    as on click. Qt has no native hover-popup mode, so we pop the menu from
-    ``enterEvent``; the guard stops it re-opening while it is already showing.
-
-    Use a :class:`HoverMenu` as the attached menu so it also closes itself when
-    the pointer wanders away."""
-
-    def enterEvent(self, event):
-        super().enterEvent(event)
-        if not self.isEnabled():
-            return
-        menu = self.menu()
-        if menu is not None and not menu.isVisible():
-            self.showMenu()  # blocks until the menu is dismissed
-            self._clear_stuck_hover()
+    """A toolbar button for a :class:`HoverMenu` dropdown. Opens on click only
+    (callers set ``InstantPopup``); hovering never opens a closed menu. Hover
+    *does* switch menus while a sibling's menu is already open — that handoff
+    lives in :class:`HoverMenu`, which holds the mouse grab at that point."""
 
     def _clear_stuck_hover(self) -> None:
         """After the popup closes, the button keeps its hover (auto-raise) outline:

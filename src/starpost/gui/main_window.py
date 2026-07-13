@@ -411,7 +411,7 @@ class MainWindow(QMainWindow):
 
         # File menu: toolbar-level access to the Files tab's add dialogs and
         # the Data tab's portable-CSV import/export — same slots, second entry
-        # point. Hover-opens like Run batch.
+        # point. Click-opens like Run batch.
         self._file_button = HoverMenuToolButton()
         self._file_button.setText("File")
         self._file_button.setAutoRaise(True)

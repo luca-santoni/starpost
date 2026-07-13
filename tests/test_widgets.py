@@ -201,127 +201,134 @@ def _move_to(menu, global_pt):
     menu.mouseMoveEvent(ev)
 
 
-def _shown_hover_menu():
+def _shown_bar_menu():
+    """A menu button on a bar with its menu open — the starting state for the
+    stays-open and hover-switch tests. The bar is positioned but not shown
+    (child mapToGlobal works without showing); only the menu is shown."""
     from PySide6.QtCore import QRect
-    from PySide6.QtWidgets import QToolButton
+    from PySide6.QtWidgets import QWidget
 
-    from starpost.gui.widgets import HoverMenu
+    from starpost.gui.widgets import HoverMenu, HoverMenuToolButton
 
-    btn = QToolButton()
-    btn.setGeometry(QRect(0, 0, 80, 24))
-    menu = HoverMenu(btn, owner=btn)
+    bar = QWidget()
+    bar.setGeometry(QRect(0, 0, 400, 30))
+    btn = HoverMenuToolButton(bar)
+    btn.setGeometry(QRect(0, 0, 80, 30))
+    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
     menu.addAction("A")
     menu.setGeometry(QRect(200, 200, 120, 60))
     menu.show()
-    return btn, menu
+    return bar, btn, menu
 
 
-def test_hover_menu_closes_when_pointer_strays_far(app):
-    """Moving the pointer well beyond the menu (and its owner) auto-closes it."""
+def _other_menu_button(bar):
+    """A second menu button on ``bar`` — a hover-switch handoff target."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QMenu
+
+    from starpost.gui.widgets import HoverMenuToolButton
+
+    other = HoverMenuToolButton(bar)
+    other.setGeometry(QRect(100, 0, 80, 30))
+    other_menu = QMenu(other)
+    other_menu.addAction("B")
+    other.setMenu(other_menu)
+    return other
+
+
+def test_bar_menu_stays_open_when_pointer_strays_far(app):
+    """Moving the pointer far away leaves the menu open — it only dismisses on
+    a click (native popup behaviour); there is no distance-based auto-close."""
     from PySide6.QtCore import QPointF
 
-    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
-    assert menu.isVisible()
-    _move_to(menu, QPointF(1000, 1000))
-    assert not menu.isVisible()
-    menu.deleteLater()
-
-
-def test_hover_menu_stays_open_within_margin(app):
-    """A small overshoot past the menu edge (within CLOSE_MARGIN) keeps it open,
-    and so does moving back over the owning button."""
-    from PySide6.QtCore import QPointF
-
-    from starpost.gui.widgets import HoverMenu
-
-    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
-    # Just outside the menu's right edge (320), still within the 50 px margin.
-    _move_to(menu, QPointF(320 + HoverMenu.CLOSE_MARGIN - 5, 230))
-    assert menu.isVisible()
-    # Back over the owning button's area — never closes.
-    _move_to(menu, QPointF(40, 12))
-    assert menu.isVisible()
-    menu.deleteLater()
-
-
-def test_hover_menu_closes_when_moving_onto_sibling_bar(app):
-    """Moving onto another item of the owner's bar (e.g. Export/Settings) closes
-    the menu at once, overriding the margin forgiveness."""
-    from PySide6.QtCore import QPointF, QRect
-    from PySide6.QtWidgets import QToolButton, QWidget
-
-    from starpost.gui.widgets import HoverMenu
-
-    bar = QWidget()
-    bar.setGeometry(QRect(0, 0, 400, 30))
-    btn = QToolButton(bar)
-    btn.setGeometry(QRect(0, 0, 80, 30))
-    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
-    menu.addAction("A")
-    menu.setGeometry(QRect(0, 200, 120, 60))
-    menu.show()
-    assert menu.isVisible()
-
-    # A neighbour on the same bar (x=200 is past the button, still on the bar).
-    _move_to(menu, QPointF(200, 15))
-    assert not menu.isVisible()
-    bar.deleteLater()
-
-
-def test_hover_menu_sibling_bar_does_not_close_over_owner(app):
-    """The owning button sits on the bar too, but hovering it must keep the menu
-    open — the owner check wins over the sibling-bar exception."""
-    from PySide6.QtCore import QPointF, QRect
-    from PySide6.QtWidgets import QToolButton, QWidget
-
-    from starpost.gui.widgets import HoverMenu
-
-    bar = QWidget()
-    bar.setGeometry(QRect(0, 0, 400, 30))
-    btn = QToolButton(bar)
-    btn.setGeometry(QRect(0, 0, 80, 30))
-    menu = HoverMenu(btn, owner=btn, sibling_bar=bar)
-    menu.addAction("A")
-    menu.setGeometry(QRect(0, 200, 120, 60))
-    menu.show()
-
-    _move_to(menu, QPointF(40, 15))  # over the owner button
+    bar, btn, menu = _shown_bar_menu()  # noqa: F841 (keep btn alive)
+    _move_to(menu, QPointF(5000, 5000))
     assert menu.isVisible()
     bar.deleteLater()
 
 
-def test_hover_menu_stays_open_over_visible_submenu(app):
-    """A visible child submenu (e.g. File ▸ Add) is a separate popup that can
-    extend past CLOSE_MARGIN; the pointer over it must not close the menu."""
-    from PySide6.QtCore import QPointF, QRect
+def test_bar_menu_stays_open_over_sibling_bar(app):
+    """The pointer crossing the bar's empty area (or its non-menu items) keeps
+    the menu open — only another *menu* button is a handoff target."""
+    from PySide6.QtCore import QPointF
 
-    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
-    # addMenu(str) is safe here: the local `sub` keeps the wrapper alive (cf. _build_toolbar).
-    sub = menu.addMenu("Add")
-    sub.addAction("Files…")
-    # Well past the parent menu's right edge (320) plus the 50 px margin.
-    sub.setGeometry(QRect(500, 200, 120, 60))
-    sub.show()
-
-    _move_to(menu, QPointF(560, 230))  # inside the submenu
+    bar, btn, menu = _shown_bar_menu()  # noqa: F841 (keep btn alive)
+    _move_to(menu, QPointF(300, 15))  # on the bar, away from any menu button
     assert menu.isVisible()
-    menu.deleteLater()
+    bar.deleteLater()
 
 
-def test_hover_menu_closes_when_submenu_hidden(app):
-    """The submenu region is only safe while the submenu is actually open —
-    the same point with the submenu hidden closes the menu as before."""
-    from PySide6.QtCore import QPointF, QRect
+def test_bar_menu_hands_off_to_other_menu_button(app, monkeypatch):
+    """With a menu open, hovering a different menu button on the bar closes
+    this menu and opens that button's menu without a click."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication
 
-    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
-    sub = menu.addMenu("Add")
-    sub.addAction("Files…")
-    sub.setGeometry(QRect(500, 200, 120, 60))
-    # NOT shown.
+    bar, btn, menu = _shown_bar_menu()  # noqa: F841 (keep btn alive)
+    other = _other_menu_button(bar)
+    calls = []
+    monkeypatch.setattr(other, "showMenu", lambda: calls.append(1))
 
-    _move_to(menu, QPointF(560, 230))
+    _move_to(menu, QPointF(140, 15))  # inside `other`
     assert not menu.isVisible()
-    menu.deleteLater()
+    QApplication.processEvents()  # fire the deferred (singleShot) showMenu
+    assert calls == [1]
+    bar.deleteLater()
+
+
+def test_bar_menu_handoff_skips_disabled_button(app, monkeypatch):
+    """A disabled menu button (e.g. during a running batch) is not a handoff
+    target — the open menu stays open and the disabled menu stays shut."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication
+
+    bar, btn, menu = _shown_bar_menu()  # noqa: F841 (keep btn alive)
+    other = _other_menu_button(bar)
+    other.setEnabled(False)
+    calls = []
+    monkeypatch.setattr(other, "showMenu", lambda: calls.append(1))
+
+    _move_to(menu, QPointF(140, 15))
+    assert menu.isVisible()
+    QApplication.processEvents()
+    assert calls == []
+    bar.deleteLater()
+
+
+def test_bar_menu_button_hover_does_not_open(app, monkeypatch):
+    """Hovering a menu button never opens its closed menu — opening is
+    click-only (the button's InstantPopup mode, handled natively by Qt)."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QEnterEvent
+    from PySide6.QtWidgets import QMenu
+
+    from starpost.gui.widgets import HoverMenuToolButton
+
+    btn = HoverMenuToolButton()
+    menu = QMenu(btn)
+    menu.addAction("A")
+    btn.setMenu(menu)
+    calls = []
+    monkeypatch.setattr(btn, "showMenu", lambda: calls.append(1))
+    btn.enterEvent(QEnterEvent(QPointF(1, 1), QPointF(1, 1), QPointF(1, 1)))
+    assert calls == []
+    btn.deleteLater()
+
+
+def test_bar_menu_hide_clears_owner_stuck_hover(app, monkeypatch):
+    """Closing the menu (any path: outside click, Esc, handoff) drops the owner
+    button's leftover hover outline once the pointer has moved elsewhere — the
+    menu's mouse grab swallowed the button's leave event."""
+    from PySide6.QtCore import QPoint, Qt
+
+    import starpost.gui.widgets as widgets
+
+    bar, btn, menu = _shown_bar_menu()
+    btn.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, True)
+    monkeypatch.setattr(widgets.QCursor, "pos", staticmethod(lambda: QPoint(10000, 10000)))
+    menu.hide()
+    assert btn.testAttribute(Qt.WidgetAttribute.WA_UnderMouse) is False
+    bar.deleteLater()
 
 
 def test_enable_range_selection_sets_extended(app):
