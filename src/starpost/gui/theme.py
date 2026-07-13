@@ -304,6 +304,14 @@ QToolBar#mainToolBar QToolButton {
 }
 QToolBar#mainToolBar QToolButton:hover { background: $btn_hover; }
 QToolBar#mainToolBar QToolButton:pressed { background: $btn_pressed; }
+/* The File / Run batch menu buttons render sunken (":pressed") the whole time
+   their dropdown is open — a persistent "this menu is open" state, not a
+   momentary click. Keep the hover fill instead of the dark pressed fill so the
+   open button stays clearly highlighted (the dark $btn_pressed all but vanishes
+   against the toolbar). The objectName selector outranks the generic :pressed
+   rule above, so it wins whether or not the pointer is still over the button. */
+QToolBar#mainToolBar QToolButton#fileMenuButton:pressed,
+QToolBar#mainToolBar QToolButton#runBatchButton:pressed { background: $btn_hover; }
 QLabel#toolbarLogo { background: transparent; }
 
 /* Destructive buttons ("Clear data", profile "Delete"): themed background

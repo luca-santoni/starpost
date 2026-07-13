@@ -413,6 +413,7 @@ class MainWindow(QMainWindow):
         # the Data tab's portable-CSV import/export — same slots, second entry
         # point. Click-opens like Run batch.
         self._file_button = BarMenuButton()
+        self._file_button.setObjectName("fileMenuButton")
         self._file_button.setText("File")
         self._file_button.setAutoRaise(True)
         self._file_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -437,6 +438,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._file_button)
 
         self._run_button = BarMenuButton()
+        self._run_button.setObjectName("runBatchButton")
         self._run_button.setText("Run batch")
         self._run_button.setAutoRaise(True)
         self._run_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)

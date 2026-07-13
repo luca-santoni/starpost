@@ -18,6 +18,11 @@ All notable changes to StarPost are recorded here. Versions follow the
   mouse goes; with one open, hovering the other menu button switches to it,
   and a click anywhere else dismisses it — like a traditional menu bar.
 
+### Bug Fixes
+- **Open-menu button highlight** — the **File** and **Run batch** buttons kept
+  their bright hover highlight while their dropdown was open instead of fading
+  to the near-invisible pressed shade, so it's now clear which menu is active.
+
 ## [2.4.0] — 2026-07-12
 
 ### New Features
