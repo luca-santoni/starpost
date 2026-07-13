@@ -3,7 +3,7 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
-## [Unreleased]
+## [2.5.0] — 2026-07-13
 
 ### New Features
 - **File menu** — a new **File** dropdown sits first in the top bar (before
