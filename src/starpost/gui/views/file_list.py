@@ -267,8 +267,8 @@ class FileListPanel(QWidget):
         )
         remove.setToolTip("Remove the selected files and folders from the list")
         clear.setToolTip("Remove all files and folders from the list")
-        add_files.clicked.connect(self._add_files)
-        add_folder.clicked.connect(self._add_folder)
+        add_files.clicked.connect(self.add_files_dialog)
+        add_folder.clicked.connect(self.add_folder_dialog)
         remove.clicked.connect(self._remove_selected)
         clear.clicked.connect(self._clear_confirmed)
 
@@ -597,13 +597,13 @@ class FileListPanel(QWidget):
         FolderPropertiesDialog(item.text(0), total, len(paths), self).exec()
 
     # --- slots -----------------------------------------------------------
-    def _add_files(self) -> None:
+    def add_files_dialog(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Add .sim files", "", "STAR-CCM+ sim (*.sim)"
         )
         self._add_paths([Path(p) for p in paths])
 
-    def _add_folder(self) -> None:
+    def add_folder_dialog(self) -> None:
         """Pick a folder and add its .sim files inside a new internal folder named
         after it (skipping any already present elsewhere in the list)."""
         chosen = QFileDialog.getExistingDirectory(self, "Add folder of .sim files")

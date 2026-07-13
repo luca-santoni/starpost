@@ -2561,3 +2561,35 @@ def test_file_and_data_panels_clear_hover_after_context_menu(app, monkeypatch):
         except RuntimeError:
             pass
         assert cleared == [panel._tree]
+
+
+def test_file_panel_public_add_dialogs(app, monkeypatch, tmp_path):
+    """add_files_dialog / add_folder_dialog are the public entry points to the
+    Files tab's native add dialogs (used by the toolbar File menu too)."""
+    import starpost.gui.views.file_list as fl
+
+    sim_a = tmp_path / "a.sim"
+    sim_b = tmp_path / "b.sim"
+    sim_a.touch()
+    sim_b.touch()
+
+    win = mw.MainWindow(Settings())
+    monkeypatch.setattr(
+        fl.QFileDialog,
+        "getOpenFileNames",
+        staticmethod(lambda *a, **k: ([str(sim_a)], "")),
+    )
+    win.file_list.add_files_dialog()
+    assert win.file_list.files() == [sim_a]
+
+    folder = tmp_path / "runs"
+    folder.mkdir()
+    (folder / "c.sim").touch()
+    monkeypatch.setattr(
+        fl.QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *a, **k: str(folder)),
+    )
+    win.file_list.add_folder_dialog()
+    assert folder / "c.sim" in win.file_list.files()
+    win.close()
