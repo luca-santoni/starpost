@@ -36,7 +36,6 @@ class CaptionButton(QAbstractButton):
         super().__init__(parent)
         self._kind = kind
         self._hover = False
-        self._pinned = False
         self._glyph = QColor("#cfcfcf")
         self._hover_bg = QColor("#353535")
         self._hover_glyph = QColor("#e6e6e6")
@@ -77,18 +76,6 @@ class CaptionButton(QAbstractButton):
 
     hoverGlyph = Property(QColor, _get_hover_glyph, _set_hover_glyph)
 
-    def _get_pinned(self) -> bool:
-        return self._pinned
-
-    def _set_pinned(self, on: bool) -> None:
-        self._pinned = bool(on)
-        self.update()
-
-    # When true the button always paints in its "active" (hovered) look — the
-    # hover background and brighter glyph — even with the pointer away. Set from
-    # QSS (qproperty-pinnedActive) so it stays a themeable, per-button choice.
-    pinnedActive = Property(bool, _get_pinned, _set_pinned)
-
     # --- painting --------------------------------------------------------
     def enterEvent(self, event) -> None:
         self._hover = True
@@ -103,7 +90,7 @@ class CaptionButton(QAbstractButton):
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        active = self._hover or self.isDown() or self._pinned
+        active = self._hover or self.isDown()
         if active:
             p.fillRect(self.rect(), self._hover_bg)
         glyph = self._hover_glyph if active else self._glyph
