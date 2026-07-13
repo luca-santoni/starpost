@@ -290,6 +290,39 @@ def test_hover_menu_sibling_bar_does_not_close_over_owner(app):
     bar.deleteLater()
 
 
+def test_hover_menu_stays_open_over_visible_submenu(app):
+    """A visible child submenu (e.g. File ▸ Add) is a separate popup that can
+    extend past CLOSE_MARGIN; the pointer over it must not close the menu."""
+    from PySide6.QtCore import QPointF, QRect
+
+    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
+    sub = menu.addMenu("Add")
+    sub.addAction("Files…")
+    # Well past the parent menu's right edge (320) plus the 50 px margin.
+    sub.setGeometry(QRect(500, 200, 120, 60))
+    sub.show()
+
+    _move_to(menu, QPointF(560, 230))  # inside the submenu
+    assert menu.isVisible()
+    menu.deleteLater()
+
+
+def test_hover_menu_closes_when_submenu_hidden(app):
+    """The submenu region is only safe while the submenu is actually open —
+    the same point with the submenu hidden closes the menu as before."""
+    from PySide6.QtCore import QPointF, QRect
+
+    btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
+    sub = menu.addMenu("Add")
+    sub.addAction("Files…")
+    sub.setGeometry(QRect(500, 200, 120, 60))
+    # NOT shown.
+
+    _move_to(menu, QPointF(560, 230))
+    assert not menu.isVisible()
+    menu.deleteLater()
+
+
 def test_enable_range_selection_sets_extended(app):
     """enable_range_selection turns a default (single-select) list into an
     extended-selection one, so Shift/Ctrl+click select multiple items."""

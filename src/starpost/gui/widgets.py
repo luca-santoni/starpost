@@ -323,6 +323,9 @@ class HoverMenu(QMenu):
     the owner lives on) — e.g. hovering Export or Settings — closes the menu at
     once, so those neighbours feel reachable even though the open menu holds the
     mouse grab.
+
+    A visible child submenu (added with ``addMenu``) is part of the safe
+    region as well, so moving deep into it never closes the parent.
     """
 
     #: How far (px) the pointer may move beyond the menu — and its owner widget —
@@ -371,6 +374,16 @@ class HoverMenu(QMenu):
             -m, -m, m, m
         ).contains(pos):
             return
+        # An open child submenu (e.g. "Add ▸") is a separate popup window that
+        # can extend past the margin — while it is visible, it is safe too.
+        for action in self.actions():
+            sub = action.menu()
+            if (
+                sub is not None
+                and sub.isVisible()
+                and sub.frameGeometry().adjusted(-m, -m, m, m).contains(pos)
+            ):
+                return
         self.close()
 
 
