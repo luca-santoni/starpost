@@ -299,7 +299,7 @@ QToolBar#mainToolBar QToolButton {
     color: $text;
     border: none;
     border-radius: 4px;
-    padding: 9px 11px;
+    padding: 6px 10px;
     margin: 0;
 }
 QToolBar#mainToolBar QToolButton:hover { background: $btn_hover; }
