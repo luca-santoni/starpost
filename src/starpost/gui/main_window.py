@@ -483,9 +483,11 @@ class MainWindow(QMainWindow):
             "(run a saved profile)"
         )
         run_menu = BarMenu(self._run_button, owner=self._run_button, sibling_bar=tb)
-        full_act = run_menu.addAction("Full Batch", self._run_batch)
+        full_act = run_menu.addAction(shortcuts.menu_label("Full Batch"), self._run_batch)
         full_act.setShortcut(QKeySequence(shortcuts.key("batch_full")))
-        express_act = run_menu.addAction("Express batch", self._run_express_batch)
+        express_act = run_menu.addAction(
+            shortcuts.menu_label("Express batch"), self._run_express_batch
+        )
         express_act.setShortcut(QKeySequence(shortcuts.key("batch_express")))
         # An action that lives only in a hidden popup menu never matches its
         # shortcut; adding it to the window keeps the keys active app-wide.

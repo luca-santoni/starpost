@@ -793,9 +793,9 @@ class FileListPanel(QWidget):
             # Delete folder dissolves the folder but keeps its files, so it
             # does not get the Del hint; that key actually runs Remove below.
             delete_act = menu.addAction("Delete folder")
-            remove_act = menu.addAction("Remove")
+            remove_act = menu.addAction(shortcuts.menu_label("Remove"))
             menu.addSeparator()
-            props_act = menu.addAction("Properties")
+            props_act = menu.addAction(shortcuts.menu_label("Properties"))
             for act, shortcut_id in (
                 (remove_act, "file_remove"),
                 (props_act, "file_props"),
@@ -829,9 +829,11 @@ class FileListPanel(QWidget):
         # action loads them all, so label it "Load files".
         paths = [Path(f.data(0, _PATH_ROLE)) for f in self._iter_files()
                  if f.isSelected()] or [Path(item.data(0, _PATH_ROLE))]
-        load_act = menu.addAction("Load files" if len(paths) >= 2 else "Load file")
-        props_act = menu.addAction("Properties")
-        remove_act = menu.addAction("Remove")
+        load_act = menu.addAction(
+            shortcuts.menu_label("Load files" if len(paths) >= 2 else "Load file")
+        )
+        props_act = menu.addAction(shortcuts.menu_label("Properties"))
+        remove_act = menu.addAction(shortcuts.menu_label("Remove"))
         for act, shortcut_id in (
             (load_act, "file_load"),
             (props_act, "file_props"),

@@ -28,6 +28,12 @@ def test_key_and_hint():
     assert shortcuts.hint("Switch to Reports", "tab_reports") == "Switch to Reports (F1)"
 
 
+def test_menu_label_pads_for_shortcut_column():
+    padded = shortcuts.menu_label("Load file")
+    assert padded.rstrip() == "Load file"
+    assert padded != "Load file"  # trailing gap widens the shortcut column
+
+
 def test_expected_bindings():
     """The bindings agreed in the spec, verbatim."""
     expected = {
@@ -122,13 +128,15 @@ def test_batch_shortcuts_trigger_and_display(app, monkeypatch):
         QTest.keyClick(win, Qt.Key_B, Qt.ControlModifier | Qt.ShiftModifier)
         QTest.keyClick(win, Qt.Key_E, Qt.ControlModifier | Qt.ShiftModifier)
         assert calls == ["full", "express"]
-        # The menu entries display the keys (rendered right-aligned by Qt).
+        # The menu entries display the keys (rendered right-aligned by Qt);
+        # labels carry menu_label's gap padding so the columns aren't cramped.
         texts = {
-            a.text(): a.shortcut().toString()
+            a.text().rstrip(): a.shortcut().toString()
             for a in win._run_button.menu().actions()
         }
         assert texts["Full Batch"] == "Ctrl+Shift+B"
         assert texts["Express batch"] == "Ctrl+Shift+E"
+        assert all(a.text().endswith(" ") for a in win._run_button.menu().actions())
     finally:
         win.close()
 

@@ -40,3 +40,13 @@ def key(shortcut_id: str) -> str:
 def hint(text: str, shortcut_id: str) -> str:
     """Tooltip text with the shortcut appended, e.g. ``"Switch to Reports (F1)"``."""
     return f"{text} ({key(shortcut_id)})"
+
+
+# Qt anchors a menu's shortcut column straight after its widest label, which
+# reads cramped; trailing spaces on the label widen that gap.
+_MENU_GAP = " " * 6
+
+
+def menu_label(text: str) -> str:
+    """A menu-entry label padded so its shortcut sits further to the right."""
+    return text + _MENU_GAP
