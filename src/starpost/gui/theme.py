@@ -282,6 +282,10 @@ CaptionButton#winClose {
     qproperty-hoverGlyph: #ffffff;
     qproperty-hoverBg: #c42b1c;
 }
+/* The maximise/restore button always paints in its active (hovered) look — the
+   hover background box and brighter glyph — so it reads as a distinct, always-
+   visible control rather than fading to the faint idle glyph. */
+CaptionButton#winMax { qproperty-pinnedActive: true; }
 
 /* Main menu-style toolbar: the StarPost badge followed by flat menu items,
    modelled on a classic application menu bar (STAR-CCM+'s). Generous vertical
