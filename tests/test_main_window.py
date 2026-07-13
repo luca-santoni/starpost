@@ -2593,3 +2593,45 @@ def test_file_panel_public_add_dialogs(app, monkeypatch, tmp_path):
     win.file_list.add_folder_dialog()
     assert folder / "c.sim" in win.file_list.files()
     win.close()
+
+
+def test_toolbar_file_menu_structure(app):
+    """A File hover-dropdown sits first in the bar (before Run batch) with
+    Add ▸ Files…/Folder…, Import data… and Export data…."""
+    win = mw.MainWindow(Settings())
+    assert win._file_button.text() == "File"
+    labels = [a.text() for a in win._file_menu.actions()]
+    assert labels == ["Add", "Import data…", "Export data…"]
+    add_menu = win._file_menu.actions()[0].menu()
+    assert [a.text() for a in add_menu.actions()] == ["Files…", "Folder…"]
+    # Placement: File comes before Run batch in the bar.
+    widgets = [win._toolbar.widgetForAction(a) for a in win._toolbar.actions()]
+    assert widgets.index(win._file_button) < widgets.index(win._run_button)
+    win.close()
+
+
+def test_file_menu_actions_call_slots(app, monkeypatch):
+    """Each File-menu action triggers the same slot as its tab-button twin."""
+    from starpost.gui.views.file_list import FileListPanel
+
+    calls = []
+    monkeypatch.setattr(
+        FileListPanel, "add_files_dialog", lambda self: calls.append("files")
+    )
+    monkeypatch.setattr(
+        FileListPanel, "add_folder_dialog", lambda self: calls.append("folder")
+    )
+    monkeypatch.setattr(
+        mw.MainWindow, "_import_data", lambda self: calls.append("import")
+    )
+    monkeypatch.setattr(
+        mw.MainWindow, "_export_data", lambda self: calls.append("export")
+    )
+    win = mw.MainWindow(Settings())
+    add_menu = win._file_menu.actions()[0].menu()
+    for action in add_menu.actions():
+        action.trigger()
+    for action in win._file_menu.actions()[1:]:
+        action.trigger()
+    assert calls == ["files", "folder", "import", "export"]
+    win.close()

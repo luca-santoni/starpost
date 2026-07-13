@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSizePolicy,
     QSplitter,
@@ -407,6 +408,35 @@ class MainWindow(QMainWindow):
         )
         self._toolbar_logo.setContentsMargins(4, 0, 10, 0)
         tb.addWidget(self._toolbar_logo)
+
+        # File menu: toolbar-level access to the Files tab's add dialogs and
+        # the Data tab's portable-CSV import/export — same slots, second entry
+        # point. Hover-opens like Run batch.
+        self._file_button = HoverMenuToolButton()
+        self._file_button.setText("File")
+        self._file_button.setAutoRaise(True)
+        self._file_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._file_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._file_button.setToolTip(
+            "Add .sim files or folders, import or export portable data CSVs"
+        )
+        file_menu = HoverMenu(
+            self._file_button, owner=self._file_button, sibling_bar=tb
+        )
+        # Built with an explicit QMenu(parent) + addMenu(menu) rather than the
+        # addMenu(title) factory: the factory's returned QMenu has no Python
+        # reference of its own, and PySide6 deletes its C++ object once the
+        # local variable here goes out of scope, despite the QObject parent
+        # link — leaving a dangling "Add" submenu.
+        add_menu = QMenu("Add", file_menu)
+        add_menu.addAction("Files…", self.file_list.add_files_dialog)
+        add_menu.addAction("Folder…", self.file_list.add_folder_dialog)
+        file_menu.addMenu(add_menu)
+        file_menu.addAction("Import data…", self._import_data)
+        file_menu.addAction("Export data…", self._export_data)
+        self._file_button.setMenu(file_menu)
+        self._file_menu = file_menu
+        tb.addWidget(self._file_button)
 
         self._run_button = HoverMenuToolButton()
         self._run_button.setText("Run batch")

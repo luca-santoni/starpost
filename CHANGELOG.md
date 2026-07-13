@@ -3,6 +3,15 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [Unreleased]
+
+### New Features
+- **File menu** — a new **File** dropdown sits first in the top bar (before
+  Run batch). It hover-opens like Run batch and offers **Add ▸ Files… /
+  Folder…** (the Files tab's add dialogs), **Import data…** and **Export
+  data…** (the Data tab's portable-CSV import/export) — the same operations,
+  reachable without switching tabs.
+
 ## [2.4.0] — 2026-07-12
 
 ### New Features
