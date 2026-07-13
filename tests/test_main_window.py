@@ -2569,9 +2569,7 @@ def test_file_panel_public_add_dialogs(app, monkeypatch, tmp_path):
     import starpost.gui.views.file_list as fl
 
     sim_a = tmp_path / "a.sim"
-    sim_b = tmp_path / "b.sim"
     sim_a.touch()
-    sim_b.touch()
 
     win = mw.MainWindow(Settings())
     monkeypatch.setattr(

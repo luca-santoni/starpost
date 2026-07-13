@@ -296,6 +296,7 @@ def test_hover_menu_stays_open_over_visible_submenu(app):
     from PySide6.QtCore import QPointF, QRect
 
     btn, menu = _shown_hover_menu()  # noqa: F841 (keep btn alive)
+    # addMenu(str) is safe here: the local `sub` keeps the wrapper alive (cf. _build_toolbar).
     sub = menu.addMenu("Add")
     sub.addAction("Files…")
     # Well past the parent menu's right edge (320) plus the 50 px margin.

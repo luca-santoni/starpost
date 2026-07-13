@@ -420,9 +420,7 @@ class MainWindow(QMainWindow):
         self._file_button.setToolTip(
             "Add .sim files or folders, import or export portable data CSVs"
         )
-        file_menu = HoverMenu(
-            self._file_button, owner=self._file_button, sibling_bar=tb
-        )
+        file_menu = HoverMenu(self._file_button, owner=self._file_button, sibling_bar=tb)
         # Built with an explicit QMenu(parent) + addMenu(menu) rather than the
         # addMenu(title) factory: the factory's returned QMenu has no Python
         # reference of its own, and PySide6 deletes its C++ object once the
