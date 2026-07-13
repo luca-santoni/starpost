@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.data.models import MonitorPlot
+from starpost.gui import shortcuts
 from starpost.gui.plot_style import (  # noqa: F401 (re-exported for importers)
     _COLORS,
     _UNIT_RE,
@@ -533,9 +534,9 @@ class PlotView(QWidget):
         # "Smooth data" sits at the bottom-left: when ticked, shown monitors are
         # drawn through a moving average (width from settings).
         self._smooth_check = QCheckBox("Smooth data")
-        self._smooth_check.setToolTip(
-            "Smooth the shown monitors with a moving average"
-        )
+        self._smooth_check.setToolTip(shortcuts.hint(
+            "Smooth the shown monitors with a moving average", "smooth"
+        ))
         self._smooth_check.toggled.connect(self._on_smooth_toggled)
 
         # "Clear selection" sits at the bottom-right, past the category
@@ -685,6 +686,11 @@ class PlotView(QWidget):
         self._smooth_width = max(1, int(width))
         if self._smooth and self._mode is not None:
             self._render()
+
+    def toggle_smooth(self) -> None:
+        """Toggle the "Smooth data" checkbox — the Alt+Shift+S shortcut path.
+        Goes through click() so it behaves exactly like the mouse."""
+        self._smooth_check.click()
 
     def _on_smooth_toggled(self, checked: bool) -> None:
         """The "Smooth data" checkbox: redraw with/without the moving average."""

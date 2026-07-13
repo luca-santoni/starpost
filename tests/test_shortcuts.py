@@ -214,3 +214,26 @@ def test_selection_tooltips_show_keys(app):
     assert "(Ctrl+R)" in panel._section_buttons["scenes"]["run"].toolTip()
     assert "(Ctrl+R)" in panel._section_buttons["screenplays"]["run"].toolTip()
     panel.close()
+
+
+def test_smooth_shortcut_only_on_plots_tab(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    win = _make_window()
+    try:
+        pv = win.plot_view  # force the lazy build
+        assert not pv._smooth_check.isChecked()
+        QTest.keyClick(win, Qt.Key_S, Qt.AltModifier | Qt.ShiftModifier)
+        assert not pv._smooth_check.isChecked()  # Reports tab: no-op
+
+        win._center_tabs.setCurrentIndex(1)  # Plots
+        QApplication.processEvents()
+        QTest.keyClick(win, Qt.Key_S, Qt.AltModifier | Qt.ShiftModifier)
+        assert pv._smooth_check.isChecked()
+        QTest.keyClick(win, Qt.Key_S, Qt.AltModifier | Qt.ShiftModifier)
+        assert not pv._smooth_check.isChecked()
+        assert "(Alt+Shift+S)" in pv._smooth_check.toolTip()
+    finally:
+        win.close()

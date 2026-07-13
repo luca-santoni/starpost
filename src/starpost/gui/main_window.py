@@ -322,6 +322,12 @@ class MainWindow(QMainWindow):
         bind("select_all", self.selection.click_select_all)
         bind("clear_selection", self.selection.click_clear_selection)
         bind("run_render", self.selection.click_run)
+        bind("smooth", self._shortcut_smooth)
+
+    def _shortcut_smooth(self) -> None:
+        """Alt+Shift+S: toggle Smooth data, only while the Plots tab shows."""
+        if self._center_tabs.currentWidget() is self._plot_tab:
+            self.plot_view.toggle_smooth()
 
     def _on_center_tab_changed(self, index: int) -> None:
         """Sync the selection panel to the active centre tab: the Reports
