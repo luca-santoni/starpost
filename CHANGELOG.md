@@ -5,6 +5,12 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### Fixed
+- **Window buttons** — the minimise / maximise / close buttons in the top-right
+  corner now fill the title bar's full height; previously they sat centred with
+  a small gap above and below, so their hover highlight didn't reach the
+  window edge.
+
 ### New Features
 - **Keyboard shortcuts** — the main views and actions now have hotkeys, shown
   in menus and tooltips (hover a tab or button to see its key):

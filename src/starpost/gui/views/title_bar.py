@@ -19,6 +19,7 @@ from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
+    QSizePolicy,
     QToolBar,
     QWidget,
 )
@@ -39,7 +40,12 @@ class CaptionButton(QAbstractButton):
         self._glyph = QColor("#cfcfcf")
         self._hover_bg = QColor("#353535")
         self._hover_glyph = QColor("#e6e6e6")
-        self.setFixedSize(_BTN_W, CAPTION_HEIGHT)
+        # Fixed width, expanding height: the toolbar layout offers items the
+        # full row height, and the button must take it so the hover fill runs
+        # edge-to-edge (a fixed height would centre it with gaps above/below).
+        self.setFixedWidth(_BTN_W)
+        self.setMinimumHeight(CAPTION_HEIGHT)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 

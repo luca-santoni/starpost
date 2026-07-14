@@ -151,6 +151,44 @@ def test_single_top_bar_has_menu_and_window_buttons(app):
     win.close()
 
 
+def test_caption_buttons_fill_bar_height(app):
+    """The window min/max/close buttons span the title bar's full height. The
+    toolbar layout offers every item the whole row (the menu buttons take it);
+    a height-capped caption button would float centred with a gap above and
+    below instead of reaching the window's top edge."""
+    from starpost.gui.views.title_bar import _BTN_W, CAPTION_HEIGHT, CaptionButton
+
+    # Unit level: the button accepts any height >= its minimum (the toolbar
+    # hands it the row height); only the width is fixed.
+    btn = CaptionButton("close")
+    btn.resize(200, CAPTION_HEIGHT + 15)
+    assert btn.width() == _BTN_W
+    assert btn.height() == CAPTION_HEIGHT + 15
+    assert btn.minimumHeight() == CAPTION_HEIGHT
+
+    # In the window, under the real theme (whose QSS zeroes the toolbar's
+    # default layout margins): each button covers exactly the same vertical
+    # extent as the menu buttons, which fill the bar — no gap above or below.
+    from starpost.gui.theme import apply_theme
+
+    old_qss = app.styleSheet()
+    try:
+        apply_theme(app)
+        win = mw.MainWindow(Settings())
+        win.resize(1000, 700)
+        win.show()
+        app.processEvents()
+        ref = win._file_button.geometry()
+        assert ref.height() > CAPTION_HEIGHT  # the themed row is the tall part
+        for b in (win._btn_min, win._btn_max, win._btn_close):
+            g = b.geometry()
+            assert g.y() == ref.y()
+            assert g.height() == ref.height()
+        win.close()
+    finally:
+        app.setStyleSheet(old_qss)
+
+
 def test_maximize_button_tracks_window_state(app, monkeypatch):
     """A window-state change swaps the maximise button to the restore glyph and
     back (driven by changeEvent)."""
