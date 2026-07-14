@@ -651,7 +651,7 @@ class SelectionPanel(QWidget):
             on_clear=self.clear_screenplays_requested,
             section="screenplays",
         )
-        self._saved_views_group = self._group("Saved views", self.views)
+        self._saved_views_group = self._group("Saved views", self.views, buttons=False)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Profile"))
@@ -766,32 +766,46 @@ class SelectionPanel(QWidget):
             buttons["run"].click()
 
     def _group(
-        self, title: str, lst: _CheckList, section: str | None = None
+        self,
+        title: str,
+        lst: _CheckList,
+        section: str | None = None,
+        *,
+        buttons: bool = True,
     ) -> QGroupBox:
-        # Right-clicking the title sorts this list A–Z / Z–A.
+        # Right-clicking the title sorts this list A–Z / Z–A. ``buttons=False``
+        # drops the Select all / Clear row (Saved views: a render uses one
+        # view, so bulk check/uncheck has no point).
         box = _SortableGroupBox(
             title, on_sort=lambda gp, lst=lst: self._show_sort_menu(lst, gp)
         )
         box.setToolTip("Right-click the title to sort A–Z / Z–A")
-        all_on = QPushButton("Select all")
-        all_off = QPushButton("Clear")
-        on_tip = f"Select every entry under {title}"
-        off_tip = f"Deselect every entry under {title}"
-        if section is not None:
-            on_tip = shortcuts.hint(on_tip, "select_all")
-            off_tip = shortcuts.hint(off_tip, "clear_selection")
-        all_on.setToolTip(on_tip)
-        all_off.setToolTip(off_tip)
-        all_on.clicked.connect(lambda: (lst.set_all(True), self.selection_changed.emit()))
-        all_off.clicked.connect(lambda: (lst.set_all(False), self.selection_changed.emit()))
-        row = QHBoxLayout()
-        row.addWidget(all_on)
-        row.addWidget(all_off)
         v = QVBoxLayout(box)
-        v.addLayout(row)
+        if buttons:
+            all_on = QPushButton("Select all")
+            all_off = QPushButton("Clear")
+            on_tip = f"Select every entry under {title}"
+            off_tip = f"Deselect every entry under {title}"
+            if section is not None:
+                on_tip = shortcuts.hint(on_tip, "select_all")
+                off_tip = shortcuts.hint(off_tip, "clear_selection")
+            all_on.setToolTip(on_tip)
+            all_off.setToolTip(off_tip)
+            all_on.clicked.connect(
+                lambda: (lst.set_all(True), self.selection_changed.emit())
+            )
+            all_off.clicked.connect(
+                lambda: (lst.set_all(False), self.selection_changed.emit())
+            )
+            row = QHBoxLayout()
+            row.addWidget(all_on)
+            row.addWidget(all_off)
+            v.addLayout(row)
+            if section is not None:
+                self._section_buttons[section] = {
+                    "select_all": all_on, "clear": all_off,
+                }
         v.addWidget(lst)
-        if section is not None:
-            self._section_buttons[section] = {"select_all": all_on, "clear": all_off}
         return box
 
     def _run_group_box(

@@ -6,6 +6,9 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Changed
+- **Saved views buttons removed** — the Saved views pane on the Scenes and
+  Screenplays tabs no longer shows Select all / Clear; a render uses a single
+  view, so bulk check/uncheck served no purpose.
 - **Tab button rows removed** — the rows of buttons beneath the Files list
   (Add files, Add folder, Remove, Clear) and the Data list (Import, Export
   Data, Delete, Clear Data) are gone; every action lives in the File menu,

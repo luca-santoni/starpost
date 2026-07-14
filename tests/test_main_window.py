@@ -251,6 +251,21 @@ def test_data_sort_menu_sorting_still_works(app):
     panel.close()
 
 
+def test_saved_views_group_has_no_buttons(app):
+    """The Saved views pane (Scenes/Screenplays) has no Select all / Clear
+    row — renders use a single view, so bulk check/uncheck is pointless. The
+    sibling section groups keep theirs."""
+    from PySide6.QtWidgets import QPushButton
+
+    from starpost.gui.views.selection_panel import SelectionPanel
+
+    panel = SelectionPanel()
+    assert panel._saved_views_group.findChildren(QPushButton) == []
+    # The per-section groups are untouched (Scenes still has its buttons).
+    assert panel._section_buttons["scenes"]["select_all"].text() == "Select all"
+    panel.close()
+
+
 def test_files_and_data_tabs_have_no_bottom_buttons(app):
     """The button rows under the Files and Data trees are gone: every action
     lives in the File menu, the tab/item context menus, or on a hotkey."""
