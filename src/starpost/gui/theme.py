@@ -320,18 +320,18 @@ QToolBar#mainToolBar QToolButton#fileMenuButton:pressed,
 QToolBar#mainToolBar QToolButton#runBatchButton:pressed { background: $btn_hover; }
 QLabel#toolbarLogo { background: transparent; }
 
-/* Destructive buttons ("Clear data", profile "Delete"): themed background
+/* Destructive buttons (profile "Delete", "Clear rendered"): themed background
    (follows dark/light mode), but fixed red text+border independent of the
    user's accent colour. */
-QPushButton#clearDataButton, QPushButton#dangerButton {
+QPushButton#dangerButton {
     background: $btn_bg;
     color: #e5484d;
     border: 1px solid #e5484d;
     border-radius: 4px;
     padding: 4px 10px;
 }
-QPushButton#clearDataButton:hover, QPushButton#dangerButton:hover { background: $btn_hover; }
-QPushButton#clearDataButton:pressed, QPushButton#dangerButton:pressed { background: $btn_pressed; }
+QPushButton#dangerButton:hover { background: $btn_hover; }
+QPushButton#dangerButton:pressed { background: $btn_pressed; }
 
 /* Destructive context-menu entry (the Files/Data tab menus' "Clear"): a label
    in a QWidgetAction, red like the danger buttons. Hover inverts it — red
