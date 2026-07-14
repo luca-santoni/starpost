@@ -477,8 +477,16 @@ class MainWindow(QMainWindow):
         self.addAction(add_files_act)
         self.addAction(add_folder_act)
         file_menu.addMenu(add_menu)
-        file_menu.addAction("Import data…", self._import_data)
-        file_menu.addAction("Export data…", self._export_data)
+        import_act = file_menu.addAction(
+            shortcuts.menu_label("Import data…"), self._import_data
+        )
+        import_act.setShortcut(QKeySequence(shortcuts.key("import_data")))
+        export_act = file_menu.addAction(
+            shortcuts.menu_label("Export data…"), self._export_data
+        )
+        export_act.setShortcut(QKeySequence(shortcuts.key("export_data")))
+        self.addAction(import_act)
+        self.addAction(export_act)
         self._file_button.setMenu(file_menu)
         self._file_menu = file_menu
         tb.addWidget(self._file_button)

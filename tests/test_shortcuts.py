@@ -47,6 +47,8 @@ def test_expected_bindings():
         "batch_express": "Ctrl+Shift+E",
         "add_files": "Ctrl+N",
         "add_folder": "Ctrl+Shift+N",
+        "import_data": "Alt+Shift+I",
+        "export_data": "Alt+Shift+E",
         "select_all": "Ctrl+Shift+A",
         "clear_selection": "Ctrl+Shift+D",
         "run_render": "Ctrl+R",
@@ -168,6 +170,32 @@ def test_add_files_folder_shortcuts_trigger_and_display(app, monkeypatch):
         texts = {a.text().rstrip(): a.shortcut().toString() for a in add_menu.actions()}
         assert texts["Files…"] == "Ctrl+N"
         assert texts["Folder…"] == "Ctrl+Shift+N"
+    finally:
+        win.close()
+
+
+def test_import_export_shortcuts_trigger_and_display(app, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    import starpost.gui.main_window as mw
+
+    calls = []
+    # Patch on the class BEFORE construction: the File menu binds the bound
+    # methods at addAction time (and the real slots open modal dialogs).
+    monkeypatch.setattr(mw.MainWindow, "_import_data", lambda self: calls.append("import"))
+    monkeypatch.setattr(mw.MainWindow, "_export_data", lambda self: calls.append("export"))
+    win = _make_window()
+    try:
+        QTest.keyClick(win, Qt.Key_I, Qt.AltModifier | Qt.ShiftModifier)
+        QTest.keyClick(win, Qt.Key_E, Qt.AltModifier | Qt.ShiftModifier)
+        assert calls == ["import", "export"]
+        texts = {
+            a.text().rstrip(): a.shortcut().toString()
+            for a in win._file_menu.actions()
+        }
+        assert texts["Import data…"] == "Alt+Shift+I"
+        assert texts["Export data…"] == "Alt+Shift+E"
     finally:
         win.close()
 

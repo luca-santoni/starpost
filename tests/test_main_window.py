@@ -2570,7 +2570,8 @@ def test_toolbar_file_menu_structure(app):
     Add ▸ Files…/Folder…, Import data… and Export data…."""
     win = mw.MainWindow(Settings())
     assert win._file_button.text() == "File"
-    labels = [a.text() for a in win._file_menu.actions()]
+    # Labels carry shortcuts.menu_label's trailing gap padding — strip it.
+    labels = [a.text().rstrip() for a in win._file_menu.actions()]
     assert labels == ["Add", "Import data…", "Export data…"]
     add_menu = win._file_menu.actions()[0].menu()
     # Labels carry shortcuts.menu_label's trailing gap padding — strip it.

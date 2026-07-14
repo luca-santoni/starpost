@@ -24,6 +24,8 @@ SHORTCUTS: dict[str, tuple[str, str]] = {
     "batch_express": ("Ctrl+Shift+E", "Open the Express batch dialog"),
     "add_files": ("Ctrl+N", "Add .sim files to the Files list"),
     "add_folder": ("Ctrl+Shift+N", "Add a folder of .sim files to the Files list"),
+    "import_data": ("Alt+Shift+I", "Import a portable data CSV"),
+    "export_data": ("Alt+Shift+E", "Export the selected data set to a portable CSV"),
     "select_all": ("Ctrl+Shift+A", "Select all entries in the current checklist"),
     "clear_selection": ("Ctrl+Shift+D", "Deselect the current checklist"),
     "run_render": ("Ctrl+R", "Run / Record on the Scenes / Screenplays tab"),
