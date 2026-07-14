@@ -81,8 +81,8 @@ export/import — re-loadable without STAR-CCM+).
 Two distinct "batch" concepts — don't conflate them:
 - **Extraction batch** (`queue.py` `BatchWorker`): runs `Job`s (one `.sim` each)
   **sequentially off the GUI thread** in a `QThread`. Sequential is deliberate — one
-  license checkout at a time. Supports cooperative "stop after current file"; never killed
-  mid-write. Scene rendering has its own `SceneRenderWorker` (parallel `starccm+ -np`).
+  license checkout at a time. Never killed mid-write: a started batch runs every file to
+  completion. Scene rendering has its own `SceneRenderWorker` (parallel `starccm+ -np`).
 - **"Run batch" export** (`run.py`): the toolbar wizard that bundles selected report
   tables, plot images, scene stills, screenplay movies (and optional portable CSVs)
   into a single `.zip`. This runs **on the GUI thread** because it renders real

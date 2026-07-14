@@ -1,8 +1,8 @@
 """Sequential batch worker, designed to run off the GUI thread.
 
-Runs jobs one at a time (license-safe), emits Qt signals for progress/log/result,
-and supports a cooperative "stop after current file" — batch sessions must not be
-killed mid-write, so we finish the in-flight file before halting.
+Runs jobs one at a time (license-safe) and emits Qt signals for
+progress/log/result. A batch is never killed mid-write: once started, every
+file runs to completion.
 
 Usage (from the GUI):
     worker = BatchWorker(jobs, runner, output_dir, store)
@@ -19,7 +19,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from starpost.batch.job import Job, JobState
+from starpost.batch.job import Job
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import SimResult
 from starpost.data.store import ResultStore
@@ -28,9 +28,8 @@ from starpost.data.store import ResultStore
 class BatchWorker(QObject):
     log = Signal(str)                 # a line of run output
     progress = Signal(int, int)       # (completed, total)
-    job_state = Signal(int, str)      # (index, JobState value)
     sim_done = Signal(object)         # SimResult
-    finished = Signal()               # whole batch finished/stopped
+    finished = Signal()               # whole batch finished
 
     def __init__(
         self,
@@ -44,23 +43,10 @@ class BatchWorker(QObject):
         self._runner = runner
         self._output_dir = output_dir
         self._store = store
-        self._stop_requested = False
-
-    def request_stop(self) -> None:
-        """Stop *after* the current file completes."""
-        self._stop_requested = True
-        self.log.emit("Stop requested — will halt after the current file.")
 
     def run(self) -> None:
         total = len(self._jobs)
         for i, job in enumerate(self._jobs):
-            if self._stop_requested:
-                job.state = JobState.SKIPPED
-                self.job_state.emit(i, JobState.SKIPPED.value)
-                continue
-
-            job.state = JobState.RUNNING
-            self.job_state.emit(i, JobState.RUNNING.value)
             self.log.emit(f"--- [{i + 1}/{total}] {job.name} ---")
 
             try:
@@ -73,11 +59,6 @@ class BatchWorker(QObject):
             self._store.put(result)
             self._store.save_cache()  # crash-recovery checkpoint after each file
 
-            if result.error:
-                job.state, job.message = JobState.FAILED, result.error
-            else:
-                job.state = JobState.DONE
-            self.job_state.emit(i, job.state.value)
             self.sim_done.emit(result)
             self.progress.emit(i + 1, total)
 
