@@ -205,6 +205,52 @@ def test_files_sort_menu_sorting_still_works(app, monkeypatch):
     panel.close()
 
 
+def test_data_sort_menu_ends_with_red_clear_entry(app):
+    """The Data tab's right-click menu also ends with the red Clear entry,
+    wired to the same clear_requested signal as the Clear Data button."""
+    from PySide6.QtWidgets import QWidgetAction
+
+    from starpost.gui.views.data_list import DataListPanel
+
+    panel = DataListPanel()
+    cleared = []
+    panel.clear_requested.connect(lambda: cleared.append(True))
+    menu, actions, clear_act = panel._build_sort_menu()
+    acts = menu.actions()
+    assert acts[-2].isSeparator()
+    assert acts[-1] is clear_act
+    assert isinstance(clear_act, QWidgetAction)
+    label = clear_act.defaultWidget()
+    assert label.text() == "Clear"
+    assert label.objectName() == "dangerMenuItem"
+
+    label.clicked.emit()  # mouse path
+    assert cleared == [True]
+    clear_act.trigger()  # keyboard path
+    assert cleared == [True, True]
+    assert panel._sort_mode == "name_az"
+    panel.close()
+
+
+def test_data_sort_menu_sorting_still_works(app):
+    """Choosing a Data tab sort option still applies it; Clear or a dismissed
+    menu passing through the dispatch is a no-op."""
+    from starpost.gui.views.data_list import DataListPanel
+
+    panel = DataListPanel()
+    cleared = []
+    panel.clear_requested.connect(lambda: cleared.append(True))
+    menu, actions, clear_act = panel._build_sort_menu()
+    za_action = next(a for a, mode in actions.items() if mode == "name_za")
+    panel._on_sort_menu_chosen(za_action, actions)
+    assert panel._sort_mode == "name_za"
+    panel._on_sort_menu_chosen(clear_act, actions)
+    panel._on_sort_menu_chosen(None, actions)
+    assert panel._sort_mode == "name_za"
+    assert cleared == []
+    panel.close()
+
+
 def test_caption_buttons_fill_bar_height(app):
     """The window min/max/close buttons span the title bar's full height. The
     toolbar layout offers every item the whole row (the menu buttons take it);

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 # Reuse the Files tab's folder-icon tinting and the nested-row dash so the two
@@ -38,6 +39,7 @@ from PySide6.QtWidgets import (
 # (which skips folders) works unchanged for data rows too.
 from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
 from starpost.gui.widgets import (
+    DangerMenuItem,
     clear_item_view_hover,
     enable_check_range,
     enable_range_selection,
@@ -356,8 +358,19 @@ class DataListPanel(QWidget):
         ]
 
     def show_sort_menu(self, global_pos) -> None:
-        """Tab-wide sort (the Data tab is right-clicked); orders each folder's
-        contents, folders before data sets. The active mode shows a checkmark."""
+        """Show the tab context menu (sort options + Clear) at a global
+        position (the Data tab is right-clicked). The active sort mode shows a
+        checkmark; sorting orders each folder's contents, folders before data
+        sets."""
+        menu, actions, _clear_act = self._build_sort_menu()
+        self._on_sort_menu_chosen(menu.exec(global_pos), actions)
+
+    def _build_sort_menu(self):
+        """The Data tab context menu: the sort modes, then a destructive Clear
+        entry below a separator — it emits ``clear_requested``, same as the
+        Clear Data button. Returns ``(menu, {action: sort_mode}, clear_act)``;
+        Clear handles itself through its signals (click closes the menu, and a
+        keyboard Enter triggers the action), so the exec dispatch skips it."""
         menu = QMenu(self)
         actions = {}
         for text, key in (("Name (A–Z)", "name_az"), ("Name (Z–A)", "name_za")):
@@ -365,8 +378,22 @@ class DataListPanel(QWidget):
             act.setCheckable(True)
             act.setChecked(key == self._sort_mode)
             actions[act] = key
-        chosen = menu.exec(global_pos)
-        if chosen is not None:
+        menu.addSeparator()
+        label = DangerMenuItem("Clear")
+        clear_act = QWidgetAction(menu)
+        clear_act.setDefaultWidget(label)
+        menu.addAction(clear_act)
+        # Close first, request second: the confirmation the main window shows
+        # must not sit under a still-open menu holding the mouse grab.
+        label.clicked.connect(menu.close)
+        label.clicked.connect(self.clear_requested)
+        clear_act.triggered.connect(self.clear_requested)
+        return menu, actions, clear_act
+
+    def _on_sort_menu_chosen(self, chosen, actions) -> None:
+        """Apply the picked sort mode; Clear (or a dismissed menu) is not a
+        sort choice and does nothing here."""
+        if chosen in actions:
             self._sort_mode = actions[chosen]
             self._apply_sort()
             self._save()

@@ -9,6 +9,7 @@ from PySide6.QtCore import (
     QRect,
     Qt,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMenu,
     QProxyStyle,
@@ -26,6 +28,28 @@ from PySide6.QtWidgets import (
     QToolButton,
     QWidget,
 )
+
+
+class DangerMenuItem(QLabel):
+    """A destructive entry for a QMenu, hosted by a QWidgetAction: red text
+    like the danger buttons, with the theme's neutral hover fill (styled by
+    the ``dangerMenuItem`` QSS rules). A plain QAction is no use here — the
+    app stylesheet colours all menu items alike, with no per-item override.
+    Emits ``clicked`` on a left-button release inside the label."""
+
+    clicked = Signal()
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self.setObjectName("dangerMenuItem")
+
+    def mouseReleaseEvent(self, event) -> None:
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self.rect().contains(event.position().toPoint())
+        ):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 def enable_range_selection(view: QAbstractItemView) -> None:

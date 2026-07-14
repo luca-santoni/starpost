@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
-    QLabel,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -41,7 +40,11 @@ from PySide6.QtWidgets import (
 from starpost.gui import shortcuts
 from starpost.gui.theme import DEFAULT_ACCENT, contrast_color
 
-from starpost.gui.widgets import clear_item_view_hover, enable_range_selection
+from starpost.gui.widgets import (
+    DangerMenuItem,
+    clear_item_view_hover,
+    enable_range_selection,
+)
 from starpost.utils.paths import file_list_cache_path
 
 MAX_FILES = 25  # v1 expected ceiling; warn beyond this
@@ -67,28 +70,6 @@ CACHE_VERSION = 2  # nested-folder cache layout (v1 was a flat list of paths)
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
-
-
-class _DangerMenuItem(QLabel):
-    """A destructive entry for a QMenu, hosted by a QWidgetAction: red text
-    like the danger buttons, with the theme's neutral hover fill (styled by
-    the ``dangerMenuItem`` QSS rules). A plain QAction is no use here — the
-    app stylesheet colours all menu items alike, with no per-item override.
-    Emits ``clicked`` on a left-button release inside the label."""
-
-    clicked = Signal()
-
-    def __init__(self, text: str) -> None:
-        super().__init__(text)
-        self.setObjectName("dangerMenuItem")
-
-    def mouseReleaseEvent(self, event) -> None:
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self.rect().contains(event.position().toPoint())
-        ):
-            self.clicked.emit()
-        super().mouseReleaseEvent(event)
 
 
 def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
@@ -472,7 +453,7 @@ class FileListPanel(QWidget):
             act.setChecked(key == self._sort_mode)
             actions[act] = key
         menu.addSeparator()
-        label = _DangerMenuItem("Clear")
+        label = DangerMenuItem("Clear")
         clear_act = QWidgetAction(menu)
         clear_act.setDefaultWidget(label)
         menu.addAction(clear_act)
