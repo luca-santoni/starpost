@@ -40,7 +40,8 @@ from starpost.core.settings import Settings
 from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import PlotKind
 from starpost.data.store import ResultStore
-from starpost.gui.icons import app_icon, logo_pixmap
+from starpost.gui import theme
+from starpost.gui.icons import app_icon, logo_pixmap, menu_icon
 from starpost.gui.widgets import BarMenu, BarMenuButton, UniformTabBar
 from starpost.gui import shortcuts
 from starpost.gui.views.data_list import DataListPanel
@@ -514,6 +515,19 @@ class MainWindow(QMainWindow):
         self.addAction(express_act)
         self._run_button.setMenu(run_menu)
         tb.addWidget(self._run_button)
+
+        # Glyph icons beside the dropdown entries (STAR-CCM+ menu style), tinted
+        # to the theme; re-tinted on theme change (_apply_settings_to_views).
+        self._menu_icon_actions = [
+            (add_menu.menuAction(), "add"),
+            (add_files_act, "add-files"),
+            (add_folder_act, "add-folder"),
+            (import_act, "import"),
+            (export_act, "export"),
+            (full_act, "batch-full"),
+            (express_act, "batch-express"),
+        ]
+        self._refresh_menu_icons()
         export_action = tb.addAction("Export…", self._export)
         export_action.setToolTip("Export the selected reports and plots to files")
         settings_action = tb.addAction("Settings…", self._open_settings)
@@ -556,6 +570,17 @@ class MainWindow(QMainWindow):
         self._btn_min.clicked.connect(self.showMinimized)
         self._btn_max.clicked.connect(self._toggle_maximized)
         self._btn_close.clicked.connect(self.close)
+
+    def _refresh_menu_icons(self) -> None:
+        """(Re)tint the dropdown menu glyphs to the current theme: the palette's
+        subtle colour normally, the accent's contrast colour on the highlighted
+        row (whose background is the accent), the disabled grey when greyed."""
+        colors = theme.palette(self.settings.appearance.mode)
+        on_accent = theme.contrast_color(
+            theme.normalize_accent(self.settings.appearance.accent)
+        )
+        for act, kind in self._menu_icon_actions:
+            act.setIcon(menu_icon(kind, colors["subtle"], on_accent, colors["dis_text"]))
 
     def _toggle_maximized(self) -> None:
         if self.isMaximized():
@@ -1708,6 +1733,7 @@ class MainWindow(QMainWindow):
     def _apply_settings_to_views(self) -> None:
         """Push the current settings onto every view that mirrors them. Used when
         the Settings dialog is saved and when settings are reset to defaults."""
+        self._refresh_menu_icons()  # theme mode/accent may have changed
         self.file_list.set_show_full_names(self.settings.show_full_file_names)
         folder_color = self.settings.appearance.resolved_folder_color()
         self.file_list.set_folder_color(folder_color)

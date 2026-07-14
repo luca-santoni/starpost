@@ -91,6 +91,12 @@ _LIGHT = {
 }
 
 
+def palette(mode: str) -> dict[str, str]:
+    """The raw colour table for ``mode`` ("light", else dark) — for code that
+    draws its own theme-matched pixmaps (e.g. the dropdown menu glyphs)."""
+    return dict(_LIGHT if mode == "light" else _DARK)
+
+
 def normalize_accent(accent: str) -> str:
     """Return a valid ``#rrggbb`` string, falling back to the default accent."""
     if not accent:

@@ -12,6 +12,10 @@ All notable changes to StarPost are recorded here. Versions follow the
   window edge.
 
 ### New Features
+- **Menu icons** — the File and Run batch dropdowns now show a small glyph
+  beside each entry (add, import/export, play/fast-forward…), STAR-CCM+
+  style. The glyphs follow the light/dark theme and the accent's contrast
+  colour on the highlighted row.
 - **Keyboard shortcuts** — the main views and actions now have hotkeys, shown
   in menus and tooltips (hover a tab or button to see its key):
   **F1**/**F2** switch the left panel to Files/Data; **1**–**4** switch the
