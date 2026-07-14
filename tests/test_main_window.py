@@ -207,7 +207,7 @@ def test_files_sort_menu_sorting_still_works(app, monkeypatch):
 
 def test_data_sort_menu_ends_with_red_clear_entry(app):
     """The Data tab's right-click menu also ends with the red Clear entry,
-    wired to the same clear_requested signal as the Clear Data button."""
+    wired to clear_requested (the main window's confirm-and-clear-all)."""
     from PySide6.QtWidgets import QWidgetAction
 
     from starpost.gui.views.data_list import DataListPanel
@@ -249,6 +249,22 @@ def test_data_sort_menu_sorting_still_works(app):
     assert panel._sort_mode == "name_za"
     assert cleared == []
     panel.close()
+
+
+def test_files_and_data_tabs_have_no_bottom_buttons(app):
+    """The button rows under the Files and Data trees are gone: every action
+    lives in the File menu, the tab/item context menus, or on a hotkey."""
+    from PySide6.QtWidgets import QPushButton
+
+    from starpost.gui.views.data_list import DataListPanel
+    from starpost.gui.views.file_list import FileListPanel
+
+    fp = FileListPanel()
+    dp = DataListPanel()
+    assert fp.findChildren(QPushButton) == []
+    assert dp.findChildren(QPushButton) == []
+    fp.close()
+    dp.close()
 
 
 def test_data_list_delete_key_emits_selected_names(app):

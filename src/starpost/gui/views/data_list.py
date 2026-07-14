@@ -19,12 +19,10 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QHBoxLayout,
     QInputDialog,
     QListWidget,
     QMenu,
     QMessageBox,
-    QPushButton,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -251,11 +249,8 @@ class _DataTree(QTreeWidget):
 class DataListPanel(QWidget):
     # Emitted when the set of checked entries changes.
     selection_changed = Signal()
-    import_requested = Signal()
-    export_requested = Signal()
-    delete_requested = Signal()  # delete the checked data sets
     remove_requested = Signal(list)  # data set names to delete (selection-based)
-    clear_requested = Signal()
+    clear_requested = Signal()  # wipe all loaded data (the tab menu's Clear)
     properties_requested = Signal(object)  # a data set name to show properties for
     # A folder's name and its contained data set names, for aggregate properties.
     folder_properties_requested = Signal(object, object)
@@ -302,27 +297,11 @@ class DataListPanel(QWidget):
         sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         sc.activated.connect(self._remove_selected)
 
-        import_btn = QPushButton("Import")
-        import_btn.setToolTip("Import data from a portable StarPost CSV file")
-        import_btn.clicked.connect(self.import_requested)
-        export = QPushButton("Export Data")
-        export.setToolTip("Export loaded data sets to portable StarPost CSV files")
-        export.clicked.connect(self.export_requested)
-        delete = QPushButton("Delete")
-        delete.setToolTip("Delete the selected data sets")
-        delete.clicked.connect(self.delete_requested)
-        clear = QPushButton("Clear Data")
-        clear.setObjectName("clearDataButton")
-        clear.setToolTip("Remove all loaded data")
-        clear.clicked.connect(self.clear_requested)
-        buttons = QHBoxLayout()
-        for b in (import_btn, export, delete, clear):
-            buttons.addWidget(b)
-        buttons.addStretch(1)
-
+        # No button row: import/export live in the File menu, deletion in the
+        # item context menu / Delete key, and Clear in the tab's right-click
+        # menu (clear_requested).
         layout = QVBoxLayout(self)
         layout.addWidget(self._tree)
-        layout.addLayout(buttons)
 
         self._load()
 

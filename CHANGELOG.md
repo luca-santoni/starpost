@@ -5,6 +5,15 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### Changed
+- **Tab button rows removed** — the rows of buttons beneath the Files list
+  (Add files, Add folder, Remove, Clear) and the Data list (Import, Export
+  Data, Delete, Clear Data) are gone; every action lives in the File menu,
+  the right-click menus, or on a hotkey, leaving the panels' full height to
+  the lists. One behavioural note: data deletion now acts on the *selected*
+  data sets (right-click ▸ Remove or the Delete key) rather than the checked
+  ones.
+
 ### Fixed
 - **Window buttons** — the minimise / maximise / close buttons in the top-right
   corner now fill the title bar's full height; previously they sat centred with
@@ -14,14 +23,13 @@ All notable changes to StarPost are recorded here. Versions follow the
 ### New Features
 - **Remove data sets from the right-click menu** — right-clicking a data set
   on the Data tab now offers **Remove** (shown with its **Delete** key, which
-  also works whenever the data list has focus). It removes the selected data
-  sets after the same confirmation as the Delete button — like removing files
-  on the Files tab, but acting on the selection rather than the checkboxes.
+  also works whenever the data list has focus). It asks for confirmation,
+  then deletes the selected data sets — like removing files on the Files tab.
 - **Clear in the tab right-click menus** — the Files and Data tabs'
   right-click menus now end with a red **Clear** entry beneath the sort
-  options; it asks for confirmation and empties the list, same as the Clear /
-  Clear Data buttons at the bottom of each tab. Hovering it inverts the entry
-  to a red fill with white text, its take on the other items' highlight.
+  options; it asks for confirmation and empties the list. Hovering it inverts
+  the entry to a red fill with white text, its take on the other items'
+  highlight.
 - **Menu icons** — the File and Run batch dropdowns now show a small glyph
   beside each entry (add, import/export, play/fast-forward…), STAR-CCM+
   style. The glyphs follow the light/dark theme and the accent's contrast

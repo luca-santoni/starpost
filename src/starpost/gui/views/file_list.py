@@ -24,11 +24,9 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
-    QHBoxLayout,
     QInputDialog,
     QMenu,
     QMessageBox,
-    QPushButton,
     QStyle,
     QTreeWidget,
     QTreeWidgetItem,
@@ -282,29 +280,11 @@ class FileListPanel(QWidget):
             sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             sc.activated.connect(slot)
 
-        add_files = QPushButton("Add files…")
-        add_folder = QPushButton("Add folder…")
-        remove = QPushButton("Remove")
-        clear = QPushButton("Clear")
-        clear.setObjectName("dangerButton")
-        add_files.setToolTip("Add one or more .sim files to the list")
-        add_folder.setToolTip(
-            "Add a folder's .sim files into a new internal folder named after it"
-        )
-        remove.setToolTip("Remove the selected files and folders from the list")
-        clear.setToolTip("Remove all files and folders from the list")
-        add_files.clicked.connect(self.add_files_dialog)
-        add_folder.clicked.connect(self.add_folder_dialog)
-        remove.clicked.connect(self._remove_selected)
-        clear.clicked.connect(self._clear_confirmed)
-
-        buttons = QHBoxLayout()
-        for b in (add_files, add_folder, remove, clear):
-            buttons.addWidget(b)
-
+        # No button row: adding lives in the File menu (Add ▸ Files…/Folder…),
+        # removal in the item context menu / Delete key, and Clear in the tab's
+        # right-click menu.
         layout = QVBoxLayout(self)
         layout.addWidget(self._tree)
-        layout.addLayout(buttons)
 
         self._load()
 

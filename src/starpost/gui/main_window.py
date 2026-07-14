@@ -194,9 +194,6 @@ class MainWindow(QMainWindow):
         self.data_list.folder_properties_requested.connect(
             self._show_data_folder_properties
         )
-        self.data_list.import_requested.connect(self._import_data)
-        self.data_list.export_requested.connect(self._export_data)
-        self.data_list.delete_requested.connect(self._delete_selected_data)
         self.data_list.remove_requested.connect(self._delete_data_names)
         self.data_list.clear_requested.connect(self._clear_data)
         self._refresh_from_store()
@@ -1121,14 +1118,9 @@ class MainWindow(QMainWindow):
         self.store.save_cache_async()
         self._refresh_from_store()
 
-    def _delete_selected_data(self) -> None:
-        """Delete just the checked data sets from the store, after confirmation
-        (the Data tab's Delete button)."""
-        self._delete_data_names(self.data_list.checked_names())
-
     def _delete_data_names(self, names: list) -> None:
-        """Delete the named data sets from the store, after confirmation. Also
-        the Data tab's selection-based remove (context menu / Delete key)."""
+        """Delete the named data sets from the store, after confirmation — the
+        Data tab's selection-based remove (context menu / Delete key)."""
         if self._thread is not None and self._thread.isRunning():
             QMessageBox.information(
                 self, "Delete data",
