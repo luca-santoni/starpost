@@ -51,12 +51,14 @@ def test_highlighted_menu_checkmark_uses_a_distinct_glyph(app):
     assert normal != selected
 
 
-def test_danger_menu_item_is_red_with_neutral_hover(app):
-    """The destructive context-menu entry (Files tab's Clear) is styled red
-    like the danger buttons, with the neutral button hover fill (not the
-    accent, which would clash with the red text)."""
+def test_danger_menu_item_is_red_and_inverts_on_hover(app):
+    """The destructive context-menu entry (the tabs' Clear) is styled red like
+    the danger buttons, and hovering inverts it: the red becomes the fill and
+    the text goes white — its own version of the other items' accent
+    highlight."""
     qss = build_stylesheet("dark", "#ffc829")
     body = _rule_body(qss, "QLabel#dangerMenuItem")
-    assert "#e5484d" in body
+    assert "color: #e5484d" in body
     hover = _rule_body(qss, "QLabel#dangerMenuItem:hover")
-    assert "background" in hover
+    assert "background: #e5484d" in hover
+    assert "color: #ffffff" in hover

@@ -15,7 +15,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 - **Clear in the tab right-click menus** — the Files and Data tabs'
   right-click menus now end with a red **Clear** entry beneath the sort
   options; it asks for confirmation and empties the list, same as the Clear /
-  Clear Data buttons at the bottom of each tab.
+  Clear Data buttons at the bottom of each tab. Hovering it inverts the entry
+  to a red fill with white text, its take on the other items' highlight.
 - **Menu icons** — the File and Run batch dropdowns now show a small glyph
   beside each entry (add, import/export, play/fast-forward…), STAR-CCM+
   style. The glyphs follow the light/dark theme and the accent's contrast

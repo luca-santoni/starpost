@@ -333,16 +333,21 @@ QPushButton#clearDataButton, QPushButton#dangerButton {
 QPushButton#clearDataButton:hover, QPushButton#dangerButton:hover { background: $btn_hover; }
 QPushButton#clearDataButton:pressed, QPushButton#dangerButton:pressed { background: $btn_pressed; }
 
-/* Destructive context-menu entry (the Files tab menu's "Clear"): a label in a
-   QWidgetAction, red like the danger buttons. Hover keeps the neutral button
-   fill — red text on the accent highlight would clash. Left padding lines its
-   text up with the checkable sort entries above it (item padding + indicator). */
+/* Destructive context-menu entry (the Files/Data tab menus' "Clear"): a label
+   in a QWidgetAction, red like the danger buttons. Hover inverts it — red
+   fill, white text (the close caption button's convention) — this entry's
+   version of the accent highlight the ordinary items get. Left padding lines
+   its text up with the checkable sort entries above it (item padding +
+   indicator). */
 QLabel#dangerMenuItem {
     background: transparent;
     color: #e5484d;
     padding: 4px 22px 4px 21px;
 }
-QLabel#dangerMenuItem:hover { background: $btn_hover; }
+QLabel#dangerMenuItem:hover {
+    background: #e5484d;
+    color: #ffffff;
+}
 
 QListWidget#settingsNav {
     background: $base_bg;
