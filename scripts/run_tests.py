@@ -10,7 +10,7 @@ are pinned by app-level event filters and signal-connected bound methods), and
 explicitly destroying the pyqtgraph-backed windows segfaults the interpreter.
 So they accumulate across the whole session and ``apply_theme``'s app-wide
 ``setStyleSheet`` re-polish grows pathologically slow — minutes late in the run,
-and an on-screen hang on Windows. See ``GUI_TEST_PERF_REPORT.md``.
+and an on-screen hang on Windows.
 
 Running each file in a fresh subprocess caps the live-widget count at a single
 file's worth (each file in isolation is fast), so the suite stays quick on every

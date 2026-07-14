@@ -44,7 +44,7 @@ accumulates widgets until `apply_theme`'s app-wide restyle is pathologically slo
 (minutes late in the run; an on-screen hang on Windows). The runner gives each
 file a fresh process, capping accumulation, and runs them in a bounded parallel
 pool (`STARPOST_TEST_JOBS` to cap). Single-file `pytest` is already one process,
-so it's fine directly. See `GUI_TEST_PERF_REPORT.md`.
+so it's fine directly.
 
 The version is the single source of truth in `__version__` in `src/starpost/__init__.py`;
 `pyproject.toml` derives its version from there via setuptools' dynamic `attr`. Packaging
