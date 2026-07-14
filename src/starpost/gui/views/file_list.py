@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 from starpost.gui import shortcuts
@@ -65,6 +67,28 @@ CACHE_VERSION = 2  # nested-folder cache layout (v1 was a flat list of paths)
 
 def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
+
+
+class _DangerMenuItem(QLabel):
+    """A destructive entry for a QMenu, hosted by a QWidgetAction: red text
+    like the danger buttons, with the theme's neutral hover fill (styled by
+    the ``dangerMenuItem`` QSS rules). A plain QAction is no use here — the
+    app stylesheet colours all menu items alike, with no per-item override.
+    Emits ``clicked`` on a left-button release inside the label."""
+
+    clicked = Signal()
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self.setObjectName("dangerMenuItem")
+
+    def mouseReleaseEvent(self, event) -> None:
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self.rect().contains(event.position().toPoint())
+        ):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
@@ -421,9 +445,19 @@ class FileListPanel(QWidget):
 
     # --- sorting ---------------------------------------------------------
     def show_sort_menu(self, global_pos) -> None:
-        """Show the sort options at a global position (the Files tab is
-        right-clicked). The active mode shows a checkmark. Sorting orders each
-        folder's contents, folders before files."""
+        """Show the tab context menu (sort options + Clear) at a global
+        position (the Files tab is right-clicked). The active sort mode shows
+        a checkmark. Sorting orders each folder's contents, folders before
+        files."""
+        menu, actions, _clear_act = self._build_sort_menu()
+        self._on_sort_menu_chosen(menu.exec(global_pos), actions)
+
+    def _build_sort_menu(self):
+        """The Files tab context menu: the four sort modes, then a destructive
+        Clear entry below a separator — the same confirm-and-clear as the
+        panel's Clear button. Returns ``(menu, {action: sort_mode}, clear_act)``;
+        Clear handles itself through its signals (click closes the menu, and a
+        keyboard Enter triggers the action), so the exec dispatch skips it."""
         menu = QMenu(self)
         options = [
             ("Name (A–Z)", "name_az"),
@@ -437,8 +471,22 @@ class FileListPanel(QWidget):
             act.setCheckable(True)
             act.setChecked(key == self._sort_mode)
             actions[act] = key
-        chosen = menu.exec(global_pos)
-        if chosen is not None:
+        menu.addSeparator()
+        label = _DangerMenuItem("Clear")
+        clear_act = QWidgetAction(menu)
+        clear_act.setDefaultWidget(label)
+        menu.addAction(clear_act)
+        # Close first, confirm second: the confirmation box must not sit under
+        # a still-open menu holding the mouse grab.
+        label.clicked.connect(menu.close)
+        label.clicked.connect(self._clear_confirmed)
+        clear_act.triggered.connect(self._clear_confirmed)
+        return menu, actions, clear_act
+
+    def _on_sort_menu_chosen(self, chosen, actions) -> None:
+        """Apply the picked sort mode; Clear (or a dismissed menu) is not a
+        sort choice and does nothing here."""
+        if chosen in actions:
             self._sort_mode = actions[chosen]
             self._apply_sort()
             self._changed()

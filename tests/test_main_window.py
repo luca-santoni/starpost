@@ -151,6 +151,60 @@ def test_single_top_bar_has_menu_and_window_buttons(app):
     win.close()
 
 
+def test_files_sort_menu_ends_with_red_clear_entry(app, monkeypatch):
+    """The Files tab's right-click menu carries a Clear entry beneath the sort
+    options: a separator, then a QWidgetAction whose label is the red danger
+    style — wired to the same confirm-and-clear as the panel's Clear button."""
+    from PySide6.QtWidgets import QWidgetAction
+
+    from starpost.gui.views.file_list import FileListPanel
+
+    panel = FileListPanel()
+    cleared = []
+    monkeypatch.setattr(panel, "_clear_confirmed", lambda: cleared.append(True))
+    menu, actions, clear_act = panel._build_sort_menu()
+    acts = menu.actions()
+    assert acts[-2].isSeparator()
+    assert acts[-1] is clear_act
+    assert isinstance(clear_act, QWidgetAction)
+    label = clear_act.defaultWidget()
+    assert label.text() == "Clear"
+    assert label.objectName() == "dangerMenuItem"
+
+    # Clicking the label (its clicked signal) runs the panel's confirm-and-clear.
+    label.clicked.emit()
+    assert cleared == [True]
+
+    # Keyboard activation (Enter on the entry triggers the action) too.
+    clear_act.trigger()
+    assert cleared == [True, True]
+
+    # Neither path disturbed the sort mode.
+    assert panel._sort_mode == "name_az"
+    panel.close()
+
+
+def test_files_sort_menu_sorting_still_works(app, monkeypatch):
+    """Choosing a sort option still applies it, and the Clear entry passing
+    through the chosen-action dispatch is a no-op (its own signals handle it)."""
+    from starpost.gui.views.file_list import FileListPanel
+
+    panel = FileListPanel()
+    cleared = []
+    monkeypatch.setattr(panel, "_clear_confirmed", lambda: cleared.append(True))
+    menu, actions, clear_act = panel._build_sort_menu()
+    za_action = next(a for a, mode in actions.items() if mode == "name_za")
+    panel._on_sort_menu_chosen(za_action, actions)
+    assert panel._sort_mode == "name_za"
+    # exec returning the Clear widget-action (or None) must not re-clear or
+    # touch the sort mode: the action's triggered signal already handled it.
+    panel._on_sort_menu_chosen(clear_act, actions)
+    panel._on_sort_menu_chosen(None, actions)
+    assert panel._sort_mode == "name_za"
+    assert cleared == []
+    panel.close()
+
+
 def test_caption_buttons_fill_bar_height(app):
     """The window min/max/close buttons span the title bar's full height. The
     toolbar layout offers every item the whole row (the menu buttons take it);
