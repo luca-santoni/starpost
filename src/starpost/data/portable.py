@@ -43,11 +43,6 @@ from starpost.data.models import (
 FORMAT = "starpost-data"
 VERSION = 2
 
-# Row tags (first cell). A row whose first cell isn't one of these is a numeric
-# data row belonging to the current head block.
-_TAGS = {"meta", "report", "plot", "head"}
-
-
 def _bool(v: bool) -> str:
     return "true" if v else "false"
 

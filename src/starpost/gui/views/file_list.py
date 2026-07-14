@@ -45,8 +45,6 @@ from starpost.gui.widgets import (
 )
 from starpost.utils.paths import file_list_cache_path
 
-MAX_FILES = 25  # v1 expected ceiling; warn beyond this
-
 # Item data roles and the type tag they carry.
 _PATH_ROLE = int(Qt.ItemDataRole.UserRole)      # a file item's full path (str)
 _TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 1  # "file" or "folder"

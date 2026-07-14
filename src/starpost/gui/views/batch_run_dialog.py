@@ -86,9 +86,6 @@ from starpost.gui.widgets import (
     enable_range_selection,
 )
 
-_TAB_NAMES = ["Source", "Reports", "Plots", "Scenes", "Screenplays", "Summary"]
-
-
 def _header(text: str) -> QLabel:
     """A bold section header label, shared across the batch dialogs."""
     label = QLabel(text)
@@ -681,7 +678,6 @@ class SourcePanel(QWidget):
         self._data_sets = list(data_sets or [])  # data-set names shown in "data" mode
         self._sim_files: list[Path] = []          # .sim files added via Load File
         self._results = list(results or [])       # SimResults, for source resolution
-        self._show_similar_format = show_similar_format
 
         self._source_input = QComboBox()
         self._source_input.addItem(".sim files", "sim")
