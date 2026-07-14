@@ -8,7 +8,7 @@ All notable changes to StarPost are recorded here. Versions follow the
 ### New Features
 - **Keyboard shortcuts** — the main views and actions now have hotkeys, shown
   in menus and tooltips (hover a tab or button to see its key):
-  **1**/**2** switch the left panel to Files/Data; **F1**–**F4** switch the
+  **F1**/**F2** switch the left panel to Files/Data; **1**–**4** switch the
   centre tabs (Reports, Plots, Scenes, Screenplays); **Ctrl+Shift+B** /
   **Ctrl+Shift+E** open Full Batch / Express batch; **Ctrl+N** /
   **Ctrl+Shift+N** add files / a folder to the Files list; **Alt+Shift+I** /

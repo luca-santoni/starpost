@@ -24,8 +24,8 @@ def app():
 
 
 def test_key_and_hint():
-    assert shortcuts.key("tab_reports") == "F1"
-    assert shortcuts.hint("Switch to Reports", "tab_reports") == "Switch to Reports (F1)"
+    assert shortcuts.key("tab_reports") == "1"
+    assert shortcuts.hint("Switch to Reports", "tab_reports") == "Switch to Reports (1)"
 
 
 def test_menu_label_pads_for_shortcut_column():
@@ -37,12 +37,12 @@ def test_menu_label_pads_for_shortcut_column():
 def test_expected_bindings():
     """The bindings agreed in the spec, verbatim."""
     expected = {
-        "tab_files": "1",
-        "tab_data": "2",
-        "tab_reports": "F1",
-        "tab_plots": "F2",
-        "tab_scenes": "F3",
-        "tab_screenplays": "F4",
+        "tab_files": "F1",
+        "tab_data": "F2",
+        "tab_reports": "1",
+        "tab_plots": "2",
+        "tab_scenes": "3",
+        "tab_screenplays": "4",
         "batch_full": "Ctrl+Shift+B",
         "batch_express": "Ctrl+Shift+E",
         "add_files": "Ctrl+N",
@@ -91,13 +91,13 @@ def test_tab_keys_switch_tabs(app):
     win = _make_window()
     try:
         for qtkey, index in (
-            (Qt.Key_F2, 1), (Qt.Key_F3, 2), (Qt.Key_F4, 3), (Qt.Key_F1, 0),
+            (Qt.Key_2, 1), (Qt.Key_3, 2), (Qt.Key_4, 3), (Qt.Key_1, 0),
         ):
             QTest.keyClick(win, qtkey)
             assert win._center_tabs.currentIndex() == index
-        QTest.keyClick(win, Qt.Key_2)
+        QTest.keyClick(win, Qt.Key_F2)
         assert win._left_tabs.currentIndex() == 1
-        QTest.keyClick(win, Qt.Key_1)
+        QTest.keyClick(win, Qt.Key_F1)
         assert win._left_tabs.currentIndex() == 0
     finally:
         win.close()
@@ -106,10 +106,10 @@ def test_tab_keys_switch_tabs(app):
 def test_tab_tooltips_show_keys(app):
     win = _make_window()
     try:
-        for i, key_text in enumerate(("(F1)", "(F2)", "(F3)", "(F4)")):
+        for i, key_text in enumerate(("(1)", "(2)", "(3)", "(4)")):
             assert key_text in win._center_tabs.tabToolTip(i)
-        assert "(1)" in win._left_tabs.tabToolTip(0)
-        assert "(2)" in win._left_tabs.tabToolTip(1)
+        assert "(F1)" in win._left_tabs.tabToolTip(0)
+        assert "(F2)" in win._left_tabs.tabToolTip(1)
     finally:
         win.close()
 

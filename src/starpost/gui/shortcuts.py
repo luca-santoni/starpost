@@ -14,12 +14,12 @@ Scopes (enforced where the keys are registered, not here):
 
 SHORTCUTS: dict[str, tuple[str, str]] = {
     # id: (key sequence, human label)
-    "tab_files": ("1", "Switch to Files"),
-    "tab_data": ("2", "Switch to Data"),
-    "tab_reports": ("F1", "Switch to Reports"),
-    "tab_plots": ("F2", "Switch to Plots"),
-    "tab_scenes": ("F3", "Switch to Scenes"),
-    "tab_screenplays": ("F4", "Switch to Screenplays"),
+    "tab_files": ("F1", "Switch to Files"),
+    "tab_data": ("F2", "Switch to Data"),
+    "tab_reports": ("1", "Switch to Reports"),
+    "tab_plots": ("2", "Switch to Plots"),
+    "tab_scenes": ("3", "Switch to Scenes"),
+    "tab_screenplays": ("4", "Switch to Screenplays"),
     "batch_full": ("Ctrl+Shift+B", "Open the Full Batch wizard"),
     "batch_express": ("Ctrl+Shift+E", "Open the Express batch dialog"),
     "add_files": ("Ctrl+N", "Add .sim files to the Files list"),
