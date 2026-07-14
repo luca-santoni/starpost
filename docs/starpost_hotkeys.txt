@@ -34,3 +34,7 @@ Files list (only while the Files list has focus)
 Load file(s)            Ctrl+L
 Properties              Ctrl+P
 Remove file/folder      Delete
+
+Data list (only while the Data list has focus)
+----------------------------------------------
+Remove data set(s)      Delete

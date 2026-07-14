@@ -7,6 +7,8 @@ adds nothing to startup.
 
 Scopes (enforced where the keys are registered, not here):
 - the ``file_*`` ids are active only while the Files list has focus;
+  ``file_remove``'s Delete key is also bound on the Data list (remove the
+  selected data sets) — same key, each binding active only in its own tree;
 - ``select_all`` / ``clear_selection`` / ``run_render`` / ``smooth`` act on the
   active centre tab (the selection panel tracks it);
 - everything else is app-wide.

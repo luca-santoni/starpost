@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -37,6 +38,7 @@ from PySide6.QtWidgets import (
 # Reuse the Files tab's folder-icon tinting and the nested-row dash so the two
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
+from starpost.gui import shortcuts
 from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
 from starpost.gui.widgets import (
     DangerMenuItem,
@@ -252,6 +254,7 @@ class DataListPanel(QWidget):
     import_requested = Signal()
     export_requested = Signal()
     delete_requested = Signal()  # delete the checked data sets
+    remove_requested = Signal(list)  # data set names to delete (selection-based)
     clear_requested = Signal()
     properties_requested = Signal(object)  # a data set name to show properties for
     # A folder's name and its contained data set names, for aggregate properties.
@@ -291,6 +294,13 @@ class DataListPanel(QWidget):
         # so they don't trigger a save).
         self._tree.itemExpanded.connect(self._on_expansion_changed)
         self._tree.itemCollapsed.connect(self._on_expansion_changed)
+
+        # Delete removes the selected data sets — the same key as the Files
+        # tab's Remove, active only while the data tree has focus. The context
+        # menu displays the key, but this persistent binding does the real work.
+        sc = QShortcut(QKeySequence(shortcuts.key("file_remove")), self._tree)
+        sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        sc.activated.connect(self._remove_selected)
 
         import_btn = QPushButton("Import")
         import_btn.setToolTip("Import data from a portable StarPost CSV file")
@@ -667,10 +677,46 @@ class DataListPanel(QWidget):
                 self._folder_properties(item)
             return
 
-        # A data set: Properties on the right-clicked one.
-        props_act = menu.addAction("Properties")
-        if menu.exec(global_pos) is props_act:
+        # A data set: Properties on the right-clicked one, Remove like the
+        # Files tab (menu is a throwaway; the builder is split out for tests).
+        menu, props_act, remove_act = self._build_item_menu(item)
+        chosen = menu.exec(global_pos)
+        if chosen is props_act:
             self.properties_requested.emit(item.data(0, _NAME_ROLE))
+        elif chosen is remove_act:
+            # Removing acts on the selection; make the right-clicked item part
+            # of it when nothing was selected.
+            if not item.isSelected():
+                self._tree.setCurrentItem(item)
+                item.setSelected(True)
+            self._remove_selected()
+
+    def _build_item_menu(self, item: QTreeWidgetItem):
+        """The data-set context menu: Properties, then Remove displaying the
+        Files tab's Delete key (the always-active binding is the tree's
+        QShortcut). Returns ``(menu, props_act, remove_act)``."""
+        menu = QMenu(self)
+        props_act = menu.addAction(shortcuts.menu_label("Properties"))
+        remove_act = menu.addAction(shortcuts.menu_label("Remove"))
+        remove_act.setShortcut(QKeySequence(shortcuts.key("file_remove")))
+        remove_act.setShortcutVisibleInContextMenu(True)
+        return menu, props_act, remove_act
+
+    def _remove_selected(self) -> None:
+        """Request deletion of the selected data sets (Delete key / context
+        menu Remove), falling back to the current item when nothing is
+        selected. The main window owns the store, so this only emits
+        remove_requested — it confirms and deletes, exactly as for the Delete
+        button. Folders are skipped: they have their own Delete folder entry."""
+        names = [
+            it.data(0, _NAME_ROLE) for it in self._iter_data() if it.isSelected()
+        ]
+        if not names:
+            current = self._tree.currentItem()
+            if current is not None and not _is_folder(current):
+                names = [current.data(0, _NAME_ROLE)]
+        if names:
+            self.remove_requested.emit(names)
 
     # --- slots -----------------------------------------------------------
     def _on_item_changed(self, _item, _column) -> None:

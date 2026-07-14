@@ -251,6 +251,76 @@ def test_data_sort_menu_sorting_still_works(app):
     panel.close()
 
 
+def test_data_list_delete_key_emits_selected_names(app):
+    """The Delete key on the Data tree requests removal of the selected data
+    sets (remove_requested carries their names), mirroring the Files tab."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from starpost.gui.views.data_list import DataListPanel
+
+    panel = DataListPanel()
+    panel.set_entries(["d0", "d1", "d2"])
+    panel.show()
+    panel._tree.setFocus()
+    QApplication.processEvents()
+    requested = []
+    panel.remove_requested.connect(requested.append)
+    tree = panel._tree
+    items = [tree.topLevelItem(i) for i in range(3)]
+    items[0].setSelected(True)
+    items[2].setSelected(True)
+    QTest.keyClick(tree, Qt.Key_Delete)
+    assert requested == [["d0", "d2"]]
+    # Nothing selected and no current item: no request.
+    tree.clearSelection()
+    tree.setCurrentItem(None)
+    QTest.keyClick(tree, Qt.Key_Delete)
+    assert requested == [["d0", "d2"]]
+    panel.close()
+
+
+def test_data_item_context_menu_offers_remove_with_delete_key(app):
+    """Right-clicking a data set offers Remove alongside Properties, showing
+    the same Delete key as the Files tab's Remove."""
+    from starpost.gui.views.data_list import DataListPanel
+
+    panel = DataListPanel()
+    panel.set_entries(["d0"])
+    item = panel._tree.topLevelItem(0)
+    menu, props_act, remove_act = panel._build_item_menu(item)
+    texts = [a.text().rstrip() for a in menu.actions()]
+    assert texts == ["Properties", "Remove"]
+    from PySide6.QtGui import QKeySequence
+
+    from starpost.gui import shortcuts
+
+    assert remove_act.shortcut() == QKeySequence(shortcuts.key("file_remove"))
+    assert remove_act.isShortcutVisibleInContextMenu()
+    panel.close()
+
+
+def test_main_window_removes_data_sets_on_request(app, monkeypatch):
+    """remove_requested from the Data tab deletes exactly the named data sets
+    from the store, behind the same confirmation as the Delete button."""
+    import starpost.gui.main_window as mw
+    from PySide6.QtWidgets import QMessageBox
+
+    from starpost.data.models import SimResult
+
+    win = mw.MainWindow(Settings())
+    for name in ("a", "b"):
+        win.store.put(SimResult(sim_path=f"/tmp/{name}.sim"))
+    answers = iter([QMessageBox.No, QMessageBox.Yes])
+    monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: next(answers))
+    win.data_list.remove_requested.emit(["a"])  # answered No: nothing removed
+    assert {r.sim_name for r in win.store.all()} == {"a", "b"}
+    win.data_list.remove_requested.emit(["a"])  # answered Yes
+    assert {r.sim_name for r in win.store.all()} == {"b"}
+    win.close()
+
+
 def test_caption_buttons_fill_bar_height(app):
     """The window min/max/close buttons span the title bar's full height. The
     toolbar layout offers every item the whole row (the menu buttons take it);

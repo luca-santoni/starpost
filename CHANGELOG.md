@@ -12,6 +12,11 @@ All notable changes to StarPost are recorded here. Versions follow the
   window edge.
 
 ### New Features
+- **Remove data sets from the right-click menu** — right-clicking a data set
+  on the Data tab now offers **Remove** (shown with its **Delete** key, which
+  also works whenever the data list has focus). It removes the selected data
+  sets after the same confirmation as the Delete button — like removing files
+  on the Files tab, but acting on the selection rather than the checkboxes.
 - **Clear in the tab right-click menus** — the Files and Data tabs'
   right-click menus now end with a red **Clear** entry beneath the sort
   options; it asks for confirmation and empties the list, same as the Clear /
