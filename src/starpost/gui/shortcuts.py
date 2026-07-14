@@ -22,6 +22,8 @@ SHORTCUTS: dict[str, tuple[str, str]] = {
     "tab_screenplays": ("F4", "Switch to Screenplays"),
     "batch_full": ("Ctrl+Shift+B", "Open the Full Batch wizard"),
     "batch_express": ("Ctrl+Shift+E", "Open the Express batch dialog"),
+    "add_files": ("Ctrl+N", "Add .sim files to the Files list"),
+    "add_folder": ("Ctrl+Shift+N", "Add a folder of .sim files to the Files list"),
     "select_all": ("Ctrl+Shift+A", "Select all entries in the current checklist"),
     "clear_selection": ("Ctrl+Shift+D", "Deselect the current checklist"),
     "run_render": ("Ctrl+R", "Run / Record on the Scenes / Screenplays tab"),

@@ -2388,7 +2388,8 @@ def test_toolbar_run_batch_menu_has_full_and_express(app, monkeypatch):
     import starpost.gui.main_window as mw
 
     win = mw.MainWindow(Settings())
-    labels = [a.text() for a in win._run_button.menu().actions()]
+    # Labels carry shortcuts.menu_label's trailing gap padding — strip it.
+    labels = [a.text().rstrip() for a in win._run_button.menu().actions()]
     assert labels == ["Full Batch", "Express batch"]
 
     opened = {}
@@ -2572,7 +2573,8 @@ def test_toolbar_file_menu_structure(app):
     labels = [a.text() for a in win._file_menu.actions()]
     assert labels == ["Add", "Import data…", "Export data…"]
     add_menu = win._file_menu.actions()[0].menu()
-    assert [a.text() for a in add_menu.actions()] == ["Files…", "Folder…"]
+    # Labels carry shortcuts.menu_label's trailing gap padding — strip it.
+    assert [a.text().rstrip() for a in add_menu.actions()] == ["Files…", "Folder…"]
     # Placement: File comes before Run batch in the bar.
     widgets = [win._toolbar.widgetForAction(a) for a in win._toolbar.actions()]
     assert widgets.index(win._file_button) < widgets.index(win._run_button)

@@ -10,7 +10,8 @@ All notable changes to StarPost are recorded here. Versions follow the
   in menus and tooltips (hover a tab or button to see its key):
   **1**/**2** switch the left panel to Files/Data; **F1**–**F4** switch the
   centre tabs (Reports, Plots, Scenes, Screenplays); **Ctrl+Shift+B** /
-  **Ctrl+Shift+E** open Full Batch / Express batch; **Ctrl+Shift+A** /
+  **Ctrl+Shift+E** open Full Batch / Express batch; **Ctrl+N** /
+  **Ctrl+Shift+N** add files / a folder to the Files list; **Ctrl+Shift+A** /
   **Ctrl+Shift+D** select-all / clear the current checklist; **Ctrl+R** runs
   (Scenes) or records (Screenplays); **Alt+Shift+S** toggles Smooth data on
   the Plots tab; and in the Files list **Ctrl+L** loads, **Ctrl+P** shows

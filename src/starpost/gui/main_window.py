@@ -463,8 +463,19 @@ class MainWindow(QMainWindow):
         # local variable here goes out of scope, despite the QObject parent
         # link — leaving a dangling "Add" submenu.
         add_menu = QMenu("Add", file_menu)
-        add_menu.addAction("Files…", self.file_list.add_files_dialog)
-        add_menu.addAction("Folder…", self.file_list.add_folder_dialog)
+        add_files_act = add_menu.addAction(
+            shortcuts.menu_label("Files…"), self.file_list.add_files_dialog
+        )
+        add_files_act.setShortcut(QKeySequence(shortcuts.key("add_files")))
+        add_folder_act = add_menu.addAction(
+            shortcuts.menu_label("Folder…"), self.file_list.add_folder_dialog
+        )
+        add_folder_act.setShortcut(QKeySequence(shortcuts.key("add_folder")))
+        # Same rule as the Run batch actions below: an action that lives only
+        # in a hidden popup menu never matches its shortcut, so add both to
+        # the window to keep the keys active app-wide.
+        self.addAction(add_files_act)
+        self.addAction(add_folder_act)
         file_menu.addMenu(add_menu)
         file_menu.addAction("Import data…", self._import_data)
         file_menu.addAction("Export data…", self._export_data)

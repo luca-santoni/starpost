@@ -45,6 +45,8 @@ def test_expected_bindings():
         "tab_screenplays": "F4",
         "batch_full": "Ctrl+Shift+B",
         "batch_express": "Ctrl+Shift+E",
+        "add_files": "Ctrl+N",
+        "add_folder": "Ctrl+Shift+N",
         "select_all": "Ctrl+Shift+A",
         "clear_selection": "Ctrl+Shift+D",
         "run_render": "Ctrl+R",
@@ -137,6 +139,35 @@ def test_batch_shortcuts_trigger_and_display(app, monkeypatch):
         assert texts["Full Batch"] == "Ctrl+Shift+B"
         assert texts["Express batch"] == "Ctrl+Shift+E"
         assert all(a.text().endswith(" ") for a in win._run_button.menu().actions())
+    finally:
+        win.close()
+
+
+def test_add_files_folder_shortcuts_trigger_and_display(app, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    import starpost.gui.views.file_list as fl
+
+    calls = []
+    # Patch on the class BEFORE construction: the File menu binds the panel's
+    # bound methods at addAction time (and the real slots open modal dialogs).
+    monkeypatch.setattr(
+        fl.FileListPanel, "add_files_dialog", lambda self: calls.append("files")
+    )
+    monkeypatch.setattr(
+        fl.FileListPanel, "add_folder_dialog", lambda self: calls.append("folder")
+    )
+    win = _make_window()
+    try:
+        QTest.keyClick(win, Qt.Key_N, Qt.ControlModifier)
+        QTest.keyClick(win, Qt.Key_N, Qt.ControlModifier | Qt.ShiftModifier)
+        assert calls == ["files", "folder"]
+        # The Add submenu (first File-menu entry) displays the keys.
+        add_menu = win._file_menu.actions()[0].menu()
+        texts = {a.text().rstrip(): a.shortcut().toString() for a in add_menu.actions()}
+        assert texts["Files…"] == "Ctrl+N"
+        assert texts["Folder…"] == "Ctrl+Shift+N"
     finally:
         win.close()
 
