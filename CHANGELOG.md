@@ -3,40 +3,14 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
-## [Unreleased]
-
-### Changed
-- **Saved views buttons removed** — the Saved views pane on the Scenes and
-  Screenplays tabs no longer shows Select all / Clear; a render uses a single
-  view, so bulk check/uncheck served no purpose.
-- **Tab button rows removed** — the rows of buttons beneath the Files list
-  (Add files, Add folder, Remove, Clear) and the Data list (Import, Export
-  Data, Delete, Clear Data) are gone; every action lives in the File menu,
-  the right-click menus, or on a hotkey, leaving the panels' full height to
-  the lists. One behavioural note: data deletion now acts on the *selected*
-  data sets (right-click ▸ Remove or the Delete key) rather than the checked
-  ones.
-
-### Fixed
-- **Window buttons** — the minimise / maximise / close buttons in the top-right
-  corner now fill the title bar's full height; previously they sat centred with
-  a small gap above and below, so their hover highlight didn't reach the
-  window edge.
+## [2.5.0] — 2026-07-13
 
 ### New Features
-- **Remove data sets from the right-click menu** — right-clicking a data set
-  on the Data tab now offers **Remove** (shown with its **Delete** key, which
-  also works whenever the data list has focus). It asks for confirmation,
-  then deletes the selected data sets — like removing files on the Files tab.
-- **Clear in the tab right-click menus** — the Files and Data tabs'
-  right-click menus now end with a red **Clear** entry beneath the sort
-  options; it asks for confirmation and empties the list. Hovering it inverts
-  the entry to a red fill with white text, its take on the other items'
-  highlight.
-- **Menu icons** — the File and Run batch dropdowns now show a small glyph
-  beside each entry (add, import/export, play/fast-forward…), STAR-CCM+
-  style. The glyphs follow the light/dark theme and the accent's contrast
-  colour on the highlighted row.
+- **File menu** — a new **File** dropdown sits first in the top bar (before
+  Run batch), offering **Add ▸ Files… / Folder…** (the Files tab's add
+  dialogs), **Import data…** and **Export data…** (the Data tab's
+  portable-CSV import/export) — the same operations, reachable without
+  switching tabs.
 - **Keyboard shortcuts** — the main views and actions now have hotkeys, shown
   in menus and tooltips (hover a tab or button to see its key):
   **F1**/**F2** switch the left panel to Files/Data; **1**–**4** switch the
@@ -49,27 +23,53 @@ All notable changes to StarPost are recorded here. Versions follow the
   the Plots tab; and in the Files list **Ctrl+L** loads, **Ctrl+P** shows
   properties, **Delete** removes (with the usual confirmation). The Files
   right-click menu's **Open** is now **Load file**, and it gains a **Remove**
-  entry.
-
-## [2.5.0] — 2026-07-13
-
-### New Features
-- **File menu** — a new **File** dropdown sits first in the top bar (before
-  Run batch), offering **Add ▸ Files… / Folder…** (the Files tab's add
-  dialogs), **Import data…** and **Export data…** (the Data tab's
-  portable-CSV import/export) — the same operations, reachable without
-  switching tabs.
+  entry. The full list is in `docs/starpost_hotkeys.txt`.
+- **Menu icons** — the File and Run batch dropdowns now show a small glyph
+  beside each entry (add, import/export, play/fast-forward…), STAR-CCM+
+  style. The glyphs follow the light/dark theme and the accent's contrast
+  colour on the highlighted row.
+- **Remove data sets from the right-click menu** — right-clicking a data set
+  on the Data tab now offers **Remove** (shown with its **Delete** key, which
+  also works whenever the data list has focus). It asks for confirmation,
+  then deletes the selected data sets — like removing files on the Files tab.
+- **Clear in the tab right-click menus** — the Files and Data tabs'
+  right-click menus now end with a red **Clear** entry beneath the sort
+  options; it asks for confirmation and empties the list. Hovering it inverts
+  the entry to a red fill with white text, its take on the other items'
+  highlight.
 
 ### Improvements
 - **Menu-bar-style dropdowns** — the top bar's **File** and **Run batch**
   menus now open on click (no more hover-open) and stay open wherever the
   mouse goes; with one open, hovering the other menu button switches to it,
   and a click anywhere else dismisses it — like a traditional menu bar.
+- **Tab button rows removed** — the rows of buttons beneath the Files list
+  (Add files, Add folder, Remove, Clear) and the Data list (Import, Export
+  Data, Delete, Clear Data) are gone; every action lives in the File menu,
+  the right-click menus, or on a hotkey, leaving the panels' full height to
+  the lists. One behavioural note: data deletion now acts on the *selected*
+  data sets (right-click ▸ Remove or the Delete key) rather than the checked
+  ones.
+- **Saved views buttons removed** — the Saved views pane on the Scenes and
+  Screenplays tabs no longer shows Select all / Clear; a render uses a single
+  view, so bulk check/uncheck served no purpose.
 
 ### Bug Fixes
+- **Window buttons** — the minimise / maximise / close buttons in the top-right
+  corner now fill the title bar's full height; previously they sat centred with
+  a small gap above and below, so their hover highlight didn't reach the
+  window edge.
 - **Open-menu button highlight** — the **File** and **Run batch** buttons kept
   their bright hover highlight while their dropdown was open instead of fading
   to the near-invisible pressed shade, so it's now clear which menu is active.
+
+### Maintenance
+- **Dead-code cleanup** — removed the orphaned batch stop machinery
+  (`BatchWorker.request_stop` and the unused `JobState` / `Job.state` /
+  `Job.message` fields, left behind when the non-functional "Stop after
+  current" button was dropped), the unused `PlotView.monitor_selection`
+  getter, and several unreferenced constants (`MAX_FILES`, `_TAGS`,
+  `_TAB_NAMES`).
 
 ## [2.4.0] — 2026-07-12
 

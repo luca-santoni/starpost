@@ -2,7 +2,7 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **2.4.0**
+> Version: **2.5.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
@@ -12,7 +12,9 @@
 > recording** (the Screenplays tab: screenplay → displayer selection, saved-view
 > recording, a poster-framed gallery that opens movies in the system player), a
 > **guided Run batch dialog** (a Source → Reports → Plots → Scenes → Screenplays
-> → Summary wizard producing a single archive), the full in-app settings dialog, a heavily
+> → Summary wizard producing a single archive), a single menu-bar-style top bar
+> with a **File** menu, **keyboard shortcuts** for the main views and actions,
+> the full in-app settings dialog, a heavily
 > customizable report/plot export, an in-app update check, and packaged builds
 > (Linux AppImage + Windows Inno Setup installer). The Java extraction macro has
 > been run against a live STAR-CCM+ 2310 install (reports, plots, and scene/view
@@ -20,7 +22,7 @@
 > version-specific operation still being validated (see
 > [Limitations](#4-limitations)). Screenplay recording additionally requires
 > STAR-CCM+ 2022 or newer (see [3.6b Screenplays view](#36b-screenplays-view)).
-> Document last updated: 2026-07-07
+> Document last updated: 2026-07-13
 
 ---
 
@@ -30,7 +32,7 @@
 2. [What the Program Does (Capabilities)](#2-what-the-program-does-capabilities)
 3. [User Interface Reference](#3-user-interface-reference)
    - [3.1 Window layout](#31-window-layout)
-   - [3.2 Toolbar](#32-toolbar)
+   - [3.2 Top bar](#32-top-bar)
    - [3.3 Files panel](#33-files-panel)
    - [3.4 Data panel](#34-data-panel)
    - [3.5 Reports view](#35-reports-view)
@@ -45,6 +47,7 @@
    - [3.10 Settings dialog](#310-settings-dialog)
    - [3.11 Welcome / setup wizard](#311-welcome--setup-wizard)
    - [3.12 Updates](#312-updates)
+   - [3.13 Keyboard shortcuts](#313-keyboard-shortcuts)
 4. [Limitations](#4-limitations)
 5. [How It Works (Architecture)](#5-how-it-works-architecture)
 6. [Data Flow, End to End](#6-data-flow-end-to-end)
@@ -241,12 +244,22 @@ gallery (see [Screenplay recording](#screenplay-recording) and the
   settings file and log are written **owner-only** (`0600`), and license
   credentials are **redacted** from the log and on-screen command output.
 - **In-app update check** against GitHub releases (on startup and on demand):
-  a "New update available" note appears in the toolbar, and on the packaged
+  a "New update available" note appears in the top bar, and on the packaged
   Windows build the update can be downloaded and installed in place.
 - **"Clear all temp files"** (Settings → Misc) removes cached logs, the
   crash-recovery cache, generated icons, and downloaded updates after a
   confirmation that lists what will go.
-- **Hover tooltips** on every toolbar/button control describing what it does.
+- **Hover tooltips** on every top-bar/button control describing what it does
+  (with the control's keyboard shortcut appended, where it has one).
+- **Menu-bar-style top bar** — a single frameless top bar carries a **File**
+  menu (Add files/folder, Import/Export data) and the **Run batch** menu, both
+  opening on click and behaving like a traditional menu bar, with a small glyph
+  icon beside each entry. The StarPost badge sits at the left; the version label
+  and integrated minimise / maximise / close buttons at the right.
+- **Keyboard shortcuts** for the main views and actions (tab switching, batch
+  dialogs, add/import/export, select-all/clear, run/record, smoothing, and the
+  Files/Data list actions) — shown in the menus and tooltips and listed in full
+  in [3.13 Keyboard shortcuts](#313-keyboard-shortcuts).
 - **First-run setup wizard** for the essentials, re-openable any time.
 - **Cross-platform**: per-OS config/cache/log locations via `platformdirs`;
   packaged as a Linux **AppImage** and a Windows **Inno Setup installer**.
@@ -256,15 +269,18 @@ gallery (see [Screenplay recording](#screenplay-recording) and the
 ## 3. User Interface Reference
 
 This section documents every panel, control, button, and context (right-click)
-menu in the application. StarPost has **no traditional menu bar**; actions are
-reached through the **toolbar** and through **context menus** on the various
-panels.
+menu in the application. StarPost's actions are reached through the **top bar**
+(a single menu-bar-style strip with a **File** menu and a **Run batch** menu,
+plus **Export…** and **Settings…**), through **context menus** on the various
+panels, and through **keyboard shortcuts** (see
+[3.13](#313-keyboard-shortcuts)). The panels themselves have no button rows —
+their full height goes to the lists.
 
 ### 3.1 Window layout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  [Run batch] | [Export…]  [Settings…]                        ← toolbar    │
+│ ★ File  Run batch  Export…  Settings…      StarPost v2.5.0  — ▢ ✕  ← top bar│
 ├───────────────┬───────────────────────────────────┬───────────────────┤
 │  Files | Data │ Reports|Plots|Scenes|Screenplays  │  Selection panel    │
 │  (left tabs)  │   (centre tabs)                   │  (Profile + lists)  │
@@ -275,9 +291,9 @@ panels.
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Left** — a tab widget with **Files** and **Data** tabs.
-- **Centre** — a tab widget with **Reports**, **Plots**, **Scenes**, and
-  **Screenplays** tabs.
+- **Left** — a tab widget with **Files** (`F1`) and **Data** (`F2`) tabs.
+- **Centre** — a tab widget with **Reports** (`1`), **Plots** (`2`), **Scenes**
+  (`3`), and **Screenplays** (`4`) tabs.
 - **Right** — the **Selection panel** (profile controls + the list(s) for the
   active centre tab — Reports list on Reports, Monitor plots on Plots, the
   Scenes tree + Saved views list on Scenes, and the Screenplays tree + the same
@@ -286,27 +302,40 @@ panels.
 - The three top regions and the bottom are separated by draggable splitters.
 - Window title: **StarPost**; default size 1280×800.
 
-### 3.2 Toolbar
+### 3.2 Top bar
 
-A single toolbar at the top with three actions:
+A single frameless **top bar** doubles as the window's title bar. From the left
+it carries the StarPost badge, then the menu items and actions; at the far right
+sit the version label and the window buttons. The **File** and **Run batch**
+menus behave like a traditional **menu bar**: a click opens the menu, it stays
+open wherever the mouse goes, hovering the other menu button switches to it, and
+a click anywhere else dismisses it. While a menu is open its button shows the
+near-invisible pressed shade (not the bright hover highlight), so it is clear
+which menu is active. Each menu entry carries a small **glyph icon** to its left
+(add, import/export, play/fast-forward…) that follows the light/dark theme and
+takes the accent's contrast colour on the highlighted row.
 
 | Action | Behaviour |
 |---|---|
-| **Run batch** | A **hover dropdown** (its menu drops on mouse-over) with two entries: **Full Batch** — opens the [Run batch dialog](#39a-run-batch-dialog), the guided five-tab wizard; and **Express batch** — opens the [Express batch dialog](#39b-express-batch-dialog), a lean window for running a saved batch profile quickly. (To extract straight to the workspace without a wizard, right-click → **Open** a file in the Files panel instead.) The whole button is disabled while a run is in progress. |
+| **File** | A menu (first in the bar) with **Add ▸ Files…** (`Ctrl+N`) / **Folder…** (`Ctrl+Shift+N`) — the Files tab's add dialogs — and **Import data…** (`Alt+Shift+I`) / **Export data…** (`Alt+Shift+E`) — the Data tab's portable-CSV import/export. The same operations reachable from the panels, without switching tabs. |
+| **Run batch** | A menu with two entries: **Full Batch** (`Ctrl+Shift+B`) — opens the [Run batch dialog](#39a-run-batch-dialog), the guided six-tab wizard; and **Express batch** (`Ctrl+Shift+E`) — opens the [Express batch dialog](#39b-express-batch-dialog), a lean window for running a saved batch profile quickly. (To extract straight to the workspace without a wizard, right-click → **Load file** a file in the Files panel instead.) The whole button is disabled while a run is in progress. |
 | **Export…** | Opens the [Export dialog](#39-export-dialog). |
 | **Settings…** | Opens the [Settings dialog](#310-settings-dialog). |
 
-At the **far right** of the toolbar a greyed **`StarPost v<version>`** label
-shows the running version. If the startup update check finds a newer release, a
-**"New update available"** note (tinted with the accent colour) appears directly
-beneath it.
+At the **far right** of the bar a greyed **`StarPost v<version>`** label shows
+the running version, followed by the integrated **minimise / maximise / close**
+buttons (which fill the bar's full height; close turns red on hover). If the
+startup update check finds a newer release, a **"New update available"** note
+(tinted with the accent colour) appears beneath the version label.
 
-Every toolbar action and button in the app has a **hover tooltip** describing
-what it does (shown after a short delay; moving to another control restarts the
-delay rather than showing the next tooltip instantly).
+Dragging the bar moves the window, double-clicking it maximises, and pressing
+near a window edge resizes — all via the window manager, so native snapping is
+preserved.
 
-> The default Qt toolbar/dock right-click menu is intentionally **suppressed**
-> (its only entry would hide the toolbar with no way to restore it).
+Every action and button in the app has a **hover tooltip** describing what it
+does, with its keyboard shortcut appended where it has one (shown after a short
+delay; moving to another control restarts the delay rather than showing the next
+tooltip instantly).
 
 ### 3.3 Files panel
 
@@ -316,37 +345,43 @@ expansion, and per-folder sort) is **persisted to disk** and restored on the
 next launch. Folders live **only inside StarPost** — they are never created on
 the filesystem.
 
-**Buttons (bottom of the panel):**
-- **Add files…** — file picker filtered to `*.sim`; adds the chosen files.
-- **Add folder…** — folder picker; creates a new internal folder named after the
-  chosen directory and adds every `*.sim` directly inside it into that folder
-  (skipping any already in the list; nothing is added if the directory holds no
-  `.sim` files or they are all already present).
-- **Remove** — removes the selected rows (after a confirmation). A selected
-  folder is removed with its contents.
-- **Clear** — removes all files and folders (after a confirmation). Styled as a
-  danger button.
+**Adding files** — the panel has no button row; files and folders are added from
+the top bar's **File ▸ Add** menu (or its hotkeys):
+- **Add files…** (`Ctrl+N`) — file picker filtered to `*.sim`; adds the chosen
+  files.
+- **Add folder…** (`Ctrl+Shift+N`) — folder picker; creates a new internal folder
+  named after the chosen directory and adds every `*.sim` directly inside it into
+  that folder (skipping any already in the list; nothing is added if the
+  directory holds no `.sim` files or they are all already present).
 
 **Interactions:**
 - **Multi-select** — **Shift+click** selects a contiguous range and **Ctrl+click**
   toggles individual rows (standard extended selection).
-- **Double-click a file** → *Open* just that file (extract + view it).
+- **Double-click a file** → *load* just that file (extract + view it).
 - **Drag and drop** files/folders to **re-parent** them (move into a folder, out
   to the top level, or between folders); a folder can't be dropped into its own
   subtree.
-- **Right-click a file** → **Open** (or **Open All** when two or more files are
-  selected — extracts and views every selected file, in top-to-bottom order) and
-  **Properties**. Right-clicking a row outside the current selection first
-  selects just that row.
+- **Right-click a file** → **Load file** (or **Load files** when two or more are
+  selected — extracts and views every selected file, in top-to-bottom order;
+  `Ctrl+L`), **Properties** (`Ctrl+P`), and **Remove** (removes the selected
+  rows after a confirmation; `Delete`). Each entry shows its key. Right-clicking
+  a row outside the current selection first selects just that row.
 - **Right-click a folder** → **Open All** (extract + view every `.sim` in it,
   recursively), **New Nested Folder**, a **Sort** submenu (A–Z, Z–A, File Size
   Largest, File Size Smallest — orders just this folder's contents), **Rename**,
-  **Delete folder** (keeps the contents, moving them up to the parent), and
-  **Properties** (combined size + file count).
+  **Delete folder** (dissolves the folder but keeps the contents, moving them up
+  to the parent), **Remove** (`Delete`; removes the folder *with* its contents),
+  and **Properties** (`Ctrl+P`; combined size + file count).
 - **Right-click empty space** → **New Folder** (at the top level).
-- **Right-click the "Files" tab** → **sort menu** (the active mode is
+- **Right-click the "Files" tab** → the **sort menu** (the active mode is
   checkmarked): **Name (A–Z)**, **Name (Z–A)**, **File size (largest)**,
-  **File size (smallest)** — applied to every folder.
+  **File size (smallest)** — applied to every folder — then, below a separator, a
+  red **Clear** entry that empties the whole list after a confirmation (it
+  inverts to a red fill with white text when hovered).
+
+The list-focus keys work without opening a menu: `Ctrl+L` loads, `Ctrl+P` shows
+properties, and `Delete` removes the selected files/folders (each after the
+usual confirmation).
 
 **Notes:**
 - Only `.sim` files are added; duplicates (by resolved path) are ignored.
@@ -380,27 +415,30 @@ come and go with what's loaded.
 - **No** entry checked or **one** checked → **per-file** view; **two or more**
   checked → **comparison** view.
 - **Right-click a data set** → **Properties** (its portable-CSV size plus report,
-  monitor, and iteration counts).
+  monitor, and iteration counts) and **Remove** (`Delete`) — deletes the
+  **selected** data sets from the store after a confirmation (the underlying
+  `.sim` files stay in the Files list). Note that removal now acts on the
+  *selected* rows (highlighted), not the *checked* ones.
 - **Right-click a folder** → **Check all** / **Uncheck all** its data sets,
   **New Nested Folder**, **Sort** (A–Z / Z–A), **Rename**, **Delete folder**
   (contents move up to the parent), and **Properties** (data-set count + combined
   portable-CSV size).
-- **Right-click the "Data" tab** → **sort menu**: **Name (A–Z)** / **Name (Z–A)**
-  (orders each folder's contents, folders before data sets).
+- **Right-click the "Data" tab** → the **sort menu** — **Name (A–Z)** / **Name
+  (Z–A)** (orders each folder's contents, folders before data sets) — then, below
+  a separator, a red **Clear** entry that wipes **all** loaded results after a
+  confirmation (leaving the Files list intact so they can be re-run; it inverts
+  to a red fill with white text when hovered). Both removal and Clear are blocked
+  while a batch is running.
 
-**Buttons (bottom of the panel):**
-- **Import** — load one or more **portable StarPost CSVs** (as written by Export
-  Data) straight into the workspace, with no `.sim` or STAR-CCM+ needed. Files
-  that don't match the format are reported and skipped; name collisions prompt
-  to overwrite or keep.
-- **Export Data** — opens a dialog listing the loaded data sets (pre-ticked to
-  the current selection) where you choose which to dump to portable StarPost CSV
-  (one re-importable file per data set).
-- **Delete** — deletes the **checked** data sets from the store (after a
-  confirmation). Blocked while a batch is running. The underlying `.sim` files
-  stay in the Files list.
-- **Clear data** — wipes **all** loaded results (after a confirmation), leaving
-  the Files list intact so they can be re-run. Blocked while a batch is running.
+**Importing / exporting** — the panel has no button row; these live in the top
+bar's **File** menu (or their hotkeys):
+- **Import data…** (`Alt+Shift+I`) — load one or more **portable StarPost CSVs**
+  (as written by Export data) straight into the workspace, with no `.sim` or
+  STAR-CCM+ needed. Files that don't match the format are reported and skipped;
+  name collisions prompt to overwrite or keep.
+- **Export data…** (`Alt+Shift+E`) — opens a dialog listing the loaded data sets
+  (pre-ticked to the current selection) where you choose which to dump to
+  portable StarPost CSV (one re-importable file per data set).
 
 ### 3.5 Reports view
 
@@ -458,9 +496,10 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
   Avg, Median, Std Dev, Var, Min, Max, Range).
 
 **Smooth data:**
-- A **Smooth data** checkbox at the bottom-left of the plot. When ticked, every
-  shown monitor is drawn through a **moving average**, so the lines (and the
-  hover/region readouts) reflect the smoothed data.
+- A **Smooth data** checkbox at the bottom-left of the plot (toggled with
+  `Alt+Shift+S` while the Plots tab is active). When ticked, every shown monitor
+  is drawn through a **moving average**, so the lines (and the hover/region
+  readouts) reflect the smoothed data.
 - The window size is **Moving average width** in Settings → Plots (a width of 1
   leaves the data unchanged).
 
@@ -663,7 +702,8 @@ together (scenes/views/screenplays are not part of profiles).
   "Default" is reserved; overwriting an existing profile asks for confirmation.
 
 **"Reports" group:**
-- **Select all** / **Clear** buttons.
+- **Select all** (`Ctrl+Shift+A`) / **Clear** (`Ctrl+Shift+D`) buttons — the keys
+  act on whichever group matches the active centre tab.
 - A checklist of report names (checked by default). Clicking a row toggles it.
 - **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
 
@@ -675,8 +715,9 @@ together (scenes/views/screenplays are not part of profiles).
   every plot at once is slow), and a freshly checked group reveals its monitors
   **unticked** so you pick deliberately — **except residual plots**, whose
   monitors are all ticked automatically so the whole residual set plots at once.
-- **Select all** ticks every group and monitor; **Clear** unticks all.
-  **Right-click the group title** → sort **Name (A–Z) / (Z–A)**.
+- **Select all** (`Ctrl+Shift+A`) ticks every group and monitor; **Clear**
+  (`Ctrl+Shift+D`) unticks all. **Right-click the group title** → sort **Name
+  (A–Z) / (Z–A)**.
 - A checked monitor shows a **colour swatch** to the left of its name; **clicking
   the swatch** opens a colour menu (palette colours + **Custom…**) that recolours
   that monitor's line in the plot. When **two or more data sets** are plotted,
@@ -688,13 +729,15 @@ together (scenes/views/screenplays are not part of profiles).
   selection (it updates when you tick a different sim). Each scene is a checkbox;
   checking it **reveals its scalar/vector displayers** as checkable children,
   **unticked**, so you pick which to show deliberately.
-- A **Run** button at the top renders the checked scenes of the **single** ticked
-  data set (it errors if more than one is ticked) to image stills, showing only
-  the checked displayers, from the checked **Saved views** (or the current view
-  if none). No folder prompt — files go to the configured output folder, or
-  alongside the `.sim`. Output runs in parallel and per the *Scenes per license*
-  setting; progress and per-scene log lines appear in the log console.
-- **Select all** / **Clear** tick/untick every scene and displayer.
+- A **Run** button (`Ctrl+R`) at the top renders the checked scenes of the
+  **single** ticked data set (it errors if more than one is ticked) to image
+  stills, showing only the checked displayers, from the checked **Saved views**
+  (or the current view if none). No folder prompt — files go to the configured
+  output folder, or alongside the `.sim`. Output runs in parallel and per the
+  *Scenes per license* setting; progress and per-scene log lines appear in the log
+  console.
+- **Select all** (`Ctrl+Shift+A`) / **Clear** (`Ctrl+Shift+D`) tick/untick every
+  scene and displayer.
 - **Clear scenes** (red) deletes all rendered stills from the workspace after a
   confirmation (the image files already saved on disk are kept), like *Clear
   data*.
@@ -704,14 +747,15 @@ together (scenes/views/screenplays are not part of profiles).
   Data selection — identical behaviour to the Scenes tree. Each screenplay is a
   checkbox; checking it **reveals its scene's scalar/vector displayers** as
   checkable children, **unticked**, so you pick which to show deliberately.
-- A **Record** button at the top records the checked screenplays of the
+- A **Record** button (`Ctrl+R`) at the top records the checked screenplays of the
   **single** ticked data set (it errors if zero or more than one is ticked) to
   movie files, showing only the checked displayers, from the checked **Saved
   views** (or the screenplay's own/current view if none). No folder prompt —
   files go to the configured output folder, or alongside the `.sim`. Recording
   runs in parallel and per the *Screenplays per license* setting; progress and
   per-screenplay log lines appear in the log console.
-- **Select all** / **Clear** tick/untick every screenplay and displayer.
+- **Select all** (`Ctrl+Shift+A`) / **Clear** (`Ctrl+Shift+D`) tick/untick every
+  screenplay and displayer.
 - **Clear screenplays** (red) deletes all recorded movies from the workspace
   after a confirmation (the movie/poster files already saved on disk are kept),
   like *Clear scenes*.
@@ -721,6 +765,9 @@ together (scenes/views/screenplays are not part of profiles).
   checked scene/screenplay is rendered or recorded once **per checked view**
   (its camera applied first); with **none** checked, it uses its current view.
   Like the scene/screenplay tree, it is scoped to the ticked data set(s).
+- This pane has **no Select all / Clear** buttons (unlike the scene/screenplay
+  tree above it): a render or record uses a single view, so bulk check/uncheck
+  served no purpose.
 
 ### 3.8 Log console
 
@@ -733,7 +780,7 @@ The bottom panel:
 
 ### 3.9 Export dialog
 
-Opened from the toolbar **Export…**. A tabbed dialog mirroring the main window's
+Opened from the top bar's **Export…**. A tabbed dialog mirroring the main window's
 **Reports** / **Plots** split. The selections are pre-ticked to match the main
 window when the dialog opens.
 
@@ -798,7 +845,7 @@ monitor selections to the dialog.
 
 ### 3.9a Run batch dialog
 
-Opened from the toolbar **Run batch → Full Batch**. Unlike the [Export dialog](#39-export-dialog)
+Opened from the top bar's **Run batch → Full Batch**. Unlike the [Export dialog](#39-export-dialog)
 (which writes the current view), this is a **guided wizard** that assembles a
 self-contained **archive** of extracted data. It steps through **six tabs** in
 order — **Source → Reports → Plots → Scenes → Screenplays → Summary** — advanced
@@ -871,7 +918,7 @@ that fails to record is logged and skipped, without aborting the rest of the run
 
 ### 3.9b Express batch dialog
 
-Opened from the toolbar **Run batch → Express batch**. This is the fast path for
+Opened from the top bar's **Run batch → Express batch**. This is the fast path for
 users who already have a saved **batch profile**: rather than stepping through the
 six-tab wizard, you pick a profile and sources, set the archive options, and run.
 The profile supplies everything about the output — the reports (with their
@@ -908,7 +955,7 @@ output**.
 
 ### 3.10 Settings dialog
 
-Opened from the toolbar **Settings…**. A left-hand navigation list selects one of
+Opened from the top bar's **Settings…**. A left-hand navigation list selects one of
 **twelve pages**, shown in a scrollable stack on the right. **Save** writes
 everything back to `settings.yaml`; **Cancel** discards (and reverts any live
 theme preview). A few actions take effect **immediately**, independent of
@@ -959,7 +1006,7 @@ StarPost can check **GitHub releases** for a newer version, comparing the
 running `__version__` against the latest release tag.
 
 - **On startup** (when *Check for updates on application startup* is enabled) the
-  check runs quietly in the background. If a newer release exists, the toolbar
+  check runs quietly in the background. If a newer release exists, the top bar
   shows the **"New update available"** note and a prompt offers to update.
 - **On demand** via Settings → Misc → **Check for updates**, which also reports
   "you're up to date" / connection errors (the startup check stays silent on
@@ -970,6 +1017,68 @@ running `__version__` against the latest release tag.
   - a **source checkout or other platform** instead opens the release page in the
     browser to download manually.
 - The network work runs on background threads, so the UI never blocks.
+
+### 3.13 Keyboard shortcuts
+
+The main views and actions have keyboard shortcuts. Each one is shown in its
+menu entry and appended to the control's hover tooltip, so the keys are
+discoverable in place. The bindings live in one table
+(`src/starpost/gui/shortcuts.py`) and are mirrored in the user-facing reference
+[`docs/starpost_hotkeys.txt`](starpost_hotkeys.txt) (a test keeps the two in
+sync).
+
+**Main UI navigation** (app-wide):
+
+| Shortcut | Action |
+|---|---|
+| `F1` | Switch the left panel to **Files** |
+| `F2` | Switch the left panel to **Data** |
+| `1` | Switch the centre tab to **Reports** |
+| `2` | Switch the centre tab to **Plots** |
+| `3` | Switch the centre tab to **Scenes** |
+| `4` | Switch the centre tab to **Screenplays** |
+
+**Top bar — File menu** (app-wide):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+N` | **Add files…** to the Files list |
+| `Ctrl+Shift+N` | **Add folder…** of `.sim` files to the Files list |
+| `Alt+Shift+I` | **Import data…** (a portable data CSV) |
+| `Alt+Shift+E` | **Export data…** (the selected data set to a portable CSV) |
+
+**Top bar — Run batch menu** (app-wide):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+B` | Open the **Full Batch** wizard |
+| `Ctrl+Shift+E` | Open the **Express batch** dialog |
+
+**Selection panel** (acts on the group matching the active centre tab):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+A` | **Select all** entries in the current checklist |
+| `Ctrl+Shift+D` | **Clear** (deselect) the current checklist |
+| `Ctrl+R` | **Run** (Scenes tab) / **Record** (Screenplays tab) |
+| `Alt+Shift+S` | Toggle **Smooth data** (Plots tab only) |
+
+**Files list** (only while the Files list has focus):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+L` | **Load** the selected file(s) |
+| `Ctrl+P` | **Properties** of the selected item |
+| `Delete` | **Remove** the selected files/folders |
+
+**Data list** (only while the Data list has focus):
+
+| Shortcut | Action |
+|---|---|
+| `Delete` | **Remove** the selected data set(s) |
+
+> The `Delete` key is bound on both the Files and Data lists — the same key, each
+> binding active only in its own tree.
 
 ---
 
@@ -1018,15 +1127,14 @@ running `__version__` against the latest release tag.
 - The tool **reads** simulations; it never writes changes back into `.sim` files.
 
 ### Features not exposed in the UI
-- **"Stop after current file"** is implemented in the batch worker
-  (`BatchWorker.request_stop`) but is **not wired to any UI control**. Once a
-  batch starts, it runs to completion (results are still checkpointed after each
+- **No way to stop a batch mid-run.** Once a batch starts it runs every file to
+  completion; there is no Stop control (results are still checkpointed after each
   file, and closing the app stops further files).
 - **Per-plot axis (log/linear) override** has no UI. Classification is by the
   Settings keyword lists only. (A `Profile.axis_overrides` field is persisted in
   the profile YAML but is not applied when a profile loads.)
-- The **~25-file batch ceiling** is a design expectation only; `MAX_FILES` is not
-  enforced and no warning fires when it is exceeded.
+- The **~25-file batch ceiling** is a design expectation only; it is not enforced
+  and no warning fires when it is exceeded.
 
 ### Validation caveats
 - The **extraction macro has now been run against a live STAR-CCM+ 2310 install**
@@ -1107,7 +1215,7 @@ sits on top of an installed STAR-CCM+ engine.
 
 1. **User adds `.sim` files** to the Files list (individually or by folder) and
    extracts them into the workspace — **double-click** a file, or select some and
-   **right-click → Open**. (The toolbar **Run batch** follows the same extraction
+   **right-click → Load file**. (The top bar's **Run batch** follows the same extraction
    steps below, but assembles the results into an archive instead of loading them
    into the Data tab — see the [Run batch dialog](#39a-run-batch-dialog).)
 2. For **each file, sequentially**, `StarRunner`:
@@ -1279,13 +1387,16 @@ starpost/                           (repo; app/package = "starpost")
     │
     ├── macros/
     │   ├── extract_all.java.j2     Canonical Java macro: ALL reports + ALL plots, one pass
-    │   │                           (also lists scenes + displayers + saved views)
-    │   └── render_scenes.java.j2   Separate render macro: scene stills via printAndWait
-    │                               (displayer visibility, saved-view camera, -np parallel)
+    │   │                           (also lists scenes + displayers + saved views + screenplays)
+    │   ├── render_scenes.java.j2   Separate render macro: scene stills via printAndWait
+    │   │                           (displayer visibility, saved-view camera, -np parallel)
+    │   └── record_screenplays.java.j2  Separate record macro: screenplay movies (reflective
+    │                               recorder lookup, displayer visibility, saved-view camera)
     │
     ├── batch/                      Batch orchestration
-    │   ├── job.py                  Job + JobState (pending/running/done/failed/skipped)
-    │   ├── queue.py                BatchWorker (QObject): sequential, stop-after-current
+    │   ├── job.py                  Job: one .sim -> one SimResult
+    │   ├── queue.py                BatchWorker / SceneRenderWorker / ScreenplayRecordWorker
+    │   │                           (QObject workers): sequential, off the GUI thread
     │   └── aggregator.py           Wide report frames + CSV/TSV/XLSX/ODS table export
     │
     ├── data/                       Data model & storage
@@ -1295,12 +1406,15 @@ starpost/                           (repo; app/package = "starpost")
     │   └── store.py                ResultStore: in-memory + JSON crash cache; homogeneity
     │
     ├── gui/                        PySide6 user interface
-    │   ├── main_window.py          Toolbar (+ version/update note), panels, view refresh
+    │   ├── main_window.py          Top bar (File/Run batch menus + version/update note),
+    │   │                           panels, view refresh, shortcut registration
+    │   ├── shortcuts.py            Single source of truth for keyboard shortcuts (plain data)
     │   ├── theme.py                Dark/light + accent QSS generator (build/apply)
-    │   ├── icons.py                Loads the bundled app icon + logo (QIcon/QPixmap)
+    │   ├── plot_style.py           Keeps the pyqtgraph plots theme-aware
+    │   ├── icons.py                Loads the bundled app icon + logo; builds menu glyph icons
     │   ├── update.py               Qt glue for the updater (threads, prompts, download)
     │   ├── widgets.py              Shared widgets: UniformTabBar, SecretLineEdit (masked
-    │   │                           key field), ToolTipResetStyle (tooltip timing)
+    │   │                           key field), ToolTipResetStyle (tooltip timing), DangerMenuItem
     │   ├── resources/
     │   │   ├── StarPost-logo.png   Application / window icon
     │   │   └── StarPost-logo.ico   Windows executable icon (used by the PyInstaller build)
@@ -1309,19 +1423,27 @@ starpost/                           (repo; app/package = "starpost")
     │       │                       Properties, folder-colour tinting
     │       ├── data_list.py        Data tab: virtual folders, drag-drop, sort, tick
     │       │                       data sets, import/export, delete/clear
-    │       ├── selection_panel.py  Report checklist + monitor-plot tree + scene→displayer
-    │       │                       tree + Saved views list (Run / Clear scenes), profiles
+    │       ├── selection_panel.py  Report checklist + monitor-plot tree + scene/screenplay
+    │       │                       →displayer trees + shared Saved views list (Run/Record/
+    │       │                       Clear), profiles
     │       ├── report_table.py     Numeric viewer (per-file long + comparison wide), sort
     │       ├── plot_view.py        pyqtgraph viewer: multi-group overlay, per-monitor
     │       │                       colours, smoothing, hover readout, Shift+drag region stats
     │       ├── scene_view.py       Scenes tab: rendered-still thumbnail gallery (open,
     │       │                       right-click Properties, empty-space deselect)
-    │       ├── settings_dialog.py  In-app settings (11 paged groups, incl. Scenes) + profiles
-    │       ├── properties_dialog.py  File / data-set / folder / rendered-scene Properties
+    │       ├── screenplay_view.py  Screenplays tab: poster-framed movie gallery (open in
+    │       │                       system player, right-click Properties)
+    │       ├── thumbnails.py       Shared gallery/thumbnail widgets for scenes + screenplays
+    │       ├── title_bar.py        Frameless top-bar window buttons (minimise/maximise/close)
+    │       ├── settings_dialog.py  In-app settings (twelve paged groups, incl. Scenes +
+    │       │                       Screenplays) + profiles
+    │       ├── properties_dialog.py  File / data-set / folder / rendered-scene/-movie Properties
     │       ├── data_export_dialog.py  Export Data: pick data sets → portable CSVs
     │       ├── log_console.py      Live log + progress counter/bar
     │       ├── export_dialog.py    Tabbed export (Reports/Plots) + live plot preview
-    │       ├── batch_run_dialog.py  Run batch wizard (Source→Reports→Plots→Scenes→Summary) → archive
+    │       ├── batch_run_dialog.py  Run batch wizard (Source→Reports→Plots→Scenes→
+    │       │                       Screenplays→Summary) → archive
+    │       ├── express_batch_dialog.py  Express batch: run a saved batch profile → archive
     │       └── welcome_dialog.py   First-run setup wizard
     │
     └── utils/
@@ -1364,7 +1486,7 @@ python scripts\dev_run.py
    Settings).
 2. Add `.sim` files (or a folder of them) in the **Files** tab.
 3. Extract them into the workspace: **double-click** a file, or select some and
-   **right-click → Open** (progress shows in the log console).
+   **right-click → Load file** (progress shows in the log console).
 4. Tick the extracted **Data** sets to view (two or more → comparison); filter
    reports/plots in the Selection panel, or load a **Profile**.
 5. **Export…** the report tables and/or plot images — or use **Run batch** to
@@ -1396,9 +1518,10 @@ PYTHONPATH=src python -m pytest tests/ -q
   (Windows console suppressed), UTF-8 CSV parsing, automatic plot classification.
 - Data model, in-memory store, JSON crash-recovery cache, homogeneity check,
   persisted Files list.
-- Batch worker: sequential execution, progress/log signals, cooperative
-  stop-after-current (worker-level).
-- The full GUI: toolbar (with the version label + update note), Files/Data tabs,
+- Batch worker: sequential execution (off the GUI thread) with progress/log
+  signals; a started batch runs every file to completion.
+- The full GUI: the menu-bar-style top bar (with the version label + update
+  note), Files/Data tabs,
   Reports table (per-file + comparison, sortable), interactive plot viewer
   (multi-group overlay, per-monitor colours, optional moving-average smoothing,
   hover readout, Shift+drag region statistics, theme-following), the Selection
@@ -1419,15 +1542,21 @@ PYTHONPATH=src python -m pytest tests/ -q
   groups that plot all their monitors at once when selected.
 - **Selection panel** — shows the report or monitor-plot list for the active
   centre tab; monitors are picked from a tree (check a group to reveal them).
-- **Settings dialog** — ten paged groups covering every `settings.yaml` field,
+- **Settings dialog** — twelve paged groups covering every `settings.yaml` field,
   plus profile management (Show Details / Delete), Reset, and Clear all temp files.
+- **Top bar & keyboard shortcuts (v2.5.0)** — a single menu-bar-style top bar
+  with a **File** menu (Add files/folder, Import/Export data) and glyph-iconed
+  menus, and keyboard shortcuts for tab switching, the batch dialogs, add/
+  import/export, select-all/clear, run/record, smoothing, and the Files/Data list
+  actions (one shortcut table in `gui/shortcuts.py`, mirrored in
+  `docs/starpost_hotkeys.txt`).
 - **Appearance theming** — dark/light + accent + checkmark + folder colour
   generated into QSS at runtime, previewed live (the plot follows the mode too).
 - **Profiles** — YAML persistence including per-group monitor selection and
   region statistics; built-in Default; in-dialog management.
 - **Credential safety** — masked POD key, owner-only (`0600`) settings/log files,
   and license-arg redaction in the log and on-screen command output.
-- **In-app update check** — GitHub release comparison with a toolbar note, and
+- **In-app update check** — GitHub release comparison with a top-bar note, and
   download-and-install of the new installer on the packaged Windows build.
 - **First-run setup wizard.**
 - **Scene rendering (v2.0.0)** — the Scenes tab: scene/displayer/saved-view
@@ -1456,8 +1585,8 @@ PYTHONPATH=src python -m pytest tests/ -q
   screenplay pipeline (screenplay/media parsing, record-macro generation, movie
   settings, the Screenplays selection tree, and the gallery).
 
-**Not yet exposed / pending:** see [Limitations](#4-limitations) — stop-after-
-current UI, per-plot axis-override UI, and an enforced batch-size warning.
+**Not yet exposed / pending:** see [Limitations](#4-limitations) — a stop-a-batch
+control, per-plot axis-override UI, and an enforced batch-size warning.
 
 **Not validated:** the scene-render *apply-saved-view* call
 (`getCurrentView().setView(...)`) — the one remaining version-specific scene
@@ -1503,7 +1632,9 @@ These were locked during requirements gathering and shaped the v1 design.
 - **Confirm the `StarPlot.export()` CSV layout** across plot types on a real
   install and tighten the parser; **validate the scene-render apply-saved-view
   call** (`getCurrentView().setView(...)`) on the target STAR-CCM+ version.
-- **Surface stop-after-current** in the UI (a Stop button).
+- **Add a way to stop a running batch** (a Stop button plus the worker-side
+  cooperative halt to back it — the earlier stop-after-current scaffolding was
+  removed once it was found to be unwired).
 - **Per-plot axis-override UI** (and apply `Profile.axis_overrides` on load).
 - **Enforce/warn on the batch-size ceiling** if it remains a real constraint.
 - **Validate the packaged builds** end to end on clean machines, and consider
