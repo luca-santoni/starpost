@@ -112,6 +112,9 @@ appearance in the process table / argv is a **deliberate, accepted risk** — do
 
 - Commit after every change; log user-facing changes in `CHANGELOG.md` in its existing
   style (newest first).
+- Keyboard shortcuts live in one table: `src/starpost/gui/shortcuts.py`. When a binding
+  is added or changed, also update the user-facing list `docs/starpost_hotkeys.txt` —
+  `test_hotkey_doc_lists_every_binding` fails until the two agree.
 - Tests isolate per-user state with an `autouse` fixture that monkeypatches
   `paths.platformdirs.user_config_dir` / `user_cache_dir` to a `tmp_path` — reuse this
   pattern for anything that touches config/cache so tests never write real files.

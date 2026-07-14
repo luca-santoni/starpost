@@ -28,6 +28,25 @@ def test_key_and_hint():
     assert shortcuts.hint("Switch to Reports", "tab_reports") == "Switch to Reports (1)"
 
 
+def test_hotkey_doc_lists_every_binding():
+    """docs/starpost_hotkeys.txt is the user-facing hotkey list; it must name
+    every key in the table. Each binding appears as the final token of a line
+    (e.g. "Reports tab             1"), so a new or changed binding fails here
+    until the doc is updated."""
+    from pathlib import Path
+
+    doc = Path(__file__).parent.parent / "docs" / "starpost_hotkeys.txt"
+    last_tokens = {
+        line.split()[-1] for line in doc.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    missing = {
+        key_seq for key_seq, _label in shortcuts.SHORTCUTS.values()
+        if key_seq not in last_tokens
+    }
+    assert not missing, f"docs/starpost_hotkeys.txt is missing bindings: {sorted(missing)}"
+
+
 def test_menu_label_pads_for_shortcut_column():
     padded = shortcuts.menu_label("Load file")
     assert padded.rstrip() == "Load file"

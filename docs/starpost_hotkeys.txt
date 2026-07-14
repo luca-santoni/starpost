@@ -1,0 +1,36 @@
+StarPost hotkeys
+================
+
+Main UI navigation
+------------------
+Reports tab             1
+Plots tab               2
+Scenes tab              3
+Screenplays tab         4
+Files tab               F1
+Data tab                F2
+
+Top bar — File menu
+-------------------
+Add files               Ctrl+N
+Add folder              Ctrl+Shift+N
+Import data             Alt+Shift+I
+Export data             Alt+Shift+E
+
+Top bar — Run batch menu
+------------------------
+Full Batch              Ctrl+Shift+B
+Express batch           Ctrl+Shift+E
+
+Selection panel (acts on the active centre tab)
+-----------------------------------------------
+Select all                            Ctrl+Shift+A
+Clear selection                       Ctrl+Shift+D
+Run (Scenes) / Record (Screenplays)   Ctrl+R
+Smooth data (Plots tab only)          Alt+Shift+S
+
+Files list (only while the Files list has focus)
+------------------------------------------------
+Load file(s)            Ctrl+L
+Properties              Ctrl+P
+Remove file/folder      Delete
