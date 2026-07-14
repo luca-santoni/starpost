@@ -163,12 +163,6 @@ def _y_label_for(names: list[str]) -> str:
     return f"{quantity} ({unit})" if quantity else unit
 
 
-def _series_max_abs(series) -> float:
-    """The series' largest |y| (see PlotSeries.max_abs, where the cached scan
-    lives so that pyqtgraph-free callers don't need this module)."""
-    return series.max_abs()
-
-
 def _series_is_empty(series, zero_threshold: float) -> bool:
     """True when every value lies within (-threshold, +threshold) — see
     PlotSeries.is_empty; kept here as the name this module's callers use."""
@@ -864,17 +858,7 @@ class PlotView(QWidget):
             # fall back to Pillow, which infers the format from the extension.
             _save_via_pillow(image, path)
 
-    # --- monitor selection (persisted in profiles) ----------------------
-    def monitor_selection(self) -> dict[str, list[str]]:
-        """The series (monitors) currently shown, keyed by monitor group name.
-
-        Covers every group seen this session — both the live dropdowns and the
-        remembered choices for groups not currently on screen.
-        """
-        for name, sel in self._selectors.items():
-            self._selection_memory[name] = sel.selected()
-        return {k: sorted(v) for k, v in self._selection_memory.items()}
-
+    # --- monitor selection (restored from profiles) ----------------------
     def set_monitor_selection(
         self, selection: dict[str, list[str]], *, render: bool = True
     ) -> None:

@@ -51,11 +51,9 @@ def test_emptiness_scan_is_cached_and_stays_off_the_cache_file():
     into the persisted dataclass dict (the JSON crash-recovery cache)."""
     from dataclasses import asdict
 
-    from starpost.gui.views.plot_view import _series_max_abs
-
     s = PlotSeries(name="Force", x=[1, 2, 3], y=[0.1, -0.7, 0.3])
     assert _series_is_empty(s, 1e-5) is False
-    assert _series_max_abs(s) == 0.7
+    assert s.max_abs() == 0.7
     # Different thresholds reuse the cached magnitude, not a fresh scan.
     assert _series_is_empty(s, 0.7) is False   # boundary: 0.7 < 0.7 is False
     assert _series_is_empty(s, 0.71) is True
