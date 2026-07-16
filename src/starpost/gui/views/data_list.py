@@ -719,10 +719,14 @@ class DataListPanel(QWidget):
     # --- persistence -----------------------------------------------------
     def _save(self) -> None:
         # Remember each data set's folder so a set re-added later returns to it.
-        self._folder_for = {
-            it.data(0, _NAME_ROLE): (it.parent().text(0) if it.parent() else None)
+        # Merged, not rebuilt: sets currently absent from the tree keep their
+        # remembered folder — startup refreshes the tab once while the store is
+        # still empty (the cache load is deferred), and forgetting here would
+        # dump every saved set out of its folder on restart.
+        self._folder_for.update(
+            (it.data(0, _NAME_ROLE), it.parent().text(0) if it.parent() else None)
             for it in self._iter_data()
-        }
+        )
         payload = {"version": CACHE_VERSION, "items": self._serialize()}
         try:
             data_list_cache_path().write_text(json.dumps(payload))

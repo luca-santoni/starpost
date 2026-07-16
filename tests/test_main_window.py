@@ -1809,6 +1809,35 @@ def test_cache_load_is_deferred_past_construction(app):
     win.close()
 
 
+def test_data_folder_layout_survives_restart(app):
+    """A data set filed into a Data-tab folder is still in that folder after a
+    restart. Construction refreshes the Data tab once while the store is still
+    empty (the cache load is deferred); that transient empty pass must not
+    evict the saved rows from their folders."""
+    import json
+
+    import starpost.utils.paths as paths_mod
+
+    # Previous session: caseA lives inside folder "F".
+    seed = mw.ResultStore()
+    seed.put(_sim_result_with_data())  # sim_name "caseA"
+    seed.save_cache()
+    paths_mod.data_list_cache_path().write_text(json.dumps({
+        "version": 1,
+        "items": [{
+            "folder": "F", "expanded": True, "sort": "name_az",
+            "items": [{"data": "caseA"}],
+        }],
+    }))
+
+    win = mw.MainWindow(Settings())
+    app.processEvents()  # the deferred cache load populates the Data tab
+    item = next(it for it in win.data_list._iter_data() if it.text(0) == "caseA")
+    parent = item.parent()
+    assert parent is not None and parent.text(0) == "F"
+    win.close()
+
+
 def test_corrupt_cache_does_not_block_startup(app):
     """A cache that fails to parse is skipped (and logged), not fatal."""
     import starpost.utils.paths as paths_mod

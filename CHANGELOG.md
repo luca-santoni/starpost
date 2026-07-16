@@ -3,6 +3,14 @@
 All notable changes to StarPost are recorded here. Versions follow the
 `MAJOR.MINOR.PATCH` scheme; the newest release is listed first.
 
+## [Unreleased]
+
+### Bug Fixes
+- **Data tab folders survive a restart** — data sets filed into the Data tab's
+  virtual folders no longer fall out to the top level when StarPost restarts.
+  Startup refreshed the tab once before the crash-recovery cache had loaded,
+  and that momentarily-empty pass erased the saved folder memberships.
+
 ## [2.5.0] — 2026-07-13
 
 ### New Features
