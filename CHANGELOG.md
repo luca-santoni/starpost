@@ -5,6 +5,20 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### New Features
+- **Sim properties captured at extraction** — loading a .sim now also records
+  the simulation's own metadata: solution state (iteration, physical time,
+  CPU/elapsed time), mesh cell/face/vertex counts, regions with their
+  boundary-type breakdown and physics continuum, physics models per continuum,
+  solvers and stopping criteria, the mesh-operation pipeline (meshers, base
+  size, surface sizes, prism layers), geometry parts, interfaces, tags, and
+  the STAR-CCM+ version used. Everything rides the same single extraction
+  pass (no extra license checkout), survives restarts via the crash-recovery
+  cache, and is included in portable data-CSV exports. The Properties dialog
+  will surface this in a future release. **Note:** portable data exports are
+  now format v3 — older StarPost releases cannot import them; v2 files still
+  import fine.
+
 ### Bug Fixes
 - **No more stray CSVs in the output folder** — loading .sim files no longer
   litters the default output folder (or the home folder) with the extraction's
