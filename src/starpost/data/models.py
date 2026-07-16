@@ -100,6 +100,38 @@ class MediaArtifact:
 
 
 @dataclass
+class PropertyGroup:
+    """One entity's extracted sim properties: a section ("mesh", "region", ...),
+    the entity's name ("" for sim-wide sections), and its key/value entries in
+    extraction order."""
+    section: str
+    name: str = ""
+    entries: list[tuple[str, str]] = field(default_factory=list)
+
+    def get(self, key: str) -> Optional[str]:
+        for k, v in self.entries:
+            if k == key:
+                return v
+        return None
+
+
+@dataclass
+class SimProperties:
+    """Simulation metadata captured at extraction time (solution state, mesh
+    counts, regions, physics, tags, ...). Deliberately generic strings, not
+    typed fields: the key set drifts across STAR-CCM+ releases and extraction
+    tiers, and the consumer is a display dialog — anything needing a number
+    parses it at the point of use."""
+    groups: list[PropertyGroup] = field(default_factory=list)
+
+    def get(self, section: str, name: str = "") -> Optional[PropertyGroup]:
+        for g in self.groups:
+            if g.section == section and g.name == name:
+                return g
+        return None
+
+
+@dataclass
 class SimResult:
     """Everything extracted from one .sim file."""
     sim_path: str
@@ -119,6 +151,9 @@ class SimResult:
     # Visual outputs rendered from this .sim (scene stills, etc.). Produced by a
     # separate render pass, not the numeric extraction.
     media: list[MediaArtifact] = field(default_factory=list)
+    # Simulation metadata captured during extraction (None for results
+    # extracted before this feature). Never part of signature().
+    properties: Optional[SimProperties] = None
     extracted_at: str = ""        # ISO timestamp
     error: Optional[str] = None   # set if the whole batch run failed
 
