@@ -1,6 +1,7 @@
 """Sim properties feature: model, properties-CSV parsing, macro generation,
 cache persistence, and version-banner capture (the Properties dialog's
 backend; the dialog itself is a later pass)."""
+from starpost.core.result_parser import parse_sim_output
 from starpost.data.models import (
     PropertyGroup,
     Report,
@@ -41,3 +42,67 @@ def test_sim_result_signature_ignores_properties():
         properties=SimProperties(groups=[PropertyGroup(section="sim")]),
     )
     assert a.signature() == b.signature()
+
+
+CLASSIFICATION = {"residual_keywords": ["residual"], "force_keywords": ["force"]}
+
+
+def test_parse_sim_output_reads_properties(tmp_path):
+    (tmp_path / "caseA__properties.csv").write_text(
+        "section,name,key,value\n"
+        "sim,,units_system,SI\n"
+        "solution,,iteration,4500\n"
+        "solution,,initialized,true\n"
+        "mesh,,cell_count,12400312\n"
+        'region,Fluid,boundary_types,"Velocity Inlet=1; Wall=44"\n'
+        "tag,baseline,,\n"
+        "future_section,thing,key,value\n"
+    )
+    res = parse_sim_output(str(tmp_path / "caseA.sim"), tmp_path, CLASSIFICATION)
+    props = res.properties
+    assert props is not None
+    assert props.get("sim").get("units_system") == "SI"
+    # Consecutive same-(section, name) rows form one group, order preserved.
+    assert props.get("solution").entries == [
+        ("iteration", "4500"), ("initialized", "true"),
+    ]
+    # Quoted multi-valued cells survive intact.
+    assert (props.get("region", "Fluid").get("boundary_types")
+            == "Velocity Inlet=1; Wall=44")
+    # A key-less row registers the group with no entries.
+    assert props.get("tag", "baseline").entries == []
+    # Unknown sections pass through — forward-compat with future macro tiers.
+    assert props.get("future_section", "thing").get("key") == "value"
+
+
+def test_parse_sim_output_no_properties_csv_is_none(tmp_path):
+    # Older extractions simply have no properties CSV.
+    res = parse_sim_output(str(tmp_path / "caseA.sim"), tmp_path, CLASSIFICATION)
+    assert res.properties is None
+
+
+def test_parse_properties_group_order_follows_the_file(tmp_path):
+    (tmp_path / "caseA__properties.csv").write_text(
+        "section,name,key,value\n"
+        "solver,Segregated Flow,,\n"
+        "solver,Segregated Energy,,\n"
+        "mesh,,cell_count,100\n"
+    )
+    res = parse_sim_output(str(tmp_path / "caseA.sim"), tmp_path, CLASSIFICATION)
+    assert [(g.section, g.name) for g in res.properties.groups] == [
+        ("solver", "Segregated Flow"),
+        ("solver", "Segregated Energy"),
+        ("mesh", ""),
+    ]
+
+
+def test_parse_properties_empty_value_is_kept(tmp_path):
+    # "not meshed": the macro writes mesh rows with empty values, which must
+    # stay distinguishable from an absent section.
+    (tmp_path / "caseA__properties.csv").write_text(
+        "section,name,key,value\n"
+        "mesh,,cell_count,\n"
+    )
+    res = parse_sim_output(str(tmp_path / "caseA.sim"), tmp_path, CLASSIFICATION)
+    assert res.properties.get("mesh").get("cell_count") == ""
+    assert res.properties.get("mesh").get("vertex_count") is None

@@ -16,9 +16,11 @@ from starpost.data.models import (
     MonitorPlot,
     PlotKind,
     PlotSeries,
+    PropertyGroup,
     Report,
     Scene,
     Screenplay,
+    SimProperties,
     SimResult,
 )
 from starpost.utils.logging import get_logger
@@ -53,6 +55,9 @@ def parse_sim_output(
     result.views = _parse_views(output_dir / f"{sim_name}__views_index.csv")
     result.screenplays = _parse_screenplays(
         output_dir / f"{sim_name}__screenplays_index.csv"
+    )
+    result.properties = _parse_properties(
+        output_dir / f"{sim_name}__properties.csv"
     )
     return result
 
@@ -115,6 +120,34 @@ def _parse_screenplays(path: Path) -> list[Screenplay]:
             if disp:
                 play.displayers.append(Displayer(name=disp, kind=kind))
     return list(plays.values())
+
+
+def _parse_properties(path: Path) -> Optional[SimProperties]:
+    """Read the properties CSV (``section,name,key,value`` rows) the extraction
+    macro wrote. Consecutive rows sharing (section, name) form one
+    PropertyGroup, preserving file order; a key-less row just registers the
+    group (e.g. a tag). Unknown sections pass through untouched — that's the
+    forward-compat contract with future macro tiers. Missing file -> None
+    (older extractions have no properties CSV)."""
+    if not path.exists():
+        return None
+    props = SimProperties()
+    current: Optional[PropertyGroup] = None
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            section = (row.get("section") or "").strip()
+            if not section:
+                if any((v or "").strip() for v in row.values()):
+                    log.warning("properties row without section skipped: %r", row)
+                continue
+            name = (row.get("name") or "").strip()
+            if current is None or (current.section, current.name) != (section, name):
+                current = PropertyGroup(section=section, name=name)
+                props.groups.append(current)
+            key = (row.get("key") or "").strip()
+            if key:
+                current.entries.append((key, row.get("value") or ""))
+    return props
 
 
 def parse_media_index(sim_name: str, output_dir: Path) -> list[MediaArtifact]:
