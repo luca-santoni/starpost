@@ -716,17 +716,16 @@ class MainWindow(QMainWindow):
                 ]:
                     self.store.remove(r.sim_path)
                 load_paths = paths
-        out_dir = Path(self.settings.default_output_dir or str(Path.home()))
-        self._start_jobs([Job(sim_file=p) for p in load_paths], out_dir)
+        self._start_jobs([Job(sim_file=p) for p in load_paths])
 
-    def _start_jobs(self, jobs: list[Job], out_dir: Path) -> None:
+    def _start_jobs(self, jobs: list[Job]) -> None:
         """Run the given jobs on a worker thread, wiring progress to the UI."""
         if self._busy():
             return
         runner = StarRunner(self.settings)
 
         self._thread = QThread()
-        self._worker = BatchWorker(jobs, runner, out_dir, self.store)
+        self._worker = BatchWorker(jobs, runner, self.store)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)

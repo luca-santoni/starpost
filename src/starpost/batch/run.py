@@ -283,7 +283,6 @@ def build_batch_archive(
     total = len(config.sources)
     with tempfile.TemporaryDirectory(prefix="starpost_batch_") as tmp:
         out_root = Path(tmp) / "out"     # this gets zipped
-        work_root = Path(tmp) / "work"   # extraction scratch, not zipped
         combined_results: list[SimResult] = []  # the valid ones, for the root report
         for i, source in enumerate(config.sources):
             log(f"--- {source.name} ({i + 1}/{total}) ---")
@@ -295,9 +294,7 @@ def build_batch_archive(
             result = source.result
             if result is None and source.sim_file is not None:
                 steps.at(f"Opening {source.name}…")
-                result = runner.extract(
-                    source.sim_file, work_root / _safe_name(source.name), log_sink=log
-                )
+                result = runner.extract(source.sim_file, log_sink=log)
                 steps.advance()
             if result is None or result.error:
                 log(f"Skipping {source.name}: "

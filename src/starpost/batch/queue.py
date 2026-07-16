@@ -5,7 +5,7 @@ progress/log/result. A batch is never killed mid-write: once started, every
 file runs to completion.
 
 Usage (from the GUI):
-    worker = BatchWorker(jobs, runner, output_dir, store)
+    worker = BatchWorker(jobs, runner, store)
     thread = QThread(); worker.moveToThread(thread)
     thread.started.connect(worker.run)
     worker.finished.connect(thread.quit)
@@ -35,13 +35,11 @@ class BatchWorker(QObject):
         self,
         jobs: list[Job],
         runner: StarRunner,
-        output_dir: Path,
         store: ResultStore,
     ) -> None:
         super().__init__()
         self._jobs = jobs
         self._runner = runner
-        self._output_dir = output_dir
         self._store = store
 
     def run(self) -> None:
@@ -51,7 +49,7 @@ class BatchWorker(QObject):
 
             try:
                 result: SimResult = self._runner.extract(
-                    job.sim_file, self._output_dir, log_sink=self.log.emit
+                    job.sim_file, log_sink=self.log.emit
                 )
             except Exception as e:  # noqa: BLE001 - surface any failure to the UI
                 result = SimResult(sim_path=str(job.sim_file), error=str(e))

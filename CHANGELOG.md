@@ -6,6 +6,13 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Bug Fixes
+- **No more stray CSVs in the output folder** — loading .sim files no longer
+  litters the default output folder (or the home folder) with the extraction's
+  intermediate files: the per-plot CSVs, the reports table and the
+  scene/screenplay/view index CSVs the STAR-CCM+ macro exports. Extraction now
+  writes them to a temporary scratch folder it cleans up after parsing; only
+  files you explicitly export end up in your output folder. (Existing stray
+  files can simply be deleted — they are not read back.)
 - **Crisp text in exported plots** — the title, axis and legend text in
   exported plot images is now rendered with plain grayscale antialiasing.
   Previously the capture baked the screen's RGB-subpixel hinting into the

@@ -2319,7 +2319,7 @@ def test_build_batch_archive_extracts_sim_sources(app, tmp_path, monkeypatch):
 
     extracted = []
 
-    def fake_extract(self, sim_file, output_dir, log_sink=None):
+    def fake_extract(self, sim_file, log_sink=None):
         extracted.append(Path(sim_file))
         return _sim_result_with_data()
     monkeypatch.setattr(run.StarRunner, "extract", fake_extract)

@@ -105,15 +105,19 @@ class StarRunner:
     def extract(
         self,
         sim_file: Path,
-        output_dir: Path,
         log_sink: Optional[LogSink] = None,
     ) -> SimResult:
-        """Run the macro on one .sim and parse the exported CSVs into a result."""
-        output_dir.mkdir(parents=True, exist_ok=True)
+        """Run the macro on one .sim and parse the exported CSVs into a result.
+
+        The macro's CSV exports are implementation details, so they go to a
+        scratch directory owned (and cleaned up) here — never to a caller-chosen
+        folder, where they'd sit around as files the user didn't ask for."""
         sink = log_sink or (lambda s: None)
 
-        with tempfile.TemporaryDirectory(prefix="starpost_macro_") as tmp:
-            macro = render_macro(output_dir, Path(tmp))
+        with tempfile.TemporaryDirectory(prefix="starpost_extract_") as tmp:
+            scratch = Path(tmp) / "out"
+            scratch.mkdir()
+            macro = render_macro(scratch, Path(tmp))
             cmd = self.build_command(macro, sim_file)
             # Mask the POD key / license server before this command reaches the
             # GUI console or the log file; the subprocess still gets the real cmd.
@@ -127,9 +131,9 @@ class StarRunner:
                 sink(msg)
                 return SimResult(sim_path=str(sim_file), error=msg)
 
-        result = parse_sim_output(
-            str(sim_file), output_dir, self.settings.plot_classification
-        )
+            result = parse_sim_output(
+                str(sim_file), scratch, self.settings.plot_classification
+            )
         sink(f"Parsed {len(result.reports)} reports, {len(result.plots)} plots "
              f"from {sim_file.name}")
         return result
