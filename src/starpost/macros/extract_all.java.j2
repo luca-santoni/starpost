@@ -10,6 +10,8 @@
 //   <simname>__scenes_index.csv      scene,displayer,kind  (scalar/vector only)
 //   <simname>__views_index.csv       view            (one saved-view name per row)
 //   <simname>__screenplays_index.csv screenplay,scene,displayer,kind
+//   <simname>__properties.csv       section,name,key,value (sim metadata:
+//                                   solution state, mesh, regions, physics...)
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -33,6 +35,7 @@ public class extract_all extends StarMacro {
         exportScenes(sim, simName, dir);
         exportViews(sim, simName, dir);
         exportScreenplays(sim, simName, dir);
+        exportProperties(sim, simName, dir);
     }
 
     // Lists the saved camera views in the .sim (sim-global, from the view
@@ -266,5 +269,448 @@ public class extract_all extends StarMacro {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Sim properties: the simulation's own metadata (solution state, mesh
+    // counts, regions, physics, mesh pipeline, parts, tags) as flat
+    // section,name,key,value rows. Getters only — nothing here may compute,
+    // initialize or mutate. Every section has its own try/catch, so a failing
+    // section loses its rows only, never the file, never the extraction.
+    // Classes outside star.common are reached exclusively via reflection: a
+    // compile-time reference would be fatal on releases that moved them.
+    private void exportProperties(Simulation sim, String simName, String dir) {
+        String out = dir + File.separator + simName + "__properties.csv";
+        try (PrintWriter w = new PrintWriter(new FileWriter(out))) {
+            w.println("section,name,key,value");
+            propsSim(sim, w);
+            propsSolution(sim, w);
+            propsMesh(sim, w);
+            propsRegions(sim, w);
+            propsInterfaces(sim, w);
+            propsContinua(sim, w);
+            propsSolvers(sim, w);
+            propsCriteria(sim, w);
+            propsMeshOps(sim, w);
+            propsParts(sim, w);
+            propsTags(sim, w);
+        } catch (Exception e) {
+            sim.println("starpost: failed to write properties CSV: "
+                + e.getMessage());
+        }
+    }
+
+    // One properties row.
+    private void prow(PrintWriter w, String section, String name, String key,
+                      String value) {
+        w.println(esc(section) + "," + esc(name) + "," + esc(key) + ","
+            + esc(value));
+    }
+
+    // Object -> CSV cell text; null (a failed reflective read) becomes "".
+    private String str(Object o) {
+        return o == null ? "" : String.valueOf(o);
+    }
+
+    private void propsSim(Simulation sim, PrintWriter w) {
+        try {
+            // The selected units system (SI / USCS). The option object's exact
+            // accessor varies, so probe, then fall back to its display text.
+            Object opt = sim.getUnitsManager().getSystemOption();
+            String v = presentationName(invokeQuiet(opt, "getSelectedElement"));
+            if (v == null) {
+                Object sel = invokeQuiet(opt, "getSelected");
+                v = (sel != null) ? String.valueOf(sel) : str(opt);
+            }
+            prow(w, "sim", "", "units_system", v);
+        } catch (Exception e) {
+            sim.println("starpost: properties: sim section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsSolution(Simulation sim, PrintWriter w) {
+        try {
+            SimulationIterator it = sim.getSimulationIterator();
+            Solution sol = sim.getSolution();
+            prow(w, "solution", "", "iteration",
+                String.valueOf(it.getCurrentIteration()));
+            prow(w, "solution", "", "time_level",
+                String.valueOf(it.getCurrentTimeLevel()));
+            prow(w, "solution", "", "physical_time",
+                String.valueOf(sol.getPhysicalTime()));
+            prow(w, "solution", "", "initialized",
+                String.valueOf(sol.isInitialized()));
+            prow(w, "solution", "", "cpu_time_s",
+                str(invokeQuiet(it, "getCpuTime")));
+            prow(w, "solution", "", "elapsed_time_s",
+                str(invokeQuiet(it, "getElapsedTime")));
+        } catch (Exception e) {
+            sim.println("starpost: properties: solution section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsMesh(Simulation sim, PrintWriter w) {
+        try {
+            FvRepresentation fv = null;
+            for (Object rep : sim.getRepresentationManager().getObjects()) {
+                if (rep instanceof FvRepresentation) {
+                    fv = (FvRepresentation) rep;
+                    break;
+                }
+            }
+            // Empty values mean "no volume mesh" — distinct from a failed
+            // section, whose rows are absent entirely.
+            prow(w, "mesh", "", "cell_count",
+                fv == null ? "" : String.valueOf(fv.getCellCount()));
+            prow(w, "mesh", "", "interior_face_count",
+                fv == null ? "" : String.valueOf(fv.getInteriorFaceCount()));
+            prow(w, "mesh", "", "vertex_count",
+                fv == null ? "" : String.valueOf(fv.getVertexCount()));
+        } catch (Exception e) {
+            sim.println("starpost: properties: mesh section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsRegions(Simulation sim, PrintWriter w) {
+        try {
+            for (Region r : sim.getRegionManager().getRegions()) {
+                String name = r.getPresentationName();
+                try {
+                    prow(w, "region", name, "type",
+                        str(presentationName(r.getRegionType())));
+                    prow(w, "region", name, "continuum",
+                        str(presentationName(
+                            invokeQuiet(r, "getPhysicsContinuum"))));
+                    // Boundary count plus a count-per-type summary — never a
+                    // per-boundary dump (regions can hold thousands).
+                    java.util.Map<String, Integer> types =
+                        new java.util.LinkedHashMap<>();
+                    int count = 0;
+                    for (Boundary b : r.getBoundaryManager().getBoundaries()) {
+                        count++;
+                        String t = presentationName(b.getBoundaryType());
+                        if (t == null) {
+                            t = "Unknown";
+                        }
+                        Integer prev = types.get(t);
+                        types.put(t, prev == null ? 1 : prev + 1);
+                    }
+                    prow(w, "region", name, "boundaries",
+                        String.valueOf(count));
+                    StringBuilder sb = new StringBuilder();
+                    for (java.util.Map.Entry<String, Integer> en
+                            : types.entrySet()) {
+                        if (sb.length() > 0) {
+                            sb.append("; ");
+                        }
+                        sb.append(en.getKey()).append("=").append(en.getValue());
+                    }
+                    prow(w, "region", name, "boundary_types", sb.toString());
+                } catch (Exception e) {
+                    sim.println("starpost: properties: region '" + name
+                        + "' failed: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: regions section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsInterfaces(Simulation sim, PrintWriter w) {
+        try {
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (Object o : sim.getInterfaceManager().getObjects()) {
+                String n = presentationName(o);
+                if (n != null) {
+                    names.add(n);
+                }
+            }
+            prow(w, "interface", "", "count", String.valueOf(names.size()));
+            for (String n : names) {
+                prow(w, "interface", n, "", "");
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: interfaces section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsContinua(Simulation sim, PrintWriter w) {
+        try {
+            for (Object o : sim.getContinuumManager().getObjects()) {
+                if (!(o instanceof Continuum)) {
+                    continue;
+                }
+                Continuum c = (Continuum) o;
+                String name = c.getPresentationName();
+                try {
+                    // The enabled-models list answers most "what kind of sim
+                    // is this?" questions (Steady/Unsteady, Gas/Liquid, ...).
+                    StringBuilder models = new StringBuilder();
+                    for (Object m : c.getModelManager().getObjects()) {
+                        String mn = presentationName(m);
+                        if (mn == null) {
+                            continue;
+                        }
+                        if (models.length() > 0) {
+                            models.append("; ");
+                        }
+                        models.append(mn);
+                    }
+                    prow(w, "continuum", name, "models", models.toString());
+                    prow(w, "continuum", name, "regions",
+                        countOf(invokeQuiet(c, "getRegions")));
+                } catch (Exception e) {
+                    sim.println("starpost: properties: continuum '" + name
+                        + "' failed: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: continua section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsSolvers(Simulation sim, PrintWriter w) {
+        try {
+            for (Object o : sim.getSolverManager().getObjects()) {
+                String n = presentationName(o);
+                if (n != null) {
+                    prow(w, "solver", n, "", "");
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: solvers section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsCriteria(Simulation sim, PrintWriter w) {
+        try {
+            for (Object o
+                    : sim.getSolverStoppingCriterionManager().getObjects()) {
+                String n = presentationName(o);
+                if (n == null) {
+                    continue;
+                }
+                Object used = invokeQuiet(o, "getIsUsed");
+                if (used == null) {
+                    used = invokeQuiet(o, "isUsed");
+                }
+                prow(w, "criterion", n, "enabled", str(used));
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: criteria section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsMeshOps(Simulation sim, PrintWriter w) {
+        try {
+            java.util.List<Object> ops = new java.util.ArrayList<>();
+            try {
+                Class<?> mgrClass = Class.forName("star.meshing.MeshOperationManager");
+                Object mgr = Simulation.class.getMethod("get", Class.class)
+                    .invoke(sim, mgrClass);
+                Object objs = mgr.getClass().getMethod("getObjects").invoke(mgr);
+                for (Object o : (Iterable<?>) objs) {
+                    ops.add(o);
+                }
+            } catch (Exception e) {
+                // release without MeshOperationManager
+            }
+            for (Object op : ops) {
+                String name = presentationName(op);
+                if (name == null) {
+                    continue;
+                }
+                try {
+                    prow(w, "mesh_op", name, "type",
+                        op.getClass().getSimpleName());
+                    Object meshers = invokeQuiet(op, "getMeshersCollection");
+                    if (meshers instanceof Iterable) {
+                        StringBuilder sb = new StringBuilder();
+                        for (Object m : (Iterable<?>) meshers) {
+                            String mn = presentationName(m);
+                            if (mn == null) {
+                                continue;
+                            }
+                            if (sb.length() > 0) {
+                                sb.append("; ");
+                            }
+                            sb.append(mn);
+                        }
+                        prow(w, "mesh_op", name, "meshers", sb.toString());
+                    }
+                    meshDefault(w, name, op, "star.meshing.BaseSize",
+                        "base_size");
+                    meshDefault(w, name, op,
+                        "star.meshing.PartsTargetSurfaceSize",
+                        "target_surface_size");
+                    meshDefault(w, name, op,
+                        "star.meshing.PartsMinimumSurfaceSize",
+                        "min_surface_size");
+                    meshDefault(w, name, op,
+                        "star.prismmesher.NumPrismLayers", "prism_layers");
+                } catch (Exception e) {
+                    sim.println("starpost: properties: mesh op '" + name
+                        + "' failed: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: mesh ops section failed: "
+                + e.getMessage());
+        }
+    }
+
+    // One mesh default value from an auto-mesh operation (e.g. the base size).
+    // These star.meshing / star.prismmesher class names drift across releases
+    // more than the managers do, so each read is looked up and guarded on its
+    // own: a moved class or accessor drops this one key, nothing else.
+    private void meshDefault(PrintWriter w, String opName, Object op,
+                             String className, String key) {
+        try {
+            Object defaults = op.getClass().getMethod("getDefaultValues")
+                .invoke(op);
+            Object item = defaults.getClass().getMethod("get", Class.class)
+                .invoke(defaults, Class.forName(className));
+            String v = displayValue(item);
+            if (v != null) {
+                prow(w, "mesh_op", opName, key, v);
+            }
+        } catch (Exception e) {
+            // this release doesn't carry this default — key dropped
+        }
+    }
+
+    // A readable value for a mesh default object: probes the value accessors
+    // the size/count types expose (with units when present); null when none
+    // fits.
+    private String displayValue(Object item) {
+        Object v = invokeQuiet(item, "getValue");
+        if (v == null) {
+            v = invokeQuiet(item, "getNumLayers");
+        }
+        if (v == null) {
+            v = invokeQuiet(item, "getRelativeSizeValue");
+        }
+        if (v == null) {
+            v = invokeQuiet(item, "getAbsoluteSizeValue");
+        }
+        if (v == null) {
+            return null;
+        }
+        String units = presentationName(invokeQuiet(item, "getUnits"));
+        return (units == null || units.isEmpty())
+            ? String.valueOf(v) : v + " " + units;
+    }
+
+    // Cap on listed geometry parts: on huge sims thousands of parts mean
+    // thousands of client-server round-trips; the rest are summarised in a
+    // single trailing "truncated" row.
+    private static final int PART_CAP = 200;
+
+    private void propsParts(Simulation sim, PrintWriter w) {
+        try {
+            Object mgr = invokeQuiet(sim, "getGeometryPartManager");
+            if (mgr == null) {
+                return;
+            }
+            Object leaves = invokeQuiet(mgr, "getLeafParts");
+            if (!(leaves instanceof Iterable)) {
+                // Manager without getLeafParts: expand each top-level part
+                // (a part without leaves stands for itself).
+                java.util.List<Object> acc = new java.util.ArrayList<>();
+                Object tops = invokeQuiet(mgr, "getObjects");
+                if (tops instanceof Iterable) {
+                    for (Object p : (Iterable<?>) tops) {
+                        Object lp = invokeQuiet(p, "getLeafParts");
+                        if (lp instanceof Iterable) {
+                            for (Object leaf : (Iterable<?>) lp) {
+                                acc.add(leaf);
+                            }
+                        } else {
+                            acc.add(p);
+                        }
+                    }
+                }
+                leaves = acc;
+            }
+            int written = 0;
+            int extra = 0;
+            for (Object part : (Iterable<?>) leaves) {
+                if (written >= PART_CAP) {
+                    extra++;
+                    continue;
+                }
+                String name = presentationName(part);
+                if (name == null) {
+                    continue;
+                }
+                prow(w, "part", name, "type",
+                    part.getClass().getSimpleName());
+                prow(w, "part", name, "surfaces",
+                    countOf(invokeQuiet(part, "getPartSurfaces")));
+                prow(w, "part", name, "curves",
+                    countOf(invokeQuiet(part, "getPartCurves")));
+                written++;
+            }
+            if (extra > 0) {
+                prow(w, "part", "", "truncated", String.valueOf(extra));
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: parts section failed: "
+                + e.getMessage());
+        }
+    }
+
+    private void propsTags(Simulation sim, PrintWriter w) {
+        // TagManager is star.common, but old releases may lack it entirely,
+        // so it is still looked up reflectively — no tags is never an error.
+        for (Object t : managerObjects(sim, "star.common.TagManager")) {
+            String n = presentationName(t);
+            if (n != null) {
+                prow(w, "tag", n, "", "");
+            }
+        }
+    }
+
+    // The objects of a manager looked up by class name via sim.get(...), or
+    // an empty list when this release doesn't have that manager.
+    private java.util.List<Object> managerObjects(Simulation sim,
+                                                  String className) {
+        java.util.List<Object> out = new java.util.ArrayList<>();
+        try {
+            Class<?> mgrClass = Class.forName(className);
+            Object mgr = Simulation.class.getMethod("get", Class.class)
+                .invoke(sim, mgrClass);
+            Object objs = mgr.getClass().getMethod("getObjects").invoke(mgr);
+            for (Object o : (Iterable<?>) objs) {
+                out.add(o);
+            }
+        } catch (Exception e) {
+            // release without this manager — no rows
+        }
+        return out;
+    }
+
+    // The element count of a reflectively-fetched collection, as CSV text
+    // ("" when the accessor was unavailable).
+    private String countOf(Object o) {
+        if (o instanceof java.util.Collection) {
+            return String.valueOf(((java.util.Collection<?>) o).size());
+        }
+        if (o instanceof Iterable) {
+            int n = 0;
+            for (Object item : (Iterable<?>) o) {
+                n++;
+            }
+            return String.valueOf(n);
+        }
+        return "";
     }
 }

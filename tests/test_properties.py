@@ -1,6 +1,10 @@
 """Sim properties feature: model, properties-CSV parsing, macro generation,
 cache persistence, and version-banner capture (the Properties dialog's
 backend; the dialog itself is a later pass)."""
+import re
+from pathlib import Path
+
+from starpost.core.macro_generator import render_macro
 from starpost.core.result_parser import parse_sim_output
 from starpost.data.models import (
     PropertyGroup,
@@ -106,3 +110,39 @@ def test_parse_properties_empty_value_is_kept(tmp_path):
     res = parse_sim_output(str(tmp_path / "caseA.sim"), tmp_path, CLASSIFICATION)
     assert res.properties.get("mesh").get("cell_count") == ""
     assert res.properties.get("mesh").get("vertex_count") is None
+
+
+def test_extract_macro_exports_properties(tmp_path):
+    path = render_macro(Path("/out"), tmp_path)
+    text = path.read_text()
+    assert "exportProperties" in text
+    assert "__properties.csv" in text
+    assert "section,name,key,value" in text
+    # Fragile packages are reached reflectively.
+    assert 'Class.forName("star.meshing.MeshOperationManager")' in text
+    assert '"star.common.TagManager"' in text
+    assert '"star.meshing.BaseSize"' in text
+    assert '"star.meshing.PartsTargetSurfaceSize"' in text
+    assert '"star.meshing.PartsMinimumSurfaceSize"' in text
+    assert '"star.prismmesher.NumPrismLayers"' in text
+    # Getters only — nothing that computes or mutates.
+    assert "initializeSolution" not in text
+    assert "createSimulationSummary" not in text
+    assert ".update(" not in text
+
+
+def test_extract_macro_braces_balance(tmp_path):
+    path = render_macro(Path("/out"), tmp_path)
+    text = path.read_text()
+    assert text.count("{") == text.count("}")
+
+
+def test_extract_macro_no_compile_time_refs_outside_common(tmp_path):
+    # A compile error kills the whole extraction, so fragile packages may
+    # appear only inside string literals (Class.forName) or comments.
+    text = render_macro(Path("/out"), tmp_path).read_text()
+    text = re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)  # strip string literals
+    text = re.sub(r"//[^\n]*", "", text)             # strip line comments
+    for pkg in ("star.meshing", "star.cadmodeler", "star.prismmesher",
+                "star.screenplay"):
+        assert pkg not in text, f"compile-time reference to {pkg}"
