@@ -125,6 +125,8 @@ MENU_ICON_KINDS = tuple(_MENU_GLYPHS)
 def _menu_glyph_pixmap(kind: str, color: str) -> QPixmap:
     # Drawn at 2x and tagged with the device pixel ratio so the thin strokes
     # stay crisp on HiDPI screens.
+    if kind not in _MENU_GLYPHS:
+        raise KeyError(kind)
     dpr = 2.0
     pixmap = QPixmap(int(_MENU_ICON_PX * dpr), int(_MENU_ICON_PX * dpr))
     pixmap.setDevicePixelRatio(dpr)
