@@ -6,11 +6,18 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Bug Fixes
+- **Crisp text in exported plots** — the title, axis and legend text in
+  exported plot images is now rendered with plain grayscale antialiasing.
+  Previously the capture baked the screen's RGB-subpixel hinting into the
+  image, leaving colour fringes on every glyph that read as blur when the
+  image was viewed at any other scale. The grid, ticks and axis frame also
+  keep their subtle hairline weight at every export resolution rather than
+  thickening with it.
 - **Exported plots match the preview** — plot images (Export menu, Run batch)
-  now render their curves, axes and grid at the same relative thickness as the
-  plot preview. The high-resolution capture scaled everything except the lines
-  (drawn with cosmetic pens, which keep a fixed pixel width), so an exported
-  plot's lines came out three times thinner than the preview showed.
+  now render their curves at the same relative thickness as the plot preview.
+  The high-resolution capture scaled everything except the lines (drawn with
+  cosmetic pens, which keep a fixed pixel width), so an exported plot's lines
+  came out three times thinner than the preview showed.
 - **Data tab folders survive a restart** — data sets filed into the Data tab's
   virtual folders no longer fall out to the top level when StarPost restarts.
   Startup refreshed the tab once before the crash-recovery cache had loaded,

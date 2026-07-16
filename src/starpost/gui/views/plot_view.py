@@ -220,6 +220,23 @@ def _save_via_pillow(image, path) -> None:
     Image.open(BytesIO(bytes(data))).save(str(path))
 
 
+def _render_overlay(painter, widget) -> None:
+    """Composite an overlay child widget into an export at its on-plot position.
+    Widget rendering rasterises text with the screen's subpixel hinting, so its
+    font gets grayscale antialiasing for the capture (and restored after) —
+    otherwise the glyphs carry RGB colour fringes into the image."""
+    from PySide6.QtGui import QFont
+
+    font = widget.font()
+    plain = QFont(font)
+    plain.setStyleStrategy(QFont.StyleStrategy.NoSubpixelAntialias)
+    widget.setFont(plain)
+    try:
+        widget.render(painter, widget.pos())
+    finally:
+        widget.setFont(font)
+
+
 def _image_to_pdf(image, path) -> None:
     """Write a rendered QImage into a tightly-cropped (no-margin) PDF page."""
     from PySide6.QtCore import QMarginsF, QRect, QSizeF
@@ -833,14 +850,16 @@ class PlotView(QWidget):
         """Render just the plot (graph, title, axes, legend — none of the
         surrounding controls) to ``path`` in ``fmt`` (png | jpg | tiff | pdf).
 
-        The plot widget is captured at ``scale``× device-pixel-ratio rather than
-        by upscaling the scene: that keeps the legend and fonts in the same
+        The plot is captured at ``scale``× device-pixel-ratio rather than by
+        upscaling the scene: that keeps the legend and fonts in the same
         proportion as the on-screen preview (pyqtgraph's image exporter leaves
         them at a fixed pixel size when upscaled), while still producing a
-        high-resolution image. Cosmetic pens don't follow the ratio, so they are
-        widened for the capture (see _scale_cosmetic_pens)."""
-        from PySide6.QtGui import QColor, QImage, QPainter  # noqa: F401
-        from PySide6.QtWidgets import QWidget
+        high-resolution image. The curves' cosmetic pens don't follow the ratio,
+        so they are widened for the capture (see _scale_curve_pens); the axis
+        pens are deliberately left alone so the grid, ticks and frame keep their
+        subtle hairline weight at any resolution."""
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor, QImage, QPainter
 
         src = self._plot
         w = max(src.width(), 1)
@@ -848,16 +867,25 @@ class PlotView(QWidget):
         image = QImage(round(w * scale), round(h * scale), QImage.Format.Format_ARGB32)
         image.setDevicePixelRatio(scale)
         image.fill(QColor(self._bg))
-        # The curves and axes draw with cosmetic pens, which paint at a fixed
-        # device-pixel width and ignore the device-pixel-ratio — left alone
-        # they'd come out ``scale``× thinner than the on-screen preview. Widen
-        # them for the capture, then restore.
-        restore = self._scale_cosmetic_pens(scale)
+        restore = self._scale_curve_pens(scale)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         try:
-            # Explicit QWidget.render (not QGraphicsView.render) — capture the
-            # widget as drawn, honouring the image's device-pixel-ratio.
-            QWidget.render(src, image)
+            # Paint the scene straight onto the image rather than QWidget.render:
+            # widget rendering rasterises text with the screen's RGB-subpixel
+            # hinting, which bakes colour fringes into every glyph — visible blur
+            # once the image is viewed at any other scale. Scene painting on an
+            # image uses plain grayscale antialiasing.
+            source = src.mapToScene(src.viewport().rect()).boundingRect()
+            src.scene().render(painter, QRectF(0, 0, w, h), source)
+            # Overlay children aren't scene items; composite the visible ones
+            # (the draggable region-stats panel) at their on-plot position.
+            if self._stats_label.isVisible():
+                _render_overlay(painter, self._stats_label)
         finally:
+            painter.end()
             restore()
 
         if fmt.lower() == "pdf":
@@ -867,32 +895,20 @@ class PlotView(QWidget):
             # fall back to Pillow, which infers the format from the extension.
             _save_via_pillow(image, path)
 
-    def _scale_cosmetic_pens(self, scale: float):
-        """Multiply the width of every cosmetic pen the plot draws with — the
-        curves and the axes (whose pen also draws the grid and ticks; the legend
-        samples reuse the curve pens) — by ``scale``. Returns a zero-argument
-        callable that restores the original pens."""
+    def _scale_curve_pens(self, scale: float):
+        """Multiply the width of every curve's cosmetic pen (the legend samples
+        reuse them) by ``scale``. Returns a zero-argument callable that restores
+        the original pens."""
         restorers = []
-
-        def widen(pen):
-            wide = pg.mkPen(pen)
-            # A zero width is Qt's cosmetic hairline (1 device pixel).
-            wide.setWidthF((pen.widthF() or 1.0) * scale)
-            return wide
-
         for item in self._plot.listDataItems():
             pen = pg.mkPen(item.opts.get("pen"))
             if not pen.isCosmetic():
                 continue
-            item.setPen(widen(pen))
+            wide = pg.mkPen(pen)
+            # A zero width is Qt's cosmetic hairline (1 device pixel).
+            wide.setWidthF((pen.widthF() or 1.0) * scale)
+            item.setPen(wide)
             restorers.append(lambda item=item, pen=pen: item.setPen(pen))
-        for name in ("left", "bottom", "right", "top"):
-            ax = self._plot.getAxis(name)
-            pen = ax.pen()
-            if not pen.isCosmetic():
-                continue
-            ax.setPen(widen(pen))
-            restorers.append(lambda ax=ax, pen=pen: ax.setPen(pen))
 
         def restore():
             for r in restorers:

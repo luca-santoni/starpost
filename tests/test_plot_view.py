@@ -171,6 +171,85 @@ def test_export_line_width_scales_with_resolution(app, tmp_path):
     pv.deleteLater()
 
 
+def test_export_text_has_no_subpixel_fringing(app, tmp_path):
+    """Exported text must use grayscale antialiasing. Rendering the plot via
+    QWidget.render bakes the screen's RGB-subpixel hinting into the image —
+    colour fringes on every glyph that read as blur once the image is viewed
+    at any other scale."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+
+    from starpost.data.models import MonitorPlot, PlotKind
+
+    pv = PlotView()
+    pv.set_category_controls_visible(False)
+    pv.set_monitor_selection({"G": ["A"]}, render=False)
+    pv.show_plots([MonitorPlot(
+        "G", [PlotSeries("A", list(range(50)), [20.0] * 50)], kind=PlotKind.FORCE,
+    )])
+    pv.resize(720, 480)
+    pv.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    pv.show()
+    for _ in range(3):
+        app.processEvents()
+
+    pv.export(tmp_path / "out.png", "png", scale=3.0)
+    img = QImage(str(tmp_path / "out.png")).convertToFormat(
+        QImage.Format.Format_RGB888
+    )
+    # The left margin (tick labels) and title strip hold only text and grey
+    # chrome — any strongly colour-imbalanced pixel there is subpixel fringing.
+    fringes = 0
+    regions = (
+        (0, 100, 100, img.height() - 200),   # y-axis tick labels
+        (img.width() // 3, 0, img.width() // 3, 80),  # title strip
+    )
+    for rx, ry, rw, rh in regions:
+        for y in range(ry, ry + rh):
+            for x in range(rx, rx + rw):
+                c = img.pixelColor(x, y)
+                ch = (c.red(), c.green(), c.blue())
+                if max(ch) - min(ch) > 12:
+                    fringes += 1
+    assert fringes == 0
+    pv.deleteLater()
+
+
+def test_export_scales_curve_pens_only(app):
+    """The export widens the curves' cosmetic pens but leaves the axis pens
+    (which also draw the grid and ticks) alone — the exported grid stays
+    hairline-subtle rather than thickening with the resolution."""
+    from PySide6.QtCore import Qt
+
+    from starpost.data.models import MonitorPlot, PlotKind
+
+    pv = PlotView()
+    pv.set_category_controls_visible(False)
+    pv.set_monitor_selection({"G": ["A"]}, render=False)
+    pv.show_plots([MonitorPlot(
+        "G", [PlotSeries("A", [1, 2, 3], [1.0, 2.0, 3.0])], kind=PlotKind.FORCE,
+    )])
+    pv.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    pv.show()
+    app.processEvents()
+
+    curve = next(
+        it for it in pv._plot.listDataItems()
+        if it.opts.get("pen") is not None and it.opts["pen"].widthF() == 1.5
+    )
+    axis_widths = {
+        name: pv._plot.getAxis(name).pen().widthF()
+        for name in ("left", "bottom", "right", "top")
+    }
+    restore = pv._scale_curve_pens(3.0)
+    assert curve.opts["pen"].widthF() == pytest.approx(4.5)
+    for name, width in axis_widths.items():
+        assert pv._plot.getAxis(name).pen().widthF() == width
+    restore()
+    assert curve.opts["pen"].widthF() == pytest.approx(1.5)
+    pv.deleteLater()
+
+
 def test_legend_offset_round_trips_across_sizes(app):
     """The legend position is captured as a fraction of the plot area and restores
     to the same spot at a different render size (so saved plots keep it)."""
