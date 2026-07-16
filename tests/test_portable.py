@@ -2,7 +2,9 @@ from starpost.data.models import (
     MonitorPlot,
     PlotKind,
     PlotSeries,
+    PropertyGroup,
     Report,
+    SimProperties,
     SimResult,
 )
 from starpost.data.portable import read_sim_csv, write_sim_csv
@@ -80,3 +82,69 @@ def test_rejects_foreign_csv(tmp_path):
         pass
     else:
         raise AssertionError("expected ValueError for a non-StarPost CSV")
+
+
+def test_round_trip_properties(tmp_path):
+    result = _sample()
+    result.properties = SimProperties(groups=[
+        PropertyGroup(section="sim", entries=[("units_system", "SI")]),
+        PropertyGroup(
+            section="region", name="Fluid",
+            entries=[("boundaries", "46"),
+                     ("boundary_types", "Velocity Inlet=1; Wall=44")],
+        ),
+        PropertyGroup(section="tag", name="baseline"),
+    ])
+    path = tmp_path / "caseA.csv"
+    write_sim_csv(result, path)
+
+    assert path.read_text(encoding="utf-8").startswith("starpost-data,3")
+
+    loaded = read_sim_csv(path)
+    props = loaded.properties
+    assert props.get("sim").get("units_system") == "SI"
+    assert (props.get("region", "Fluid").get("boundary_types")
+            == "Velocity Inlet=1; Wall=44")
+    # An entry-less group (a tag) survives the round trip.
+    assert props.get("tag", "baseline").entries == []
+    # Reports and plots are untouched by the new rows.
+    assert {r.name for r in loaded.reports} == {"Drag Force", "Bad"}
+    assert loaded.plots[0].series[0].y == [0.1, 0.01]
+
+
+def test_round_trip_without_properties_stays_none(tmp_path):
+    path = tmp_path / "caseA.csv"
+    write_sim_csv(_sample(), path)
+    assert read_sim_csv(path).properties is None
+
+
+def test_v2_file_still_imports(tmp_path):
+    # Files exported by older StarPost (format v2) must keep importing.
+    path = tmp_path / "old.csv"
+    path.write_text(
+        "starpost-data,2\n"
+        "meta,sim_path,/cases/caseA.sim\n"
+        "meta,extracted_at,2026-06-16T12:00:00+00:00\n"
+        "report,Drag Force,12.5,N,\n"
+        "plot,Residuals,residual,Iteration,true,\n"
+        "head,Iteration,Continuity\n"
+        "1,0.1\n"
+        "2,0.01\n",
+        encoding="utf-8",
+    )
+    loaded = read_sim_csv(path)
+    assert loaded.sim_path == "/cases/caseA.sim"
+    assert loaded.reports[0].value == 12.5
+    assert loaded.plots[0].series[0].y == [0.1, 0.01]
+    assert loaded.properties is None
+
+
+def test_rejects_unsupported_version(tmp_path):
+    path = tmp_path / "future.csv"
+    path.write_text("starpost-data,4\n", encoding="utf-8")
+    try:
+        read_sim_csv(path)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for an unsupported version")

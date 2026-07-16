@@ -9,9 +9,11 @@ Every following row is tagged by its first cell, except a plot's data rows,
 which are stored *columnar* (a shared X column plus one column per series) to
 keep the file compact:
 
-    starpost-data,2
+    starpost-data,3
     meta,sim_path,/cases/caseA.sim
     meta,extracted_at,2026-06-16T12:00:00+00:00
+    prop,sim,,units_system,SI
+    prop,region,Fluid,boundaries,46
     report,Drag Force,12.5,N,
     plot,Residuals,residual,Iteration,true,
     head,Iteration,Continuity,X-momentum
@@ -22,6 +24,8 @@ A ``head`` row names the X axis and the series filling each column; the
 numeric rows beneath it are the data, one per X value, until the next tag.
 Series that don't share an X vector are written as separate head/data blocks
 under the same plot. One file holds exactly one data set (sim).
+A ``prop`` row carries one sim-properties entry (section, entity name, key, value);
+an entry-less group writes a single row with empty key and value.
 """
 from __future__ import annotations
 
@@ -34,14 +38,19 @@ from starpost.data.models import (
     MonitorPlot,
     PlotKind,
     PlotSeries,
+    PropertyGroup,
     Report,
+    SimProperties,
     SimResult,
 )
 
 # Signature written on the first line. Bump VERSION if the layout changes in a
 # way older readers can't handle; readers verify FORMAT and the version.
+# v3 added ``prop`` rows (sim properties); v2 files still read fine, so both
+# are accepted on import. v3 files do NOT import into pre-v3 StarPost.
 FORMAT = "starpost-data"
-VERSION = 2
+VERSION = 3
+_READABLE_VERSIONS = ("2", "3")
 
 def _bool(v: bool) -> str:
     return "true" if v else "false"
@@ -78,6 +87,15 @@ def _write_rows(result: SimResult, fh) -> None:
     w.writerow(["meta", "extracted_at", result.extracted_at])
     if result.error:
         w.writerow(["meta", "error", result.error])
+
+    if result.properties is not None:
+        for g in result.properties.groups:
+            if g.entries:
+                for key, value in g.entries:
+                    w.writerow(["prop", g.section, g.name, key, value])
+            else:
+                # An entry-less group (e.g. a tag) still needs a row to exist.
+                w.writerow(["prop", g.section, g.name, "", ""])
 
     for rep in result.reports:
         w.writerow(
@@ -143,7 +161,7 @@ def read_sim_csv(path: Path | str) -> SimResult:
             raise ValueError(f"empty file: {path.name}")
         if not signature or signature[0] != FORMAT:
             raise ValueError(f"not a StarPost data export: {path.name}")
-        if len(signature) < 2 or signature[1] != str(VERSION):
+        if len(signature) < 2 or signature[1] not in _READABLE_VERSIONS:
             raise ValueError(
                 f"unsupported StarPost data version in {path.name}: "
                 f"{signature[1:] or ['?']}"
@@ -174,6 +192,22 @@ def read_sim_csv(path: Path | str) -> SimResult:
                         error=(row[4] if len(row) > 4 else "") or None,
                     )
                 )
+            elif tag == "prop":
+                section = row[1] if len(row) > 1 else ""
+                if not section:
+                    continue
+                name = row[2] if len(row) > 2 else ""
+                if result.properties is None:
+                    result.properties = SimProperties()
+                groups = result.properties.groups
+                if (not groups or groups[-1].section != section
+                        or groups[-1].name != name):
+                    groups.append(PropertyGroup(section=section, name=name))
+                key = row[3] if len(row) > 3 else ""
+                if key:
+                    groups[-1].entries.append(
+                        (key, row[4] if len(row) > 4 else "")
+                    )
             elif tag == "plot":
                 plot = MonitorPlot(
                     name=row[1],
