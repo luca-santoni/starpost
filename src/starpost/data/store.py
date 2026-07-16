@@ -15,9 +15,11 @@ from starpost.data.models import (
     MonitorPlot,
     PlotKind,
     PlotSeries,
+    PropertyGroup,
     Report,
     Scene,
     Screenplay,
+    SimProperties,
     SimResult,
 )
 from starpost.utils.paths import results_cache_path
@@ -153,6 +155,7 @@ def _result_to_dict(r: SimResult) -> dict:
         "views": list(r.views),
         "screenplays": [asdict(sp) for sp in r.screenplays],
         "media": [asdict(m) for m in r.media],
+        "properties": asdict(r.properties) if r.properties is not None else None,
         "extracted_at": r.extracted_at,
         "error": r.error,
     }
@@ -184,8 +187,26 @@ def _result_from_dict(d: dict) -> SimResult:
         views=list(d.get("views", [])),
         screenplays=screenplays,
         media=media,
+        properties=_properties_from_dict(d.get("properties")),
         extracted_at=d.get("extracted_at", ""),
         error=d.get("error"),
+    )
+
+
+def _properties_from_dict(d) -> Optional[SimProperties]:
+    """Rebuild SimProperties from its asdict form; JSON stores the (key, value)
+    entry tuples as lists. None/absent (pre-properties caches) stays None."""
+    if not d:
+        return None
+    return SimProperties(
+        groups=[
+            PropertyGroup(
+                section=g["section"],
+                name=g.get("name", ""),
+                entries=[(k, v) for k, v in g.get("entries", [])],
+            )
+            for g in d.get("groups", [])
+        ]
     )
 
 

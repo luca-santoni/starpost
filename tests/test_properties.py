@@ -1,6 +1,7 @@
 """Sim properties feature: model, properties-CSV parsing, macro generation,
 cache persistence, and version-banner capture (the Properties dialog's
 backend; the dialog itself is a later pass)."""
+import json
 import re
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from starpost.data.models import (
     SimProperties,
     SimResult,
 )
+from starpost.data.store import ResultStore
 
 
 def test_property_group_key_lookup():
@@ -146,3 +148,56 @@ def test_extract_macro_no_compile_time_refs_outside_common(tmp_path):
     for pkg in ("star.meshing", "star.cadmodeler", "star.prismmesher",
                 "star.screenplay"):
         assert pkg not in text, f"compile-time reference to {pkg}"
+
+
+def _props() -> SimProperties:
+    return SimProperties(groups=[
+        PropertyGroup(section="sim", entries=[("units_system", "SI")]),
+        PropertyGroup(section="region", name="Fluid",
+                      entries=[("boundaries", "46")]),
+        PropertyGroup(section="tag", name="baseline"),
+    ])
+
+
+def test_store_round_trips_properties(tmp_path):
+    res = SimResult(sim_path="/c/a.sim", properties=_props())
+    store = ResultStore()
+    store.put(res)
+    path = tmp_path / "cache.json"
+    store.save_cache(path)
+
+    loaded = ResultStore()
+    loaded.load_cache(path)
+    got = loaded.get("/c/a.sim").properties
+    assert got.get("sim").get("units_system") == "SI"
+    assert got.get("region", "Fluid").get("boundaries") == "46"
+    assert got.get("tag", "baseline").entries == []
+    # JSON turns tuples into lists; the loader must rebuild tuples.
+    assert got.get("sim").entries == [("units_system", "SI")]
+    assert isinstance(got.get("sim").entries[0], tuple)
+
+
+def test_store_round_trips_none_properties(tmp_path):
+    store = ResultStore()
+    store.put(SimResult(sim_path="/c/a.sim"))
+    path = tmp_path / "cache.json"
+    store.save_cache(path)
+    loaded = ResultStore()
+    loaded.load_cache(path)
+    assert loaded.get("/c/a.sim").properties is None
+
+
+def test_old_cache_without_properties_loads_none(tmp_path):
+    # Caches written before this feature have no "properties" key at all.
+    store = ResultStore()
+    store.put(SimResult(sim_path="/c/a.sim"))
+    path = tmp_path / "cache.json"
+    store.save_cache(path)
+    payload = json.loads(path.read_text())
+    for d in payload.values():
+        d.pop("properties", None)
+    path.write_text(json.dumps(payload))
+
+    loaded = ResultStore()
+    loaded.load_cache(path)
+    assert loaded.get("/c/a.sim").properties is None
