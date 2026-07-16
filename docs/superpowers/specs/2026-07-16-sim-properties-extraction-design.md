@@ -1,9 +1,25 @@
 # Sim Properties Extraction — Design
 
 **Date:** 2026-07-16
-**Status:** Proposed (research + design; no implementation yet)
+**Status:** Approved for backend implementation (steps 1–5; GUI dialog deferred)
 **Feeds:** the Properties dialog for Data-tab data sets (and, by extension, the
 Files-tab Properties dialog once a file is extracted).
+
+## Decisions (brainstormed 2026-07-16)
+
+- **Scope now:** pipeline steps 1–5 — macro, parser, `SimProperties` model,
+  store cache, portable CSV v3. Step 6 (the Properties dialog) is deferred to
+  a later pass; this work only makes the data available.
+- **Content:** Tiers 1 + 2 in this implementation. Tier 3 (per-object tags,
+  part metadata, 3D-CAD model names, coordinate systems/frames/motions)
+  deferred.
+- **Mesh defaults (open question 2):** the standard four per Automated Mesh
+  operation — base size, target surface size, minimum surface size, prism
+  layer count — each independently guarded.
+- **Portable export (open question 3):** yes — properties go into the portable
+  CSV, with the v2 → v3 version bump.
+- Open questions 1 (dialog form) and 4 (folder aggregation) stay open; they
+  are GUI-side and out of scope here.
 
 ## Goal
 
@@ -79,7 +95,7 @@ Tier-3 candidate later if a stored-metrics API is confirmed.
 | Item | API (validated) | Notes |
 |---|---|---|
 | All tags defined | `star.common.TagManager` (via `sim.get(...)`) → tag names | |
-| Per-object tags | `TagManager.getTags(obj)` or `obj.getTagGroup().getObjects()` — every `ClientServerObject` is `Taggable` | Tier 2: tags on regions, parts, reports. Tag-everything is unbounded; restrict to the object types we already enumerate. |
+| Per-object tags | `TagManager.getTags(obj)` or `obj.getTagGroup().getObjects()` — every `ClientServerObject` is `Taggable` | Tier 3 (deferred): tags on regions, parts, reports. Tag-everything is unbounded; restrict to the object types we already enumerate. |
 
 ### 1.6 Solution state
 
@@ -168,9 +184,46 @@ Flat, order-preserving, reuses the existing `esc()` helper, and unknown
 sections are ignorable by the parser — that's the forward-compat story.
 Multi-valued cells use `; ` separators inside one escaped cell (same trick the
 media index uses for displayers). The STAR-CCM+ version (§1.7) is *not* written
-by the macro: the Python side parses it from the runner's stdout banner and
-appends it to `SimProperties` as a `sim,,starccm_version,...` entry during
-parsing, so it still displays alongside the macro-sourced rows.
+by the macro: the Python side parses it from the runner's stdout banner
+(`StarRunner` already streams stdout line by line; it exposes the match, e.g.
+`detected_version`, and the extraction job appends a `sim` group entry
+`starccm_version` after parsing — absent when the banner never matches, never
+a failure).
+
+Settled section/key inventory (covers Tiers 1 + 2; grouped below by API
+mechanism, not by tier — both tiers land together):
+
+- **Direct `star.common` calls** (like `exportViews` today):
+  - `sim,,units_system` from `getUnitsManager().getSystemOption()`.
+  - `solution,,iteration / time_level / physical_time / initialized /
+    cpu_time_s / elapsed_time_s`.
+  - `mesh,,cell_count / interior_face_count / vertex_count` from the
+    `FvRepresentation` when present. No volume mesh → write the rows with an
+    **empty value** ("not meshed"), distinguishable from a failed section
+    (rows absent entirely).
+  - `region,<name>,type / continuum / boundaries / boundary_types` —
+    `boundary_types` is the count-per-type summary (`Velocity Inlet=1;
+    Wall=44`), never a per-boundary dump.
+  - `interface,,count,N` plus one `interface,<name>,,` row per interface.
+  - `continuum,<name>,models` (`; `-joined presentation names) and
+    `continuum,<name>,regions,N`.
+  - `solver,<name>,,` rows; `criterion,<name>,enabled,true|false` rows.
+  - `tag,<name>,,` rows — `TagManager` is `star.common` but is still reached
+    via `Class.forName` + `sim.get(...)` so releases without it degrade to no
+    tag rows instead of a fatal error.
+- **Reflection only** (every class outside the already-imported
+  `star.common`/`star.base.report`/`star.vis` via `Class.forName` + the
+  existing `invokeQuiet` helper; **no new compile-time imports**):
+  - `mesh_op,<name>,type / meshers / base_size / target_surface_size /
+    min_surface_size / prism_layers` — pipeline order preserved; each of the
+    four default values independently guarded so a moved class drops that one
+    key only.
+  - `part,<name>,type / surfaces / curves` — leaf parts only, capped at the
+    first 200 with a closing `part,,truncated,N` row when more exist; `type`
+    is the concrete class's simple name (`CadPart`, `SolidModelPart`, …).
+
+Numbers are written with plain Java `long`/`double` `toString` (locale-safe).
+Getters only — nothing that computes, initializes, or mutates.
 
 Rules carried over from the existing exporters:
 - Every section wrapped in its own try/catch; a failure loses that section
@@ -186,7 +239,11 @@ Rules carried over from the existing exporters:
 **2. Parser** — `_parse_properties()` in
 [result_parser.py](src/starpost/core/result_parser.py): missing file → `None`
 (the same back-compat behaviour `_parse_scenes` has for pre-scenes
-extractions).
+extractions). Consecutive rows sharing `(section, name)` group into one
+`PropertyGroup`, preserving file order; a key-less row (e.g. `tag,baseline,,`)
+registers the group with no entries; there is **no section whitelist** —
+unknown sections pass through, which is the forward-compat contract with
+future macro tiers. A malformed row is skipped with a log warning.
 
 **3. Model** — in [models.py](src/starpost/data/models.py):
 
@@ -212,18 +269,25 @@ properties must not affect the batch homogeneity check.
 
 **4. Store** — extend `_result_to_dict` / `_result_from_dict` in
 [store.py](src/starpost/data/store.py) (`asdict` for the new dataclass; small
-and fixed-size). Old caches load with `d.get("properties")` → `None`, matching
-the existing back-compat pattern.
+and fixed-size, so the hand-built-series optimisation doesn't apply). Old
+caches load with `d.get("properties")` → `None`, matching the existing
+back-compat pattern. Note `asdict` serialises the `(key, value)` tuples as
+JSON lists; the loader rebuilds them as tuples.
 
 **5. Portable CSV** — [portable.py](src/starpost/data/portable.py) gains a
-`prop,<section>,<name>,<key>,<value>` row tag. This **requires bumping
-`VERSION` 2 → 3**: the v2 reader treats any unrecognised tag as a numeric data
-row (`float(tag)`), so it would crash on `prop` rows — silently skipping is not
-an option. Write v3 always; **accept both 2 and 3 on read** so existing
-exports keep importing. Consequence to document in the changelog: files
-exported by the new version won't import into older StarPost releases.
+`prop,<section>,<name>,<key>,<value>` row tag (and `prop,<section>,<name>,,`
+for entry-less groups such as tags), written after the `meta` rows. This
+**requires bumping `VERSION` 2 → 3**. (Verified against the code: the v2
+reader rejects any other version up front with a clear "unsupported version"
+`ValueError` at portable.py:146 — so old StarPost fails *cleanly* on a v3
+file, it never reaches the `float(tag)` fallback. The bump is still required;
+the failure mode is just friendlier than first feared.) Write v3 always;
+**accept both 2 and 3 on read** so existing exports keep importing. The v3
+reader's `prop` branch regroups rows exactly like the extraction parser.
+Consequence to document in the changelog: files exported by the new version
+won't import into older StarPost releases.
 
-**6. GUI** — extend `PropertiesDialog`
+**6. GUI (deferred — not part of this implementation)** — extend `PropertiesDialog`
 ([properties_dialog.py](src/starpost/gui/views/properties_dialog.py)):
 - Keep the current compact summary form (size, reports, monitors, iterations)
   and add the headline properties to it: cells, iteration, physical time,
@@ -236,7 +300,7 @@ exported by the new version won't import into older StarPost releases.
   ([main_window.py:1502](src/starpost/gui/main_window.py:1502)) and the Files
   tab (`_show_file_properties`) share this dialog.
 
-### 2.3 Tiering (ship in this order)
+### 2.3 Tiering (Tiers 1 + 2 land in this implementation; Tier 3 deferred)
 
 1. **Tier 1 — headline scalars:** units system, solution state (iteration,
    physical time, initialized, CPU time), mesh counts, region/boundary/
@@ -262,11 +326,15 @@ Tier 1 lands, which is the point of the generic row format.
 - Portable: v3 round-trip; v2 file still imports; v3-into-old-reader is the
   documented breaking case.
 - Macro: template renders and the generated Java balances braces (existing
-  macro tests' approach); real-sim validation is manual on this machine
+  macro tests' approach), plus an import-purity check — the rendered Java must
+  contain no compile-time reference outside `star.common` / `star.base.report`
+  / `star.vis` (i.e. `star.meshing` / `star.cadmodeler` appear only inside
+  string literals). Real-sim validation is manual on this machine
   (`/opt/Siemens` install, per machine notes — mind the 16 GB `/tmp` tmpfs on
   big sims).
-- GUI: dialog builds with `properties=None` and with a populated
-  `SimProperties` (offscreen platform).
+- Homogeneity: explicit test that `signature()` ignores `properties`.
+- GUI (deferred pass): dialog builds with `properties=None` and with a
+  populated `SimProperties` (offscreen platform).
 
 ---
 
@@ -284,16 +352,14 @@ Tier 1 lands, which is the point of the generic row format.
 | **Cache size growth.** | Low | Properties are ~1–10 KB of strings per sim; plot series dominate by orders of magnitude. |
 | **Units/locale in values** (e.g. `0.01 m`, decimal commas from a localized server). | Low | Store display strings as-is for the dialog; anything parsed as a number (cell count) is written by the macro with `Locale.ROOT`-safe formatting (plain `long`/`double` toString). |
 
-## 4. Open questions (flag before implementation)
+## 4. Open questions
 
-1. **Dialog form:** is a summary-form + collapsible tree right, or should this
-   become a tabbed dialog (Summary / Mesh / Regions / Physics / Tags)? Design
-   assumes tree; cheap to swap.
-2. **Tier 2 value selection:** which mesh defaults matter to your workflow
-   beyond base size (prism layers? target surface size?) — drives which
-   fragile `star.meshing` reads are worth carrying.
-3. **Should properties export into the portable CSV at all**, or stay
-   cache-only? Design says export (the portable file is pitched as
-   full-fidelity), at the cost of the version bump.
-4. **Folder properties aggregation** — sum cells/iterations across a Data-tab
-   folder? Deferred; per-sim first.
+1. **Dialog form** *(still open; GUI pass)*: is a summary-form + collapsible
+   tree right, or should this become a tabbed dialog (Summary / Mesh /
+   Regions / Physics / Tags)? Design assumes tree; cheap to swap.
+2. **Tier 2 value selection** — *resolved 2026-07-16*: the standard four
+   (base size, target surface size, minimum surface size, prism layer count).
+3. **Portable export** — *resolved 2026-07-16*: yes, export into the portable
+   CSV with the v2 → v3 bump.
+4. **Folder properties aggregation** *(still open; GUI pass)* — sum
+   cells/iterations across a Data-tab folder? Deferred; per-sim first.
