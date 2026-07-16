@@ -6,6 +6,11 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### Bug Fixes
+- **Exported plots match the preview** — plot images (Export menu, Run batch)
+  now render their curves, axes and grid at the same relative thickness as the
+  plot preview. The high-resolution capture scaled everything except the lines
+  (drawn with cosmetic pens, which keep a fixed pixel width), so an exported
+  plot's lines came out three times thinner than the preview showed.
 - **Data tab folders survive a restart** — data sets filed into the Data tab's
   virtual folders no longer fall out to the top level when StarPost restarts.
   Startup refreshed the tab once before the crash-recovery cache had loaded,

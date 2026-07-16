@@ -834,10 +834,11 @@ class PlotView(QWidget):
         surrounding controls) to ``path`` in ``fmt`` (png | jpg | tiff | pdf).
 
         The plot widget is captured at ``scale``× device-pixel-ratio rather than
-        by upscaling the scene: that keeps line widths, legend and fonts in the
-        same proportion as the on-screen preview (pyqtgraph's image exporter
-        leaves cosmetic pens and the legend at a fixed pixel size when upscaled),
-        while still producing a high-resolution image."""
+        by upscaling the scene: that keeps the legend and fonts in the same
+        proportion as the on-screen preview (pyqtgraph's image exporter leaves
+        them at a fixed pixel size when upscaled), while still producing a
+        high-resolution image. Cosmetic pens don't follow the ratio, so they are
+        widened for the capture (see _scale_cosmetic_pens)."""
         from PySide6.QtGui import QColor, QImage, QPainter  # noqa: F401
         from PySide6.QtWidgets import QWidget
 
@@ -847,9 +848,17 @@ class PlotView(QWidget):
         image = QImage(round(w * scale), round(h * scale), QImage.Format.Format_ARGB32)
         image.setDevicePixelRatio(scale)
         image.fill(QColor(self._bg))
-        # Explicit QWidget.render (not QGraphicsView.render) — capture the widget
-        # as drawn, honouring the image's device-pixel-ratio.
-        QWidget.render(src, image)
+        # The curves and axes draw with cosmetic pens, which paint at a fixed
+        # device-pixel width and ignore the device-pixel-ratio — left alone
+        # they'd come out ``scale``× thinner than the on-screen preview. Widen
+        # them for the capture, then restore.
+        restore = self._scale_cosmetic_pens(scale)
+        try:
+            # Explicit QWidget.render (not QGraphicsView.render) — capture the
+            # widget as drawn, honouring the image's device-pixel-ratio.
+            QWidget.render(src, image)
+        finally:
+            restore()
 
         if fmt.lower() == "pdf":
             _image_to_pdf(image, path)
@@ -857,6 +866,39 @@ class PlotView(QWidget):
             # Qt couldn't write this format (e.g. TIFF often lacks a plugin);
             # fall back to Pillow, which infers the format from the extension.
             _save_via_pillow(image, path)
+
+    def _scale_cosmetic_pens(self, scale: float):
+        """Multiply the width of every cosmetic pen the plot draws with — the
+        curves and the axes (whose pen also draws the grid and ticks; the legend
+        samples reuse the curve pens) — by ``scale``. Returns a zero-argument
+        callable that restores the original pens."""
+        restorers = []
+
+        def widen(pen):
+            wide = pg.mkPen(pen)
+            # A zero width is Qt's cosmetic hairline (1 device pixel).
+            wide.setWidthF((pen.widthF() or 1.0) * scale)
+            return wide
+
+        for item in self._plot.listDataItems():
+            pen = pg.mkPen(item.opts.get("pen"))
+            if not pen.isCosmetic():
+                continue
+            item.setPen(widen(pen))
+            restorers.append(lambda item=item, pen=pen: item.setPen(pen))
+        for name in ("left", "bottom", "right", "top"):
+            ax = self._plot.getAxis(name)
+            pen = ax.pen()
+            if not pen.isCosmetic():
+                continue
+            ax.setPen(widen(pen))
+            restorers.append(lambda ax=ax, pen=pen: ax.setPen(pen))
+
+        def restore():
+            for r in restorers:
+                r()
+
+        return restore
 
     # --- monitor selection (restored from profiles) ----------------------
     def set_monitor_selection(

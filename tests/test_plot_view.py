@@ -115,6 +115,62 @@ def test_export_preview_ignores_text_scale(app):
         dlg.deleteLater()
 
 
+def test_export_line_width_scales_with_resolution(app, tmp_path):
+    """export() captures the plot at scale× device-pixel-ratio; the curves must
+    thicken with it. pyqtgraph draws them with cosmetic pens, which paint at a
+    fixed device-pixel width regardless of the image's ratio — left alone, an
+    exported line comes out scale× thinner than the on-screen preview."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+
+    from starpost.data.models import MonitorPlot, PlotKind
+
+    pv = PlotView()
+    pv.set_category_controls_visible(False)
+    pv.set_monitor_selection({"G": ["A"]}, render=False)
+    # A constant series: a flat horizontal line whose pixel thickness is easy
+    # to measure in a vertical slice.
+    pv.show_plots([MonitorPlot(
+        "G", [PlotSeries("A", list(range(50)), [20.0] * 50)], kind=PlotKind.FORCE,
+    )])
+    pv.resize(720, 480)
+    pv.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    pv.show()
+    for _ in range(3):
+        app.processEvents()
+
+    def curve_thickness(path) -> int:
+        """Median (over three columns) of the longest vertical run of
+        curve-coloured pixels — the curve is the only saturated colour; the
+        grid, text and background are all grey/white."""
+        img = QImage(str(path)).convertToFormat(QImage.Format.Format_RGB888)
+        runs = []
+        for fx in (0.35, 0.5, 0.65):
+            x = int(img.width() * fx)
+            best = cur = 0
+            for y in range(img.height()):
+                c = img.pixelColor(x, y)
+                channels = (c.red(), c.green(), c.blue())
+                if max(channels) - min(channels) > 60:
+                    cur += 1
+                    best = max(best, cur)
+                else:
+                    cur = 0
+            runs.append(best)
+        return sorted(runs)[1]
+
+    pv.export(tmp_path / "at1.png", "png", scale=1.0)
+    pv.export(tmp_path / "at3.png", "png", scale=3.0)
+    t1 = curve_thickness(tmp_path / "at1.png")
+    t3 = curve_thickness(tmp_path / "at3.png")
+    assert t1 >= 1
+    # 3× the resolution → ~3× the pixels of line. Antialiasing skews the
+    # measured core a pixel or two either way (the 1.5px line at 1× reads ~1px;
+    # the 4.5px line at 3× reads ~5px), hence the slack around the 3× target.
+    assert 2.2 * t1 <= t3 <= 3 * t1 + 3
+    pv.deleteLater()
+
+
 def test_legend_offset_round_trips_across_sizes(app):
     """The legend position is captured as a fraction of the plot area and restores
     to the same spot at a different render size (so saved plots keep it)."""
