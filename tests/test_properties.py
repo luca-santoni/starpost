@@ -7,6 +7,8 @@ from pathlib import Path
 
 from starpost.core.macro_generator import render_macro
 from starpost.core.result_parser import parse_sim_output
+from starpost.core.settings import LicenseConfig, Settings
+from starpost.core.starccm_runner import StarRunner
 from starpost.data.models import (
     PropertyGroup,
     Report,
@@ -201,3 +203,75 @@ def test_old_cache_without_properties_loads_none(tmp_path):
     loaded = ResultStore()
     loaded.load_cache(path)
     assert loaded.get("/c/a.sim").properties is None
+
+
+BANNER = "Simcenter STAR-CCM+ 2020.1 Build 15.02.007 (linux-x86_64-2.12/gnu7.1)"
+
+
+def _runner() -> StarRunner:
+    s = Settings(starccm_path="/opt/starccm/bin/starccm+")
+    s.license = LicenseConfig()
+    return StarRunner(s)
+
+
+def _fake_render_macro(output_dir, dest_dir):
+    macro = Path(dest_dir) / "extract_all.java"
+    macro.write_text("// fake macro")
+    return macro
+
+
+def test_extract_captures_starccm_version_banner(tmp_path, monkeypatch):
+    import starpost.core.starccm_runner as sr
+
+    def fake_stream(self, cmd, sink):
+        sink(BANNER)
+        sink("Loading simulation...")
+        return 0
+
+    monkeypatch.setattr(sr, "render_macro", _fake_render_macro)
+    monkeypatch.setattr(sr.StarRunner, "_stream", fake_stream)
+
+    result = _runner().extract(tmp_path / "case.sim")
+    assert result.error is None
+    # The scratch dir had no properties CSV (parse gives None), so the banner
+    # alone must create the properties and its sim group.
+    assert (result.properties.get("sim").get("starccm_version")
+            == "2020.1 Build 15.02.007")
+
+
+def test_extract_appends_version_to_existing_sim_group(tmp_path, monkeypatch):
+    import starpost.core.starccm_runner as sr
+
+    def fake_stream(self, cmd, sink):
+        sink(BANNER)
+        return 0
+
+    def fake_parse(sim_path, output_dir, classification):
+        res = SimResult(sim_path=sim_path)
+        res.properties = SimProperties(groups=[
+            PropertyGroup(section="sim", entries=[("units_system", "SI")]),
+        ])
+        return res
+
+    monkeypatch.setattr(sr, "render_macro", _fake_render_macro)
+    monkeypatch.setattr(sr, "parse_sim_output", fake_parse)
+    monkeypatch.setattr(sr.StarRunner, "_stream", fake_stream)
+
+    result = _runner().extract(tmp_path / "case.sim")
+    assert result.properties.get("sim").entries == [
+        ("units_system", "SI"),
+        ("starccm_version", "2020.1 Build 15.02.007"),
+    ]
+
+
+def test_extract_without_banner_leaves_properties_alone(tmp_path, monkeypatch):
+    import starpost.core.starccm_runner as sr
+
+    monkeypatch.setattr(sr, "render_macro", _fake_render_macro)
+    monkeypatch.setattr(
+        sr.StarRunner, "_stream",
+        lambda self, cmd, sink: (sink("Loading simulation..."), 0)[1],
+    )
+
+    result = _runner().extract(tmp_path / "case.sim")
+    assert result.properties is None

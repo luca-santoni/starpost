@@ -9,6 +9,7 @@ most one license is checked out at a time.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,7 +23,12 @@ from starpost.core.macro_generator import (
 )
 from starpost.core.result_parser import parse_media_index, parse_sim_output
 from starpost.core.settings import Settings
-from starpost.data.models import MediaArtifact, SimResult
+from starpost.data.models import (
+    MediaArtifact,
+    PropertyGroup,
+    SimProperties,
+    SimResult,
+)
 from starpost.utils.logging import get_logger
 
 log = get_logger("runner")
@@ -54,6 +60,25 @@ def exe_dialog_filter() -> str:
 # the log file, the on-screen console, or any captured output.
 _SECRET_FLAGS = ("-podkey", "-licpath")
 _REDACTED = "***"
+
+# The STAR-CCM+ batch banner, e.g. "Simcenter STAR-CCM+ 2020.1 Build
+# 15.02.007 (linux-x86_64-2.12/gnu7.1)". Captures the version (and Build
+# number when present). Case-sensitive, so the executable path in the echoed
+# command line ("starccm+") can never match.
+_VERSION_RE = re.compile(r"STAR-CCM\+\s+(\d[\w.\-]*(?:\s+Build\s+[\w.\-]+)?)")
+
+
+def _append_starccm_version(result: SimResult, version: str) -> None:
+    """Record the STAR-CCM+ version (from the batch banner) on the result's
+    properties, creating the SimProperties / "sim" group when the macro's
+    properties CSV didn't produce them."""
+    if result.properties is None:
+        result.properties = SimProperties()
+    group = result.properties.get("sim")
+    if group is None:
+        group = PropertyGroup(section="sim")
+        result.properties.groups.insert(0, group)
+    group.entries.append(("starccm_version", version))
 
 
 def redact_command(cmd: list[str]) -> str:
@@ -114,6 +139,17 @@ class StarRunner:
         folder, where they'd sit around as files the user didn't ask for."""
         sink = log_sink or (lambda s: None)
 
+        # The version banner is only visible in the stream; remember the first
+        # match while forwarding every line untouched.
+        detected: list[str] = []
+
+        def banner_sink(line: str) -> None:
+            if not detected:
+                m = _VERSION_RE.search(line)
+                if m:
+                    detected.append(m.group(1))
+            sink(line)
+
         with tempfile.TemporaryDirectory(prefix="starpost_extract_") as tmp:
             scratch = Path(tmp) / "out"
             scratch.mkdir()
@@ -125,7 +161,7 @@ class StarRunner:
             sink(f"$ {shown}")
             log.info("running: %s", shown)
 
-            code = self._stream(cmd, sink)
+            code = self._stream(cmd, banner_sink)
             if code != 0:
                 msg = f"starccm+ exited with code {code} for {sim_file.name}"
                 sink(msg)
@@ -134,6 +170,8 @@ class StarRunner:
             result = parse_sim_output(
                 str(sim_file), scratch, self.settings.plot_classification
             )
+        if detected:
+            _append_starccm_version(result, detected[0])
         sink(f"Parsed {len(result.reports)} reports, {len(result.plots)} plots "
              f"from {sim_file.name}")
         return result
