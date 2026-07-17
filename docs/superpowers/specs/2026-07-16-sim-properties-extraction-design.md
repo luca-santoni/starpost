@@ -367,9 +367,10 @@ Tier 1 lands, which is the point of the generic row format.
 
 ## 4. Open questions
 
-1. **Dialog form** *(still open; GUI pass)*: is a summary-form + collapsible
-   tree right, or should this become a tabbed dialog (Summary / Mesh /
-   Regions / Physics / Tags)? Design assumes tree; cheap to swap.
+1. **Dialog form** — *resolved 2026-07-16*: a tabbed dialog. Shipped with
+   **General** (the classic summary) and **Parts** (the Geometry ▸ Parts
+   tree); further tabs (Mesh / Regions / Physics / Tags) can follow the same
+   pattern when wanted.
 2. **Tier 2 value selection** — *resolved 2026-07-16*: the standard four
    (base size, target surface size, minimum surface size, prism layer count).
 3. **Portable export** — *resolved 2026-07-16*: yes, export into the portable
