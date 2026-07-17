@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
@@ -333,6 +335,125 @@ def install_combo_accent(app) -> None:
     if _combo_installer is None:
         _combo_installer = _ComboAccentInstaller()
         app.installEventFilter(_combo_installer)
+
+
+# Dynamic property marking an item view exempt from click-to-deselect — for
+# views whose selection drives content and must never be cleared by a click.
+_KEEP_SELECTION_PROP = "starpostKeepSelection"
+
+
+def exempt_click_deselect(view: QAbstractItemView) -> None:
+    """Opt ``view`` out of the app-wide click-to-deselect behaviour (see
+    :class:`_ClickDeselectFilter`) — for navigation-style views (e.g. the
+    settings dialog's group list) whose selection picks what is shown and so
+    must never be empty."""
+    view.setProperty(_KEEP_SELECTION_PROP, True)
+
+
+class _ClickDeselectFilter(QObject):
+    """Application event filter: a plain left click on an already-selected item
+    clears its view's selection, so the accent highlight never lingers with no
+    way to remove it (clicking a highlighted row again "un-highlights" it).
+
+    Applies to every QAbstractItemView viewport except: popup views (combo
+    dropdowns, completers — deselecting inside those breaks the control), the
+    fallback QFileDialog's internals, header views (clicks there sort),
+    NoSelection views, and views opted out via :func:`exempt_click_deselect`.
+
+    Never consumes events, so dragging, double-click actions, context menus,
+    editing and checkbox toggles keep their native behaviour. The clear runs
+    one event-loop turn after the release — letting the view finish its own
+    release handling first — and only when the click really was a click (same
+    index, within the drag threshold, no modifiers) and didn't toggle the
+    item's checkbox (a check action, not a deselect: covers native indicator
+    clicks and the click-anywhere-toggles checklist rows)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        # The last candidate press — a plain left press on an already-selected
+        # index: (view, index, press pos, check state at press).
+        self._pending: tuple | None = None
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
+        et = event.type()
+        if et == QEvent.Type.MouseButtonPress:
+            self._pending = None
+            if (
+                event.button() == Qt.MouseButton.LeftButton
+                and event.modifiers() == Qt.KeyboardModifier.NoModifier
+            ):
+                view = self._deselectable_view(obj)
+                if view is not None:
+                    pos = event.position().toPoint()
+                    idx = view.indexAt(pos)
+                    if idx.isValid() and view.selectionModel().isSelected(idx):
+                        self._pending = (
+                            view,
+                            QPersistentModelIndex(idx),
+                            pos,
+                            idx.data(Qt.ItemDataRole.CheckStateRole),
+                        )
+        elif et == QEvent.Type.MouseButtonDblClick:
+            # The double-click replaces the second press; its trailing release
+            # must not deselect (the double-click action is the intent).
+            self._pending = None
+        elif et == QEvent.Type.MouseButtonRelease and self._pending is not None:
+            view, idx, press_pos, check = self._pending
+            self._pending = None
+            pos = event.position().toPoint()
+            if (
+                event.button() == Qt.MouseButton.LeftButton
+                and obj is view.viewport()
+                and (pos - press_pos).manhattanLength()
+                <= QApplication.startDragDistance()
+                and idx.isValid()
+                and view.indexAt(pos) == idx
+            ):
+                QTimer.singleShot(0, lambda: self._clear(view, idx, check))
+        return False  # never consume the event
+
+    @staticmethod
+    def _deselectable_view(obj) -> QAbstractItemView | None:
+        """The item view whose viewport ``obj`` is, when click-to-deselect
+        applies to it; None otherwise."""
+        if not isinstance(obj, QWidget):
+            return None
+        view = obj.parent()
+        if (
+            not isinstance(view, QAbstractItemView)
+            or isinstance(view, QHeaderView)
+            or view.viewport() is not obj
+            or view.selectionMode() == QAbstractItemView.SelectionMode.NoSelection
+            or view.property(_KEEP_SELECTION_PROP)
+        ):
+            return None
+        window = view.window()
+        if window.windowType() == Qt.WindowType.Popup or isinstance(window, QFileDialog):
+            return None
+        return view
+
+    @staticmethod
+    def _clear(view, idx, check) -> None:
+        try:
+            if not idx.isValid() or idx.data(Qt.ItemDataRole.CheckStateRole) != check:
+                return  # the row went away, or the click toggled its checkbox
+            # Clears the selection *and* the current index, so the focus
+            # outline goes together with the accent fill.
+            view.selectionModel().clear()
+        except RuntimeError:  # view destroyed before the deferred clear ran
+            pass
+
+
+_click_deselect_installer: _ClickDeselectFilter | None = None
+
+
+def install_click_deselect(app) -> None:
+    """Install (once) the app-wide filter that makes a plain click on an
+    already-selected item clear the selection highlight."""
+    global _click_deselect_installer
+    if _click_deselect_installer is None:
+        _click_deselect_installer = _ClickDeselectFilter()
+        app.installEventFilter(_click_deselect_installer)
 
 
 class BarMenu(QMenu):

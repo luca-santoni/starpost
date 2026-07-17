@@ -39,6 +39,14 @@ All notable changes to StarPost are recorded here. Versions follow the
   highlight.
 
 ### Improvements
+- **Click a highlighted item to un-highlight it** — clicking an
+  already-selected row in any list, tree or table (the Files/Data tabs, the
+  Reports table, galleries, dialog lists…) now clears the accent selection
+  highlight, so it no longer lingers on the last-clicked item with no way to
+  remove it. Everything else about clicking is unchanged: Ctrl/Shift
+  multi-select, dragging, double-click actions, right-click menus and
+  checkbox ticks all behave as before, and navigation lists that need a
+  permanent selection (the Settings dialog's group list) are unaffected.
 - **Menu-bar-style dropdowns** — the top bar's **File** and **Run batch**
   menus now open on click (no more hover-open) and stay open wherever the
   mouse goes; with one open, hovering the other menu button switches to it,

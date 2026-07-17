@@ -9,7 +9,11 @@ from starpost.core.settings import Settings
 from starpost.gui.icons import app_icon
 from starpost.gui.main_window import MainWindow
 from starpost.gui.theme import apply_theme
-from starpost.gui.widgets import ToolTipResetStyle, install_combo_accent
+from starpost.gui.widgets import (
+    ToolTipResetStyle,
+    install_click_deselect,
+    install_combo_accent,
+)
 from starpost.utils.logging import configure
 
 
@@ -24,6 +28,9 @@ def main() -> int:
     # Outline the hovered item in every dropdown popup with the accent colour
     # (instead of the style's default black focus rectangle).
     install_combo_accent(app)
+    # Clicking an already-selected item clears the highlight, in every list/
+    # tree/table (navigation lists opt out via exempt_click_deselect).
+    install_click_deselect(app)
 
     settings = Settings.load()
     apply_theme(

@@ -70,6 +70,7 @@ from starpost.gui.widgets import (
     SecretLineEdit,
     enable_check_range,
     enable_range_selection,
+    exempt_click_deselect,
 )
 from starpost.gui.theme import (
     ACCENT_PRESETS,
@@ -310,6 +311,9 @@ class SettingsDialog(QDialog):
         self._nav = QListWidget()
         self._nav.setObjectName("settingsNav")
         self._nav.setMaximumWidth(180)
+        # Navigation: the selected group picks the visible page, so clicking
+        # the current group must never clear the selection.
+        exempt_click_deselect(self._nav)
         self._stack = QStackedWidget()
 
         self._add_page("STAR-CCM+", self._build_starccm_page())
