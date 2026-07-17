@@ -366,7 +366,9 @@ class _ClickDeselectFilter(QObject):
     release handling first — and only when the click really was a click (same
     index, within the drag threshold, no modifiers) and didn't toggle the
     item's checkbox (a check action, not a deselect: covers native indicator
-    clicks and the click-anywhere-toggles checklist rows)."""
+    clicks and the click-anywhere-toggles checklist rows). A quick second
+    click is synthesised by Qt as a double-click; it deselects all the same
+    (see eventFilter)."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -376,7 +378,13 @@ class _ClickDeselectFilter(QObject):
 
     def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
         et = event.type()
-        if et == QEvent.Type.MouseButtonPress:
+        # A quick second click arrives as MouseButtonDblClick, not a plain
+        # press (Qt's double-click synthesis) — and "click, then click again"
+        # is exactly the un-highlight gesture, so both count as a press here.
+        # The view's double-click action (loading a file, opening a still) is
+        # unaffected: nothing is consumed, the action fires as always, and the
+        # trailing release then clears the highlight it would otherwise leave.
+        if et in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick):
             self._pending = None
             if (
                 event.button() == Qt.MouseButton.LeftButton
@@ -393,10 +401,6 @@ class _ClickDeselectFilter(QObject):
                             pos,
                             idx.data(Qt.ItemDataRole.CheckStateRole),
                         )
-        elif et == QEvent.Type.MouseButtonDblClick:
-            # The double-click replaces the second press; its trailing release
-            # must not deselect (the double-click action is the intent).
-            self._pending = None
         elif et == QEvent.Type.MouseButtonRelease and self._pending is not None:
             view, idx, press_pos, check = self._pending
             self._pending = None

@@ -551,6 +551,26 @@ def test_press_drag_release_does_not_clear(app, deselect):
     lst.deleteLater()
 
 
+def test_rapid_second_click_arriving_as_double_click_still_deselects(app, deselect):
+    """A real mouse's quick second click (within the double-click interval) is
+    delivered as MouseButtonDblClick + Release, not a plain press — it must
+    still clear the highlight, since "click, then click again" is exactly the
+    un-highlight gesture (regression: the filter used to ignore double-clicks
+    entirely, so a quick second click left the highlight stuck)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a", "b")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    QTest.mouseDClick(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.mouseRelease(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QApplication.processEvents()
+    assert lst.selectedItems() == []
+    lst.deleteLater()
+
+
 def test_double_click_action_still_fires(app, deselect):
     """Double-clicking a selected item still triggers the double-click action
     (e.g. the Files tab loads the sim) — the filter never consumes events."""

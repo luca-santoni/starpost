@@ -64,8 +64,16 @@ Excluded views:
 
 Multi-selection: a plain click on any selected row clears the whole selection
 (one click kills the highlight, per the request). Ctrl+click still toggles
-individual rows natively. Double-clicking a selected item briefly drops the
-highlight after the first click; the double-click action itself is unaffected.
+individual rows natively.
+
+Double-click synthesis: a quick second click (within the double-click
+interval) is delivered by Qt as `MouseButtonDblClick`, not a plain press. The
+filter treats it exactly like a press — "click, then click again" is the
+un-highlight gesture regardless of speed (found in manual testing: ignoring
+double-clicks left the highlight stuck for fast second clicks, which QTest
+never synthesises). Double-click actions (file loading, gallery opening) are
+untouched — nothing is consumed and the action fires as always; the trailing
+release then clears the highlight the gesture would otherwise leave behind.
 
 ## Testing
 
