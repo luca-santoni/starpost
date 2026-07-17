@@ -369,7 +369,8 @@ Tier 1 lands, which is the point of the generic row format.
 
 1. **Dialog form** — *resolved 2026-07-16*: a tabbed dialog. Shipped with
    **General** (the classic summary) and **Parts** (the Geometry ▸ Parts
-   tree); Mesh / Regions / Physics tabs shipped 2026-07-16 in the same format; a Tags tab can follow the same pattern when wanted.
+   tree); Mesh / Regions / Physics tabs shipped 2026-07-16 in the same
+   format; a Tags tab can follow the same pattern when wanted.
 2. **Tier 2 value selection** — *resolved 2026-07-16*: the standard four
    (base size, target surface size, minimum surface size, prism layer count).
 3. **Portable export** — *resolved 2026-07-16*: yes, export into the portable
