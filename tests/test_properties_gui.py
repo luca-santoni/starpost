@@ -101,16 +101,17 @@ def test_intermediate_composite_counts_leaf_descendants(app, tmp_path):
         PropertyGroup(section="part", name="wing a",
                       entries=[("path", "Assy.Sub one|wing a")]),
         PropertyGroup(section="part", name="wing b",
-                      entries=[("path", "Assy.Sub two|wing b")]),
+                      entries=[("path", "Assy.Sub one|wing b")]),
     ])
     dlg = PropertiesDialog(tmp_path / "caseA.sim", res)
     tree = dlg.tabs.widget(1).tree
     assy = tree.topLevelItem(0)
     assert assy.text(0) == "Assy"
-    # Two leaves inside two sub-composites: "2 parts", not "2 parts"-by-luck —
-    # each sub-composite holds one leaf and reads "1 part".
+    # Both leaves sit inside ONE sub-composite, so Assy has a single direct
+    # child but two leaf descendants: counting direct children would say
+    # "1 part" — the leaf-descendant count must say "2 parts".
     assert assy.text(2) == "2 parts"
-    assert assy.child(0).text(2) == "1 part"
+    assert assy.child(0).text(2) == "2 parts"
 
 
 def test_parts_tab_truncation_row(app, tmp_path):
