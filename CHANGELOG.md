@@ -18,13 +18,18 @@ All notable changes to StarPost are recorded here. Versions follow the
   cache, and is included in portable data-CSV exports. **Note:** portable data exports are
   now format v3 — older StarPost releases cannot import them; v2 files still
   import fine.
-- **Properties window: Parts tab** — the per-sim Properties window (Files and
-  Data tabs) is now tabbed: **General** keeps the classic size/reports/
-  monitors/iterations summary, and a new **Parts** tab shows the sim's
-  Geometry ▸ Parts tree — composites, nested sub-assemblies and every leaf
-  part with its surface and curve counts — rebuilt from the extracted sim
-  properties and sorted like STAR-CCM+'s own tree. Data sets extracted
-  before this version show a re-extract hint instead.
+- **Properties window: Parts, Mesh, Regions and Physics tabs** — the per-sim
+  Properties window (Files and Data tabs) is now tabbed. **General** keeps
+  the classic size/reports/monitors/iterations summary; **Parts** shows the
+  sim's Geometry ▸ Parts tree — composites, nested sub-assemblies and every
+  leaf part with its surface and curve counts — sorted like STAR-CCM+'s own
+  tree; **Mesh** shows the cell/face/vertex counts and the mesh-operation
+  pipeline with each operation's meshers and key sizes; **Regions** lists
+  each region's physics continuum and boundary-type breakdown plus the
+  interfaces; **Physics** lists each continuum's enabled models, the solvers
+  and the stopping criteria. Everything is read from the extracted sim
+  properties — data sets extracted before this version show a re-extract
+  hint instead.
 
 ### Bug Fixes
 - **No more stray CSVs in the output folder** — loading .sim files no longer
