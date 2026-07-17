@@ -75,6 +75,15 @@ never synthesises). Double-click actions (file loading, gallery opening) are
 untouched — nothing is consumed and the action fires as always; the trailing
 release then clears the highlight the gesture would otherwise leave behind.
 
+Window-level double delivery: on a real display every mouse event passes the
+application filter twice — first with the top-level `QWidgetWindow` as the
+receiver, then the viewport widget. The release handler must only consume the
+pending click on the *viewport* delivery; reacting to the window-level one
+drops it before the viewport ever sees the release (a second manual-testing
+find: QTest sends events straight to the widget, so offscreen tests can't hit
+either real-display path — hence the XTest real-display recipe in the project
+verify skill).
+
 ## Testing
 
 Unit tests in `tests/test_widgets.py` drive synthetic clicks through the filter

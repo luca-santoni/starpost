@@ -571,6 +571,40 @@ def test_rapid_second_click_arriving_as_double_click_still_deselects(app, desele
     lst.deleteLater()
 
 
+def test_release_delivered_to_window_first_still_deselects(app, deselect):
+    """On a real display every mouse event passes the application filter twice:
+    first for the top-level QWidgetWindow, then for the viewport widget. The
+    window-level release must not consume the pending click — only the
+    viewport delivery may (regression: the release handler popped the pending
+    state on the window-level delivery, so real clicks never deselected while
+    QTest's direct-to-viewport events did)."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a", "b")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    QTest.mousePress(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    # The window-level delivery of the same release, as a real display does it.
+    QApplication.sendEvent(
+        lst.windowHandle(),
+        QMouseEvent(
+            QEvent.Type.MouseButtonRelease,
+            QPointF(pos),
+            lst.viewport().mapToGlobal(QPointF(pos)),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    QTest.mouseRelease(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QApplication.processEvents()
+    assert lst.selectedItems() == []
+    lst.deleteLater()
+
+
 def test_double_click_action_still_fires(app, deselect):
     """Double-clicking a selected item still triggers the double-click action
     (e.g. the Files tab loads the sim) — the filter never consumes events."""

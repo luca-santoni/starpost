@@ -403,11 +403,23 @@ class _ClickDeselectFilter(QObject):
                         )
         elif et == QEvent.Type.MouseButtonRelease and self._pending is not None:
             view, idx, press_pos, check = self._pending
+            # On a real display each mouse event passes this application-level
+            # filter twice: for the top-level QWidgetWindow first, then for the
+            # viewport widget. Only the viewport delivery may consume the
+            # pending click — reacting to the window-level one would drop it
+            # before the viewport ever sees the release. (QTest sends events
+            # straight to the viewport, so only live usage hits this.)
+            try:
+                viewport = view.viewport()
+            except RuntimeError:  # view destroyed since the press
+                self._pending = None
+                return False
+            if obj is not viewport:
+                return False
             self._pending = None
             pos = event.position().toPoint()
             if (
                 event.button() == Qt.MouseButton.LeftButton
-                and obj is view.viewport()
                 and (pos - press_pos).manhattanLength()
                 <= QApplication.startDragDistance()
                 and idx.isValid()

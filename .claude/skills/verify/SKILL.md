@@ -68,3 +68,24 @@ Capture evidence with `win.grab().save(...)` between steps.
   offscreen noise; ignore it.
 - Don't drive scene rendering, screenplay recording, or batch runs — all
   shell out to STAR-CCM+ (not installed on dev machines / not on PATH).
+- **QTest is not a real mouse.** `QTest.mouseClick` sends events directly to
+  the target widget: no `MouseButtonDblClick` synthesis for rapid click pairs,
+  and no window-level delivery (a real display passes every mouse event
+  through application event filters twice — once for the top-level
+  QWidgetWindow, then for the widget). Both differences have hidden real bugs
+  that QTest-driven tests passed. For input-handling changes, verify on the
+  real display too: this machine runs X11 with `DISPLAY=:0`; inject genuine
+  clicks with `python-xlib` (installed in the venv):
+
+  ```python
+  from Xlib import X, display as xdisplay
+  from Xlib.ext import xtest
+  xd = xdisplay.Display(":0")
+  xd.screen().root.warp_pointer(gx, gy); xd.sync()
+  xtest.fake_input(xd, X.ButtonPress, 1); xd.sync()
+  xtest.fake_input(xd, X.ButtonRelease, 1); xd.sync()
+  ```
+
+  Spin the Qt loop while waiting (`app.processEvents()` in a sleep loop) —
+  the events arrive asynchronously. The app window appears on the user's
+  screen and the pointer really moves: keep the run short and warn the user.
