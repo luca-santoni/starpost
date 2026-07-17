@@ -222,7 +222,13 @@ mechanism, not by tier — both tiers land together):
     at the first 200 with a closing `part,,truncated,N` row when more exist;
     `type` is the concrete class's simple name (`CadPart`, `SolidModelPart`,
     …); `path` is `getPathInHierarchy()` (composite ancestors included), so
-    the GUI can rebuild the Parts tree from the flat leaf list.
+    the GUI can rebuild the Parts tree from the flat leaf list. Observed
+    format on the real 2506 install: composite ancestors joined with `.`,
+    then `|` before the leaf name (`Original files.Chris Penny's car|wing
+    front 5`) — STAR's own display convention. Part names may themselves
+    contain `.`; the GUI pass should split on the single `|` first and treat
+    the ancestor half as a display string (or split on `.` accepting that
+    ambiguity) rather than assume clean separators.
   - `part_tree,<name>,type / leaf_parts` — the top-level entries of the
     Geometry ▸ Parts node exactly as STAR-CCM+'s tree shows them (composite
     parts and top-level leaves), same cap and `part_tree,,truncated,N` row.
