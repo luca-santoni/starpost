@@ -358,3 +358,317 @@ def test_enable_range_selection_leaves_checkbox_lists_alone(app):
     enable_range_selection(lst)
     assert lst.selectionMode() == QAbstractItemView.SelectionMode.NoSelection
     lst.deleteLater()
+
+
+# --- click-to-deselect ------------------------------------------------------
+# A plain left click on an already-selected item clears the view's selection
+# (app-wide filter; see _ClickDeselectFilter).
+
+
+@pytest.fixture
+def deselect(app):
+    """The app-wide click-to-deselect filter, installed (idempotently)."""
+    from starpost.gui.widgets import install_click_deselect
+
+    install_click_deselect(app)
+
+
+def _shown_list(*labels: str, checkable: bool = False):
+    """A shown QListWidget with one row per label (optionally checkable)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidget, QListWidgetItem
+
+    lst = QListWidget()
+    for label in labels:
+        item = QListWidgetItem(label)
+        if checkable:
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Unchecked)
+        lst.addItem(item)
+    lst.resize(240, 160)
+    lst.show()
+    return lst
+
+
+def _click(view, pos, modifier=None) -> None:
+    """A left click on ``view``'s viewport at ``pos``, then let the deferred
+    deselect (a zero singleShot) fire."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(
+        view.viewport(),
+        Qt.MouseButton.LeftButton,
+        modifier or Qt.KeyboardModifier.NoModifier,
+        pos,
+    )
+    QApplication.processEvents()
+
+
+def test_install_click_deselect_is_idempotent(app):
+    from starpost.gui.widgets import install_click_deselect
+
+    install_click_deselect(app)
+    first = widgets._click_deselect_installer
+    install_click_deselect(app)
+    assert widgets._click_deselect_installer is first
+
+
+def test_click_on_selected_list_item_clears_selection(app, deselect):
+    """The requested behaviour: the first click selects, the second click on the
+    same (now highlighted) item removes the highlight — selection and the
+    current-index focus outline both go."""
+    lst = _shown_list("a", "b", "c")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    _click(lst, pos)
+    assert lst.selectedItems() == []
+    assert not lst.currentIndex().isValid()
+    lst.deleteLater()
+
+
+def test_click_on_unselected_item_just_selects_it(app, deselect):
+    """Clicking a different item moves the selection there as always — the
+    clear only fires for an item that was already selected when pressed."""
+    lst = _shown_list("a", "b")
+    _click(lst, lst.visualItemRect(lst.item(0)).center())
+    _click(lst, lst.visualItemRect(lst.item(1)).center())
+    assert [i.text() for i in lst.selectedItems()] == ["b"]
+    lst.deleteLater()
+
+
+def test_click_on_selected_cell_clears_table_selection(app, deselect):
+    """Same behaviour in a table (the Reports view is a QTableView)."""
+    from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
+
+    table = QTableWidget(3, 2)
+    for r in range(3):
+        for c in range(2):
+            table.setItem(r, c, QTableWidgetItem(f"{r},{c}"))
+    table.resize(240, 160)
+    table.show()
+    pos = table.visualItemRect(table.item(1, 1)).center()
+    _click(table, pos)
+    assert table.selectedItems() != []
+    _click(table, pos)
+    assert table.selectedItems() == []
+    table.deleteLater()
+
+
+def test_click_on_selected_row_clears_tree_selection(app, deselect):
+    """Same behaviour in a tree (the Files/Data tabs are QTreeWidgets)."""
+    from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
+
+    tree = QTreeWidget()
+    tree.setHeaderHidden(True)
+    for name in ("x", "y"):
+        tree.addTopLevelItem(QTreeWidgetItem([name]))
+    tree.resize(240, 160)
+    tree.show()
+    pos = tree.visualItemRect(tree.topLevelItem(0)).center()
+    _click(tree, pos)
+    assert [i.text(0) for i in tree.selectedItems()] == ["x"]
+    _click(tree, pos)
+    assert tree.selectedItems() == []
+    tree.deleteLater()
+
+
+def test_plain_click_on_any_selected_row_clears_multi_selection(app, deselect):
+    """With several rows selected, one plain click on any of them kills the
+    whole highlight (Ctrl+click still toggles rows individually, natively)."""
+    from PySide6.QtWidgets import QAbstractItemView
+
+    lst = _shown_list("a", "b", "c")
+    lst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+    for i in range(3):
+        lst.item(i).setSelected(True)
+    _click(lst, lst.visualItemRect(lst.item(1)).center())
+    assert lst.selectedItems() == []
+    lst.deleteLater()
+
+
+def test_modifier_click_keeps_native_selection_behaviour(app, deselect):
+    """Shift/Ctrl clicks are multi-select gestures; the filter leaves them
+    entirely to Qt (a Shift+click on the selected item keeps it selected)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractItemView
+
+    lst = _shown_list("a", "b")
+    lst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    _click(lst, pos, modifier=Qt.KeyboardModifier.ShiftModifier)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    lst.deleteLater()
+
+
+def _indicator_center(lst, item):
+    """Centre of ``item``'s checkbox indicator, in viewport coords (mirrors the
+    hit-testing the views use)."""
+    from PySide6.QtWidgets import QStyleOptionViewItem
+
+    opt = QStyleOptionViewItem()
+    opt.initFrom(lst)
+    opt.rect = lst.visualItemRect(item)
+    opt.features |= QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+    return lst.style().subElementRect(
+        QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, lst
+    ).center()
+
+
+def test_checkbox_toggle_click_keeps_selection(app, deselect):
+    """A click that toggles a row's checkbox is a check action, not a deselect:
+    the check flips and the selection highlight stays."""
+    from PySide6.QtCore import Qt
+
+    lst = _shown_list("a", "b", checkable=True)
+    item = lst.item(0)
+    lst.setCurrentItem(item)
+    assert item.isSelected()
+    _click(lst, _indicator_center(lst, item))
+    assert item.checkState() == Qt.CheckState.Checked
+    assert item.isSelected()
+    lst.deleteLater()
+
+
+def test_press_drag_release_does_not_clear(app, deselect):
+    """A press that travels a drag's distance before release is not a click —
+    the selection stays (so dragging a selected row still works)."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a", "b")
+    item = lst.item(0)
+    pos = lst.visualItemRect(item).center()
+    _click(lst, pos)
+    assert item.isSelected()
+    far = pos + QPoint(QApplication.startDragDistance() * 3, 0)  # same row
+    QTest.mousePress(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.mouseRelease(lst.viewport(), Qt.MouseButton.LeftButton, pos=far)
+    QApplication.processEvents()
+    assert item.isSelected()
+    lst.deleteLater()
+
+
+def test_rapid_second_click_arriving_as_double_click_still_deselects(app, deselect):
+    """A real mouse's quick second click (within the double-click interval) is
+    delivered as MouseButtonDblClick + Release, not a plain press — it must
+    still clear the highlight, since "click, then click again" is exactly the
+    un-highlight gesture (regression: the filter used to ignore double-clicks
+    entirely, so a quick second click left the highlight stuck)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a", "b")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    QTest.mouseDClick(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.mouseRelease(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QApplication.processEvents()
+    assert lst.selectedItems() == []
+    lst.deleteLater()
+
+
+def test_release_delivered_to_window_first_still_deselects(app, deselect):
+    """On a real display every mouse event passes the application filter twice:
+    first for the top-level QWidgetWindow, then for the viewport widget. The
+    window-level release must not consume the pending click — only the
+    viewport delivery may (regression: the release handler popped the pending
+    state on the window-level delivery, so real clicks never deselected while
+    QTest's direct-to-viewport events did)."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a", "b")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    QTest.mousePress(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    # The window-level delivery of the same release, as a real display does it.
+    QApplication.sendEvent(
+        lst.windowHandle(),
+        QMouseEvent(
+            QEvent.Type.MouseButtonRelease,
+            QPointF(pos),
+            lst.viewport().mapToGlobal(QPointF(pos)),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    QTest.mouseRelease(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QApplication.processEvents()
+    assert lst.selectedItems() == []
+    lst.deleteLater()
+
+
+def test_double_click_action_still_fires(app, deselect):
+    """Double-clicking a selected item still triggers the double-click action
+    (e.g. the Files tab loads the sim) — the filter never consumes events."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    lst = _shown_list("a")
+    pos = lst.visualItemRect(lst.item(0)).center()
+    fired = []
+    lst.itemDoubleClicked.connect(lambda item: fired.append(item.text()))
+    _click(lst, pos)  # now selected
+    QTest.mouseDClick(lst.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QApplication.processEvents()
+    assert fired == ["a"]
+    lst.deleteLater()
+
+
+def test_exempted_view_keeps_selection(app, deselect):
+    """exempt_click_deselect opts a view out — for navigation lists whose
+    selection drives content and must never be empty."""
+    from starpost.gui.widgets import exempt_click_deselect
+
+    lst = _shown_list("a", "b")
+    exempt_click_deselect(lst)
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    lst.deleteLater()
+
+
+def test_popup_views_are_left_alone(app, deselect):
+    """Views living in popup windows (combo dropdowns, completers) keep their
+    selection — deselecting inside those would break the control."""
+    from PySide6.QtCore import Qt
+
+    lst = _shown_list("a", "b")
+    lst.setWindowFlags(Qt.WindowType.Popup)
+    lst.show()
+    pos = lst.visualItemRect(lst.item(0)).center()
+    _click(lst, pos)
+    _click(lst, pos)
+    assert [i.text() for i in lst.selectedItems()] == ["a"]
+    lst.deleteLater()
+
+
+def test_settings_nav_is_exempt(app, deselect, monkeypatch, tmp_path):
+    """The settings dialog's nav list drives which page is shown; clicking the
+    current group must never clear it."""
+    import starpost.utils.paths as paths
+    from starpost.core.settings import Settings
+    from starpost.gui.views.settings_dialog import SettingsDialog
+
+    monkeypatch.setattr(
+        paths.platformdirs, "user_config_dir", lambda *a, **k: str(tmp_path / "config")
+    )
+    monkeypatch.setattr(
+        paths.platformdirs, "user_cache_dir", lambda *a, **k: str(tmp_path / "cache")
+    )
+    dlg = SettingsDialog(Settings.from_dict({}))
+    dlg.show()
+    nav = dlg._nav
+    pos = nav.visualItemRect(nav.item(0)).center()
+    _click(nav, pos)
+    _click(nav, pos)
+    assert nav.currentRow() == 0
+    assert [i.text() for i in nav.selectedItems()] == [nav.item(0).text()]

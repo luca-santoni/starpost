@@ -31,6 +31,16 @@ All notable changes to StarPost are recorded here. Versions follow the
   properties — data sets extracted before this version show a re-extract
   hint instead.
 
+### Improvements
+- **Click a highlighted item to un-highlight it** — clicking an
+  already-selected row in any list, tree or table (the Files/Data tabs, the
+  Reports table, galleries, dialog lists…) now clears the accent selection
+  highlight, so it no longer lingers on the last-clicked item with no way to
+  remove it. Everything else about clicking is unchanged: Ctrl/Shift
+  multi-select, dragging, double-click actions, right-click menus and
+  checkbox ticks all behave as before, and navigation lists that need a
+  permanent selection (the Settings dialog's group list) are unaffected.
+
 ### Bug Fixes
 - **No more stray CSVs in the output folder** — loading .sim files no longer
   litters the default output folder (or the home folder) with the extraction's
