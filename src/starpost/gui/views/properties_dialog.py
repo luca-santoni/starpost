@@ -21,6 +21,12 @@ from PySide6.QtWidgets import (
 )
 
 from starpost.data.parts_tree import PartNode, build_parts_tree
+from starpost.data.prop_rows import (
+    Row,
+    build_mesh_rows,
+    build_physics_rows,
+    build_region_rows,
+)
 
 
 def _human_size(num_bytes: int) -> str:
@@ -46,6 +52,10 @@ class PropertiesDialog(QDialog):
             _general_tab(path, result, size_bytes), "General"
         )
         self.tabs.addTab(_PartsTab(result), "Parts")
+        props = result.properties if result is not None else None
+        self.tabs.addTab(_RowsTab(build_mesh_rows(props), "mesh"), "Mesh")
+        self.tabs.addTab(_RowsTab(build_region_rows(props), "region"), "Regions")
+        self.tabs.addTab(_RowsTab(build_physics_rows(props), "physics"), "Physics")
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs)
@@ -142,6 +152,41 @@ def _part_item(node: PartNode) -> QTreeWidgetItem:
     item = QTreeWidgetItem([node.name, node.type, _contents(node)])
     for child in node.children:
         item.addChild(_part_item(child))
+    return item
+
+
+class _RowsTab(QWidget):
+    """A generic Item/Value tree tab fed by prop_rows builders, with the same
+    re-extract hint as the Parts tab when there is no data for it.
+    ``self.tree`` is None in the hint case."""
+
+    def __init__(self, rows: list[Row], what: str, parent=None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        if not rows:
+            self.tree = None
+            note = QLabel(
+                f"No {what} data for this data set. Re-extract the .sim with "
+                "this StarPost version to capture it."
+            )
+            note.setWordWrap(True)
+            layout.addWidget(note)
+            layout.addStretch(1)
+            return
+        tree = QTreeWidget()
+        tree.setHeaderLabels(["Item", "Value"])
+        tree.setColumnWidth(0, 240)
+        tree.setAlternatingRowColors(True)
+        for row in rows:
+            tree.addTopLevelItem(_row_item(row))
+        layout.addWidget(tree)
+        self.tree = tree
+
+
+def _row_item(row: Row) -> QTreeWidgetItem:
+    item = QTreeWidgetItem([row.label, row.value])
+    for child in row.children:
+        item.addChild(_row_item(child))
     return item
 
 

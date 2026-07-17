@@ -50,7 +50,7 @@ def _labels(widget) -> list[str]:
 def test_dialog_has_general_and_parts_tabs(app, tmp_path):
     dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
     assert [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())] == [
-        "General", "Parts",
+        "General", "Parts", "Mesh", "Regions", "Physics",
     ]
     assert dlg.windowTitle() == "Properties — caseA.sim"
 
@@ -123,3 +123,95 @@ def test_parts_tab_truncation_row(app, tmp_path):
     tree = dlg.tabs.widget(1).tree
     last = tree.topLevelItem(tree.topLevelItemCount() - 1)
     assert last.text(0) == "… and 40 more"
+
+
+def _full_props_result() -> SimResult:
+    res = _result(with_parts=False)
+    res.properties = SimProperties(groups=[
+        PropertyGroup(section="mesh",
+                      entries=[("cell_count", "21737167"),
+                               ("interior_face_count", "65351479"),
+                               ("vertex_count", "23272181")]),
+        PropertyGroup(section="mesh_op", name="Automated Mesh",
+                      entries=[("type", "AutoMeshOperation"),
+                               ("meshers", "Surface Remesher"),
+                               ("base_size", "24.0 mm")]),
+        PropertyGroup(section="region", name="External flow",
+                      entries=[("type", "Fluid Region"),
+                               ("continuum", "Physics 1"),
+                               ("boundaries", "54"),
+                               ("boundary_types", "Wall=43; Symmetry Plane=3")]),
+        PropertyGroup(section="interface", entries=[("count", "1")]),
+        PropertyGroup(section="interface", name="Fan shroud"),
+        PropertyGroup(section="continuum", name="Physics 1",
+                      entries=[("models", "Gas; Turbulent"),
+                               ("regions", "3")]),
+        PropertyGroup(section="solver", name="Coupled Implicit"),
+        PropertyGroup(section="criterion", name="Maximum Steps",
+                      entries=[("enabled", "true")]),
+    ])
+    return res
+
+
+def test_mesh_tab_shows_counts_and_pipeline(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _full_props_result())
+    tree = dlg.tabs.widget(2).tree
+    assert tree is not None
+    assert tree.headerItem().text(0) == "Item"
+    assert tree.headerItem().text(1) == "Value"
+    top = [(tree.topLevelItem(i).text(0), tree.topLevelItem(i).text(1))
+           for i in range(tree.topLevelItemCount())]
+    assert top == [
+        ("Cells", "21,737,167"),
+        ("Interior faces", "65,351,479"),
+        ("Vertices", "23,272,181"),
+        ("Automated Mesh", "AutoMeshOperation"),
+    ]
+    op = tree.topLevelItem(3)
+    assert op.child(0).text(0) == "Meshers"
+    assert op.child(0).child(0).text(0) == "Surface Remesher"
+    assert (op.child(1).text(0), op.child(1).text(1)) == (
+        "Base size", "24.0 mm",
+    )
+
+
+def test_regions_tab_shows_regions_and_interfaces(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _full_props_result())
+    tree = dlg.tabs.widget(3).tree
+    region = tree.topLevelItem(0)
+    assert (region.text(0), region.text(1)) == ("External flow", "Fluid Region")
+    assert (region.child(0).text(0), region.child(0).text(1)) == (
+        "Continuum", "Physics 1",
+    )
+    boundaries = region.child(1)
+    assert (boundaries.text(0), boundaries.text(1)) == ("Boundaries", "54")
+    assert (boundaries.child(0).text(0), boundaries.child(0).text(1)) == (
+        "Wall", "43",
+    )
+    interfaces = tree.topLevelItem(1)
+    assert (interfaces.text(0), interfaces.text(1)) == ("Interfaces", "1")
+    assert interfaces.child(0).text(0) == "Fan shroud"
+
+
+def test_physics_tab_shows_continua_solvers_criteria(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _full_props_result())
+    tree = dlg.tabs.widget(4).tree
+    continuum = tree.topLevelItem(0)
+    assert (continuum.text(0), continuum.text(1)) == ("Physics 1", "3 regions")
+    models = continuum.child(0)
+    assert (models.text(0), models.text(1)) == ("Models", "2")
+    assert models.child(1).text(0) == "Turbulent"
+    solvers = tree.topLevelItem(1)
+    assert (solvers.text(0), solvers.text(1)) == ("Solvers", "1")
+    criteria = tree.topLevelItem(2)
+    assert (criteria.child(0).text(0), criteria.child(0).text(1)) == (
+        "Maximum Steps", "Enabled",
+    )
+
+
+def test_new_tabs_without_data_show_reextract_note(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result(with_parts=False))
+    for index, what in ((2, "mesh"), (3, "region"), (4, "physics")):
+        tab = dlg.tabs.widget(index)
+        assert tab.tree is None
+        assert any("Re-extract" in t for t in _labels(tab)), what
