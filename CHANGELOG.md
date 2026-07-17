@@ -5,6 +5,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+## [2.6.0] — 2026-07-17
+
 ### New Features
 - **Sim properties captured at extraction** — loading a .sim now also records
   the simulation's own metadata: solution state (iteration, physical time,
