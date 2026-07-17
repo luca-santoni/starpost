@@ -292,6 +292,7 @@ public class extract_all extends StarMacro {
             propsSolvers(sim, w);
             propsCriteria(sim, w);
             propsMeshOps(sim, w);
+            propsPartTree(sim, w);
             propsParts(sim, w);
             propsTags(sim, w);
         } catch (Exception e) {
@@ -653,6 +654,10 @@ public class extract_all extends StarMacro {
                 }
                 prow(w, "part", name, "type",
                     part.getClass().getSimpleName());
+                // Full path in the Parts tree (composite ancestors included),
+                // so the GUI can rebuild the tree from the flat leaf list.
+                prow(w, "part", name, "path",
+                    str(invokeQuiet(part, "getPathInHierarchy")));
                 prow(w, "part", name, "surfaces",
                     countOf(invokeQuiet(part, "getPartSurfaces")));
                 prow(w, "part", name, "curves",
@@ -664,6 +669,49 @@ public class extract_all extends StarMacro {
             }
         } catch (Exception e) {
             sim.println("starpost: properties: parts section failed: "
+                + e.getMessage());
+        }
+    }
+
+    // The top level of the Geometry > Parts tree, as shown in STAR-CCM+:
+    // composite parts and top-level leaves, each with its concrete type and
+    // how many leaf parts it contains (a leaf counts as itself). Children are
+    // not listed here — the leaf rows' "path" values carry the hierarchy.
+    private void propsPartTree(Simulation sim, PrintWriter w) {
+        try {
+            Object mgr = invokeQuiet(sim, "getGeometryPartManager");
+            if (mgr == null) {
+                return;
+            }
+            Object tops = invokeQuiet(mgr, "getParts");
+            if (!(tops instanceof Iterable)) {
+                tops = invokeQuiet(mgr, "getObjects");
+            }
+            if (!(tops instanceof Iterable)) {
+                return;
+            }
+            int written = 0;
+            int extra = 0;
+            for (Object part : (Iterable<?>) tops) {
+                if (written >= PART_CAP) {
+                    extra++;
+                    continue;
+                }
+                String name = presentationName(part);
+                if (name == null) {
+                    continue;
+                }
+                prow(w, "part_tree", name, "type",
+                    part.getClass().getSimpleName());
+                prow(w, "part_tree", name, "leaf_parts",
+                    countOf(invokeQuiet(part, "getLeafParts")));
+                written++;
+            }
+            if (extra > 0) {
+                prow(w, "part_tree", "", "truncated", String.valueOf(extra));
+            }
+        } catch (Exception e) {
+            sim.println("starpost: properties: part tree section failed: "
                 + e.getMessage());
         }
     }

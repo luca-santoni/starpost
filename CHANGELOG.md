@@ -11,7 +11,8 @@ All notable changes to StarPost are recorded here. Versions follow the
   CPU/elapsed time), mesh cell/face/vertex counts, regions with their
   boundary-type breakdown and physics continuum, physics models per continuum,
   solvers and stopping criteria, the mesh-operation pipeline (meshers, base
-  size, surface sizes, prism layers), geometry parts, interfaces, tags, and
+  size, surface sizes, prism layers), the Geometry ▸ Parts tree (top-level
+  parts plus every leaf part with its tree path), interfaces, tags, and
   the STAR-CCM+ version used. Everything rides the same single extraction
   pass (no extra license checkout), survives restarts via the crash-recovery
   cache, and is included in portable data-CSV exports. The Properties dialog

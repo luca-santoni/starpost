@@ -135,6 +135,19 @@ def test_extract_macro_exports_properties(tmp_path):
     assert ".update(" not in text
 
 
+def test_extract_macro_exports_part_tree(tmp_path):
+    # The Geometry > Parts tree: top-level entries (part_tree section) plus
+    # each leaf part's full path, so the tree can be rebuilt in the GUI.
+    path = render_macro(Path("/out"), tmp_path)
+    text = path.read_text()
+    assert "propsPartTree" in text
+    assert '"part_tree"' in text
+    assert '"leaf_parts"' in text
+    assert '"getParts"' in text
+    assert '"getPathInHierarchy"' in text
+    assert '"path"' in text
+
+
 def test_extract_macro_braces_balance(tmp_path):
     path = render_macro(Path("/out"), tmp_path)
     text = path.read_text()

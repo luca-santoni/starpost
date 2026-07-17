@@ -218,9 +218,16 @@ mechanism, not by tier — both tiers land together):
     min_surface_size / prism_layers` — pipeline order preserved; each of the
     four default values independently guarded so a moved class drops that one
     key only.
-  - `part,<name>,type / surfaces / curves` — leaf parts only, capped at the
-    first 200 with a closing `part,,truncated,N` row when more exist; `type`
-    is the concrete class's simple name (`CadPart`, `SolidModelPart`, …).
+  - `part,<name>,type / path / surfaces / curves` — leaf parts only, capped
+    at the first 200 with a closing `part,,truncated,N` row when more exist;
+    `type` is the concrete class's simple name (`CadPart`, `SolidModelPart`,
+    …); `path` is `getPathInHierarchy()` (composite ancestors included), so
+    the GUI can rebuild the Parts tree from the flat leaf list.
+  - `part_tree,<name>,type / leaf_parts` — the top-level entries of the
+    Geometry ▸ Parts node exactly as STAR-CCM+'s tree shows them (composite
+    parts and top-level leaves), same cap and `part_tree,,truncated,N` row.
+    Added 2026-07-16 after real-sim validation showed the flat leaf list
+    loses the tree's top-level names.
 
 Numbers are written with plain Java `long`/`double` `toString` (locale-safe).
 Getters only — nothing that computes, initializes, or mutates.
