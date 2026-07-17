@@ -59,21 +59,30 @@ def build_parts_tree(props: Optional[SimProperties]) -> PartsTree:
             roots[name] = node
         return node
 
+    # Two passes: all part_tree groups (the top-level roots) before any part
+    # groups (leaves, attached via _ancestors' longest-first name matching
+    # against those roots). The extraction macro happens to write part_tree
+    # sections first, but this must not be an implicit cross-layer dependency
+    # on file order — a hand-edited or reordered CSV must resolve identically.
     for g in props.groups:
-        if g.section == "part_tree":
-            if not g.name:
-                tree.truncated += _count(g.get("truncated"))
-                continue
-            node = root(g.name)
-            node.type = g.get("type") or node.type
-            leaf_count = g.get("leaf_parts") or ""
-            if leaf_count.isdigit():
-                node.leaf_count = int(leaf_count)
-        elif g.section == "part":
-            if not g.name:
-                tree.truncated += _count(g.get("truncated"))
-                continue
-            _attach_leaf(g, root, roots)
+        if g.section != "part_tree":
+            continue
+        if not g.name:
+            tree.truncated += _count(g.get("truncated"))
+            continue
+        node = root(g.name)
+        node.type = g.get("type") or node.type
+        leaf_count = g.get("leaf_parts") or ""
+        if leaf_count.isdigit():
+            node.leaf_count = int(leaf_count)
+
+    for g in props.groups:
+        if g.section != "part":
+            continue
+        if not g.name:
+            tree.truncated += _count(g.get("truncated"))
+            continue
+        _attach_leaf(g, root, roots)
 
     tree.roots = sorted(roots.values(), key=lambda n: n.name.casefold())
     for node in tree.roots:

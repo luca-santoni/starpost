@@ -85,6 +85,27 @@ def test_ancestor_matching_prefers_longest_top_level_name():
     assert [c.name for c in tree.roots[0].children] == ["hull"]
 
 
+def test_part_row_order_does_not_matter():
+    # part rows may precede part_tree rows (e.g. a hand-edited portable CSV);
+    # dotted top-level names must still resolve via longest-first matching.
+    props = SimProperties(groups=[
+        _g("part", "hull", ("path", "v2.5 model|hull")),
+        _g("part_tree", "v2.5 model", ("type", "CompositePart")),
+    ])
+    tree = build_parts_tree(props)
+    assert [n.name for n in tree.roots] == ["v2.5 model"]
+    assert [c.name for c in tree.roots[0].children] == ["hull"]
+
+
+def test_leaf_name_containing_pipe_resolves():
+    props = SimProperties(groups=[
+        _g("part", "a|b", ("path", "Assy|a|b"), ("surfaces", "1")),
+    ])
+    tree = build_parts_tree(props)
+    assert [n.name for n in tree.roots] == ["Assy"]
+    assert [c.name for c in tree.roots[0].children] == ["a|b"]
+
+
 def test_leaf_with_unknown_root_creates_it():
     # part_tree section missing (older/failed section): tree still builds.
     props = SimProperties(groups=[

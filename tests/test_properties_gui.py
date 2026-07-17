@@ -95,6 +95,24 @@ def test_parts_tab_without_data_shows_reextract_note(app, tmp_path):
     assert any("Re-extract" in t for t in _labels(parts))
 
 
+def test_intermediate_composite_counts_leaf_descendants(app, tmp_path):
+    res = _result(with_parts=False)
+    res.properties = SimProperties(groups=[
+        PropertyGroup(section="part", name="wing a",
+                      entries=[("path", "Assy.Sub one|wing a")]),
+        PropertyGroup(section="part", name="wing b",
+                      entries=[("path", "Assy.Sub two|wing b")]),
+    ])
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", res)
+    tree = dlg.tabs.widget(1).tree
+    assy = tree.topLevelItem(0)
+    assert assy.text(0) == "Assy"
+    # Two leaves inside two sub-composites: "2 parts", not "2 parts"-by-luck —
+    # each sub-composite holds one leaf and reads "1 part".
+    assert assy.text(2) == "2 parts"
+    assert assy.child(0).text(2) == "1 part"
+
+
 def test_parts_tab_truncation_row(app, tmp_path):
     res = _result()
     res.properties.groups.append(

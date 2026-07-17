@@ -149,13 +149,21 @@ def _plural(n: int, noun: str) -> str:
     return f"{n} {noun}" + ("" if n == 1 else "s")
 
 
+def _leaf_total(node: PartNode) -> int:
+    """Recursive leaf-descendant count for a composite built from paths
+    (no leaf_count of its own): a childless node counts as one leaf."""
+    if not node.children:
+        return 1
+    return sum(_leaf_total(c) for c in node.children)
+
+
 def _contents(node: PartNode) -> str:
     """The Contents cell: leaf-part count for composites, surface/curve
     counts for leaf parts."""
-    if node.children or node.leaf_count is not None and not node.surfaces:
+    if node.children or (node.leaf_count is not None and not node.surfaces):
         count = node.leaf_count
         if count is None:
-            count = len(node.children)
+            count = sum(_leaf_total(c) for c in node.children)
         return _plural(count, "part")
     bits = []
     if node.surfaces.isdigit():
