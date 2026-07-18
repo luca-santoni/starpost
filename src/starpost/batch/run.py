@@ -154,14 +154,22 @@ def _scene_runner(settings, scene_data: dict, base: StarRunner) -> StarRunner:
 
 def _screenplay_runner(settings, entry_data: dict, base: StarRunner) -> StarRunner:
     """A runner whose media settings use the saved screenplay's per-entry movie
-    options (resolution/format/fps/quality), so each screenplay records at the
-    settings captured on the Screenplays tab. Falls back to ``base`` when there
-    is nothing to override."""
+    options (resolution/format/fps/quality and the recording start time and
+    length), so each screenplay records at the settings captured on the
+    Screenplays tab. Falls back to ``base`` when there is nothing to override.
+
+    The timing keys are meaningful at 0 (0 length == Auto), so their presence
+    in the saved entry — not truthiness — decides whether they override; keys
+    absent from entries saved by older StarPost fall back to the globals."""
     res = entry_data.get("resolution")
     fmt = entry_data.get("format")
     fps = entry_data.get("fps")
     quality = entry_data.get("quality")
-    if settings is None or not (res or fmt or fps or quality):
+    has_start = "start_time" in entry_data
+    has_length = "anim_length" in entry_data
+    if settings is None or not (
+        res or fmt or fps or quality or has_start or has_length
+    ):
         return base
     media = dataclasses.replace(
         settings.media,
@@ -169,6 +177,14 @@ def _screenplay_runner(settings, entry_data: dict, base: StarRunner) -> StarRunn
         movie_format=fmt or settings.media.movie_format,
         movie_fps=fps or settings.media.movie_fps,
         movie_quality=quality or settings.media.movie_quality,
+        movie_start_time=(
+            float(entry_data["start_time"]) if has_start
+            else settings.media.movie_start_time
+        ),
+        movie_anim_length=(
+            float(entry_data["anim_length"]) if has_length
+            else settings.media.movie_anim_length
+        ),
     )
     return StarRunner(dataclasses.replace(settings, media=media))
 

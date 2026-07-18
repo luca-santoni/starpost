@@ -400,3 +400,40 @@ def test_screenplay_record_worker_converts_recording_marker(app, tmp_path):
     assert started == ["Flyby-velocity"]
     # The marker itself stays out of the visible console.
     assert not any("starpost-progress" in line for line in logs)
+
+
+def test_screenplay_runner_timing_key_presence():
+    """Saved-screenplay timing overrides are decided by key presence, not
+    truthiness: an explicit 0 (Auto length / zero start) wins over a non-zero
+    global; a missing key falls back to the global setting."""
+    from starpost.batch.run import _screenplay_runner
+    from starpost.core.starccm_runner import StarRunner
+
+    s = Settings()
+    s.media.movie_anim_length = 15.0
+    s.media.movie_start_time = 3.0
+    base = StarRunner(s)
+
+    # Explicit values (including 0) override the globals.
+    r = _screenplay_runner(
+        s, {"start_time": 0.0, "anim_length": 0.0}, base
+    )
+    assert r is not base
+    assert r.settings.media.movie_anim_length == 0.0
+    assert r.settings.media.movie_start_time == 0.0
+
+    # Non-zero captured values apply too.
+    r = _screenplay_runner(
+        s, {"start_time": 1.5, "anim_length": 8.0}, base
+    )
+    assert r.settings.media.movie_anim_length == 8.0
+    assert r.settings.media.movie_start_time == 1.5
+
+    # Keys absent (entry saved by an older StarPost): globals stand. The
+    # entry has another override so a new runner is still built.
+    r = _screenplay_runner(s, {"fps": 24}, base)
+    assert r.settings.media.movie_anim_length == 15.0
+    assert r.settings.media.movie_start_time == 3.0
+
+    # Nothing to override at all -> the base runner is reused.
+    assert _screenplay_runner(s, {}, base) is base
