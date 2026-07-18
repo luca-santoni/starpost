@@ -5,6 +5,14 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### New Features
+- **Screenplay recording length & start time** — Settings → Screenplays gains
+  "Start time (s)" and "Animation length (s)" (Auto = each screenplay's own
+  length, matching STAR-CCM+'s Write Animation dialog). The run-batch window's
+  screenplay options carry the same two fields, and "Save Screenplay" captures
+  them per saved screenplay. Recordings now always start at the configured
+  start time (default 0) rather than the screenplay's preferred start time.
+
 ## [2.6.0] — 2026-07-17
 
 ### New Features
