@@ -140,6 +140,8 @@ def test_media_config_movie_defaults():
     assert m.movie_resolution == "1080p"
     assert m.movie_quality == "high"
     assert m.screenplays_per_checkout == 1
+    assert m.movie_anim_length == 0.0   # 0 == Auto (screenplay's own length)
+    assert m.movie_start_time == 0.0
     assert m.movie_dimensions() == (1920, 1080)
     assert MediaConfig(movie_resolution="2160p").movie_dimensions() == (3840, 2160)
 
@@ -151,18 +153,24 @@ def test_media_config_movie_round_trip():
         "movie_resolution": "2160p",
         "movie_quality": "Medium",
         "screenplays_per_checkout": 3,
+        "movie_anim_length": 12.5,
+        "movie_start_time": 2.0,
     }})
     assert s.media.movie_format == "avi"          # normalized to lowercase
     assert s.media.movie_fps == 24
     assert s.media.movie_resolution == "2160p"
     assert s.media.movie_quality == "medium"
     assert s.media.screenplays_per_checkout == 3
+    assert s.media.movie_anim_length == 12.5
+    assert s.media.movie_start_time == 2.0
     out = s.to_dict()["media"]
     assert out["movie_format"] == "avi"
     assert out["movie_fps"] == 24
     assert out["movie_resolution"] == "2160p"
     assert out["movie_quality"] == "medium"
     assert out["screenplays_per_checkout"] == 3
+    assert out["movie_anim_length"] == 12.5
+    assert out["movie_start_time"] == 2.0
 
 
 def test_media_config_movie_values_clamped():
@@ -173,12 +181,16 @@ def test_media_config_movie_values_clamped():
         "movie_quality": "ultra",
         "movie_fps": 0,
         "screenplays_per_checkout": 0,
+        "movie_anim_length": -5,
+        "movie_start_time": -1,
     }})
     assert s.media.movie_format == "mp4"
     assert s.media.movie_resolution == "1080p"
     assert s.media.movie_quality == "high"
     assert s.media.movie_fps == 1
     assert s.media.screenplays_per_checkout == 1
+    assert s.media.movie_anim_length == 0.0
+    assert s.media.movie_start_time == 0.0
 
 
 def test_record_screenplays_macro_embeds_selection_and_movie_settings():

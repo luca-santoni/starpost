@@ -28,6 +28,8 @@ media:
   movie_resolution: 1080p    # recording resolution: 1080p | 2160p
   movie_quality: high        # encoder quality: low | medium | high
   screenplays_per_checkout: 1  # screenplays recorded per license checkout
+  movie_anim_length: 0.0     # recording length in seconds; 0 = each screenplay's own
+  movie_start_time: 0.0      # seconds into the animation to start recording
 
 # UI appearance. Changeable in-app via Settings -> Appearance.
 appearance:

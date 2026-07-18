@@ -111,8 +111,11 @@ class MediaConfig:
     Screenplay recording (Screenplays tab → Record) is configured by ``movie_format``
     (the recorded movie container: "mp4", "avi", or "mov"), ``movie_fps`` (frame rate),
     ``movie_resolution`` (recording resolution: "1080p" or "2160p"), ``movie_quality``
-    (encoder quality: "low", "medium", or "high"), and ``screenplays_per_checkout``
-    (how many screenplays are recorded per STAR-CCM+ session before reloading the file).
+    (encoder quality: "low", "medium", or "high"), ``screenplays_per_checkout``
+    (how many screenplays are recorded per STAR-CCM+ session before reloading the file),
+    ``movie_anim_length`` (recording duration in seconds; 0 records each screenplay at
+    its own preferred length) and ``movie_start_time`` (seconds into the animation to
+    start recording).
 
     Defaults to 1080p JPG at 1× magnification."""
     magnification: int = 1
@@ -126,6 +129,8 @@ class MediaConfig:
     movie_resolution: str = "1080p"  # recording resolution: "1080p" | "2160p"
     movie_quality: str = "high"      # encoder quality: low | medium | high
     screenplays_per_checkout: int = 1  # screenplays recorded per checkout
+    movie_anim_length: float = 0.0   # seconds; 0 == each screenplay's own length
+    movie_start_time: float = 0.0    # seconds into the animation to start recording
 
     def dimensions(self) -> tuple[int, int]:
         """The (width, height) in pixels for the configured resolution."""
@@ -287,6 +292,12 @@ class Settings:
                 screenplays_per_checkout=max(
                     1, int(med.get("screenplays_per_checkout", 1))
                 ),
+                movie_anim_length=max(
+                    0.0, float(med.get("movie_anim_length", 0.0))
+                ),
+                movie_start_time=max(
+                    0.0, float(med.get("movie_start_time", 0.0))
+                ),
             ),
             appearance=AppearanceConfig(
                 mode=appe.get("mode", "dark"),
@@ -349,6 +360,8 @@ class Settings:
                 "movie_resolution": self.media.movie_resolution,
                 "movie_quality": self.media.movie_quality,
                 "screenplays_per_checkout": self.media.screenplays_per_checkout,
+                "movie_anim_length": self.media.movie_anim_length,
+                "movie_start_time": self.media.movie_start_time,
             },
             "appearance": {
                 "mode": self.appearance.mode,
