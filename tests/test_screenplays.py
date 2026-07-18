@@ -205,12 +205,19 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
             24,
             "avi",
             "medium",
+            anim_length=8.5,
+            start_time=1.5,
         )
         text = path.read_text()
         assert path.name == "record_screenplays.java"
         assert "public class record_screenplays" in text
         assert 'MOV_EXT = "avi"' in text
         assert "FPS = 24" in text
+        assert "ANIM_LENGTH = 8.5" in text
+        assert "START_TIME = 1.5" in text
+        # Start time is fully user-controlled now; the preferred-start-time
+        # probe is gone from both export paths.
+        assert "getPreferredStartTime" not in text
         assert "MOV_WIDTH = 1920" in text and "MOV_HEIGHT = 1080" in text
         assert "QUALITY = 0.75" in text
         assert 'VIEW_NAMES = { "Front" }' in text
@@ -252,6 +259,21 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert "beginMovieExport" in text
         assert "recordFrameLoop" in text
         assert "finalizeMovieExport" in text
+
+
+def test_record_screenplays_macro_timing_defaults_to_auto():
+    """Default render: ANIM_LENGTH 0 (== Auto, probe each screenplay's own
+    length) and START_TIME 0."""
+    with tempfile.TemporaryDirectory() as d:
+        path = record_screenplays_macro(
+            Path("/out"), Path(d), {"Fly": []}, [], 1920, 1080, 30
+        )
+        text = path.read_text()
+        assert "ANIM_LENGTH = 0.0" in text
+        assert "START_TIME = 0.0" in text
+        # Auto still probes the screenplay's own length.
+        assert "probeLength" in text
+        assert "getPreferredAnimationLength" in text
 
 
 @pytest.fixture(scope="module")

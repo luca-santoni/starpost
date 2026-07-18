@@ -124,6 +124,8 @@ def record_screenplays_macro(
     fps: int,
     movie_format: str = "mp4",
     quality: str = "high",
+    anim_length: float = 0.0,
+    start_time: float = 0.0,
 ) -> Path:
     """Render the screenplay-record macro that exports to ``output_dir``.
     Returns the .java path. ``screenplay_show`` maps each screenplay to record
@@ -132,6 +134,9 @@ def record_screenplays_macro(
     empty records from each screenplay's own camera. ``movie_format`` is the
     output file extension (mp4/avi/mov), which STAR-CCM+ uses to pick the
     encoder; ``quality`` is a MOVIE_QUALITIES level mapped to a 0..1 factor.
+    ``anim_length`` is the recording length in seconds (0 ==
+    record each screenplay at its own preferred length); ``start_time`` is
+    the offset in seconds the recording starts from.
 
     ``dest_dir`` is where the .java file is written (a temp dir per run).
     """
@@ -145,6 +150,8 @@ def record_screenplays_macro(
         fps=int(fps),
         movie_ext=str(movie_format),
         quality_factor=_QUALITY_FACTORS.get(str(quality), 1.0),
+        anim_length=float(anim_length),
+        start_time=float(start_time),
     )
     java_path = dest_dir / f"{_RECORD_CLASS_NAME}.java"
     java_path.write_text(text, encoding="utf-8")

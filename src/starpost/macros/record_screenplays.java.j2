@@ -16,6 +16,9 @@
 // hidden first. VIEW_NAMES are the saved camera views: each screenplay is
 // recorded once per view (empty = the screenplay's own/current camera).
 //
+// ANIM_LENGTH/START_TIME clip the recording window; ANIM_LENGTH <= 0 falls
+// back to each screenplay's own preferred length.
+//
 // The screenplay API's class names shift across releases and a Java compile
 // error is fatal to the whole macro, so it is never referenced at compile
 // time: the manager comes from Class.forName and the record call is found by
@@ -34,6 +37,10 @@ public class record_screenplays extends StarMacro {
     private static final int MOV_WIDTH = {{ width }};
     private static final int MOV_HEIGHT = {{ height }};
     private static final int FPS = {{ fps }};
+    // Recording length in seconds; <= 0 == each screenplay's own length.
+    private static final double ANIM_LENGTH = {{ anim_length }};
+    // Seconds into the animation the recording starts from.
+    private static final double START_TIME = {{ start_time }};
     private static final String MOV_EXT = "{{ movie_ext }}";  // mp4 | avi | mov
     private static final double QUALITY = {{ quality_factor }};  // 0..1 factor
     // Saved views to record each screenplay from; empty == its own camera.
@@ -305,17 +312,14 @@ public class record_screenplays extends StarMacro {
             Object prepared = invokeQuiet(adb, "prepareForExport");
             sim.println("starpost: prepareForExport -> " + prepared);
         }
-        double length = probeLength(sim, targets);
+        double length = ANIM_LENGTH > 0 ? ANIM_LENGTH
+            : probeLength(sim, targets);
         if (length <= 0) {
             tried.append("\n  [known-signature path skipped: no animation "
                 + "length getter found]");
             return false;
         }
-        double start = 0.0;
-        Object st = invokeQuiet(sp, "getPreferredStartTime");
-        if (st instanceof Number) {
-            start = ((Number) st).doubleValue();
-        }
+        double start = START_TIME;
         Class<?>[] sig9 = { int.class, int.class, double.class, double.class,
             double.class, String.class, int.class, boolean.class,
             boolean.class };
@@ -379,17 +383,15 @@ public class record_screenplays extends StarMacro {
     private boolean recordFrameLoop(Simulation sim, Object sp, String path,
                                     StringBuilder tried) {
         Object director = invokeQuiet(sp, "getScreenplayDirector");
-        Object st = invokeQuiet(sp, "getPreferredStartTime");
         Object len = invokeQuiet(sp, "getPreferredAnimationLength");
-        if (director == null || !(st instanceof Number)
-                || !(len instanceof Number)
-                || ((Number) len).doubleValue() <= 0) {
-            tried.append("\n  [frame-loop skipped: director/start/length "
+        double length = ANIM_LENGTH > 0 ? ANIM_LENGTH
+            : (len instanceof Number ? ((Number) len).doubleValue() : -1);
+        if (director == null || length <= 0) {
+            tried.append("\n  [frame-loop skipped: director/length "
                 + "unavailable]");
             return false;
         }
-        double start = ((Number) st).doubleValue();
-        double length = ((Number) len).doubleValue();
+        double start = START_TIME;
         Method begin;
         Method updateAnim;
         Method exportFrame;

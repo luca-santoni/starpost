@@ -257,6 +257,8 @@ class StarRunner:
                 media.movie_fps,
                 media.movie_format,
                 media.movie_quality,
+                anim_length=media.movie_anim_length,
+                start_time=media.movie_start_time,
             )
             cmd = self.build_command(macro, sim_file, np=np)
             shown = redact_command(cmd)
