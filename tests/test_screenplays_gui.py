@@ -191,19 +191,29 @@ def test_settings_dialog_screenplays_page_round_trip(app):
     s.media.movie_resolution = "2160p"
     s.media.movie_quality = "low"
     s.media.screenplays_per_checkout = 2
+    s.media.movie_start_time = 1.5
+    s.media.movie_anim_length = 12.5
     dlg = SettingsDialog(s)
     assert dlg._movie_format.currentData() == "mov"
     assert dlg._movie_fps.value() == 24
     assert dlg._movie_resolution.currentData() == "2160p"
     assert dlg._movie_quality.currentData() == "low"
     assert dlg._screenplays_per_checkout.value() == 2
+    assert dlg._movie_start_time.value() == 1.5
+    assert dlg._movie_anim_length.value() == 12.5
+    # 0 displays as "Auto" (use each screenplay's own length).
+    assert dlg._movie_anim_length.specialValueText() == "Auto"
     # Change in the UI and accept: _on_accept copies widget values back onto
     # the Settings object (and saves — redirected by isolated_paths).
     dlg._movie_format.setCurrentIndex(dlg._movie_format.findData("mp4"))
     dlg._movie_fps.setValue(60)
+    dlg._movie_start_time.setValue(0.0)
+    dlg._movie_anim_length.setValue(0.0)
     dlg._on_accept()
     assert s.media.movie_format == "mp4"
     assert s.media.movie_fps == 60
+    assert s.media.movie_start_time == 0.0
+    assert s.media.movie_anim_length == 0.0
 
 
 def test_record_frame_progress_scales_bar(app, monkeypatch):

@@ -695,6 +695,22 @@ class SettingsDialog(QDialog):
         self._movie_quality.addItem("Medium", "medium")
         self._movie_quality.addItem("High", "high")
 
+        # Recording window: start offset and length. Length 0 == "Auto"
+        # (record each screenplay at its own preferred length).
+        self._movie_start_time = QDoubleSpinBox()
+        self._movie_start_time.setRange(0.0, 3600.0)
+        self._movie_start_time.setDecimals(1)
+        self._movie_start_time.setFixedWidth(140)
+        self._movie_anim_length = QDoubleSpinBox()
+        self._movie_anim_length.setRange(0.0, 3600.0)
+        self._movie_anim_length.setDecimals(1)
+        self._movie_anim_length.setSpecialValueText("Auto")
+        self._movie_anim_length.setFixedWidth(140)
+        self._movie_anim_length.setToolTip(
+            "Auto records each screenplay at its own animation length; a "
+            "number forces that duration (in seconds) for all screenplays."
+        )
+
         # Screenplays recorded per license checkout (one starccm+ session).
         self._screenplays_per_checkout = QSpinBox()
         self._screenplays_per_checkout.setRange(1, 999)
@@ -704,6 +720,8 @@ class SettingsDialog(QDialog):
         form.addRow("Movie resolution", self._movie_resolution)
         form.addRow("Movie format", self._movie_format)
         form.addRow("Frame rate (fps)", self._movie_fps)
+        form.addRow("Start time (s)", self._movie_start_time)
+        form.addRow("Animation length (s)", self._movie_anim_length)
         form.addRow("Quality", self._movie_quality)
         hint = QLabel(
             "Resolution, container, frame rate and encoder quality of the "
@@ -1541,6 +1559,8 @@ class SettingsDialog(QDialog):
         mridx = self._movie_resolution.findData(s.media.movie_resolution)
         self._movie_resolution.setCurrentIndex(mridx if mridx >= 0 else 0)
         self._movie_fps.setValue(s.media.movie_fps)
+        self._movie_start_time.setValue(s.media.movie_start_time)
+        self._movie_anim_length.setValue(s.media.movie_anim_length)
         mqidx = self._movie_quality.findData(s.media.movie_quality)
         self._movie_quality.setCurrentIndex(mqidx if mqidx >= 0 else 2)
         self._screenplays_per_checkout.setValue(
@@ -1662,6 +1682,8 @@ class SettingsDialog(QDialog):
         s.media.movie_format = self._movie_format.currentData()
         s.media.movie_resolution = self._movie_resolution.currentData()
         s.media.movie_fps = self._movie_fps.value()
+        s.media.movie_start_time = self._movie_start_time.value()
+        s.media.movie_anim_length = self._movie_anim_length.value()
         s.media.movie_quality = self._movie_quality.currentData()
         s.media.screenplays_per_checkout = (
             self._screenplays_per_checkout.value()
