@@ -406,9 +406,10 @@ public class record_screenplays extends StarMacro {
                 .append(rootMessage(e)).append("]");
             return false;
         }
-        // frames = length * fps + 1, capped defensively.
+        // frames = length * fps + 1; capped defensively in Auto mode only —
+        // a probed length can be garbage, a user-forced ANIM_LENGTH is not.
         int frames = (int) Math.round(length * FPS) + 1;
-        if (frames > 100000) {
+        if (ANIM_LENGTH <= 0 && frames > 100000) {
             tried.append("\n  [frame-loop skipped: implausible frame count "
                 + frames + "]");
             return false;

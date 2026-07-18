@@ -259,6 +259,9 @@ def test_record_screenplays_macro_embeds_selection_and_movie_settings():
         assert "beginMovieExport" in text
         assert "recordFrameLoop" in text
         assert "finalizeMovieExport" in text
+        # The frame-count cap only rejects an Auto-probed (implausible)
+        # length; a user-forced ANIM_LENGTH is exempt.
+        assert "ANIM_LENGTH <= 0 && frames > 100000" in text
 
 
 def test_record_screenplays_macro_timing_defaults_to_auto():
@@ -434,6 +437,12 @@ def test_screenplay_runner_timing_key_presence():
     r = _screenplay_runner(s, {"fps": 24}, base)
     assert r.settings.media.movie_anim_length == 15.0
     assert r.settings.media.movie_start_time == 3.0
+
+    # Mixed: one timing key present, the other absent — each decided
+    # independently.
+    r = _screenplay_runner(s, {"start_time": 5.0}, base)
+    assert r.settings.media.movie_start_time == 5.0
+    assert r.settings.media.movie_anim_length == 15.0
 
     # Nothing to override at all -> the base runner is reused.
     assert _screenplay_runner(s, {}, base) is base

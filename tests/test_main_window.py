@@ -1002,9 +1002,12 @@ def test_batch_run_dialog_save_screenplay(app, monkeypatch):
         screenplays=[Screenplay("Fly", "Iso", [Displayer("P", "scalar")])],
         views=["Top"],
     )
-    dlg = BatchRunDialog(results=[result], settings=Settings())
-    assert dlg._sp_start.value() == 0.0
-    assert dlg._sp_length.value() == 0.0
+    settings = Settings()
+    settings.media.movie_start_time = 2.5
+    settings.media.movie_anim_length = 9.5
+    dlg = BatchRunDialog(results=[result], settings=settings)
+    assert dlg._sp_start.value() == 2.5
+    assert dlg._sp_length.value() == 9.5
     assert dlg._sp_length.specialValueText() == "Auto"
     root = dlg._screenplay_tree.invisibleRootItem()
     fly = root.child(0)
