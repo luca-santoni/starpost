@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -1375,6 +1376,19 @@ class BatchRunDialog(QDialog):
         self._sp_quality.addItem("Low", "low")
         self._sp_quality.addItem("Medium", "medium")
         self._sp_quality.addItem("High", "high")
+        # Recording window: start offset and length; length 0 == "Auto"
+        # (each screenplay's own preferred length).
+        self._sp_start = QDoubleSpinBox()
+        self._sp_start.setRange(0.0, 3600.0)
+        self._sp_start.setDecimals(1)
+        self._sp_length = QDoubleSpinBox()
+        self._sp_length.setRange(0.0, 3600.0)
+        self._sp_length.setDecimals(1)
+        self._sp_length.setSpecialValueText("Auto")
+        self._sp_length.setToolTip(
+            "Auto records each screenplay at its own animation length; a "
+            "number forces that duration (in seconds) for all screenplays."
+        )
         if self._settings is not None:
             media = self._settings.media
             ri = self._sp_resolution.findData(media.movie_resolution)
@@ -1387,6 +1401,8 @@ class BatchRunDialog(QDialog):
             qi = self._sp_quality.findData(media.movie_quality)
             if qi >= 0:
                 self._sp_quality.setCurrentIndex(qi)
+            self._sp_start.setValue(media.movie_start_time)
+            self._sp_length.setValue(media.movie_anim_length)
 
         options = QVBoxLayout()
         options.addWidget(self._header("Options"))
@@ -1396,6 +1412,10 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._sp_format)
         options.addWidget(QLabel("Frame rate"))
         options.addWidget(self._sp_fps)
+        options.addWidget(QLabel("Start time (s)"))
+        options.addWidget(self._sp_start)
+        options.addWidget(QLabel("Animation length (s)"))
+        options.addWidget(self._sp_length)
         options.addWidget(QLabel("Quality"))
         options.addWidget(self._sp_quality)
         options.addStretch(1)
@@ -1903,7 +1923,7 @@ class BatchRunDialog(QDialog):
     def _capture_screenplay(self) -> dict:
         """Snapshot the current screenplay setup for a saved screenplay: the
         checked screenplays and their displayers, the chosen views, and the movie
-        options."""
+        options including the recording start time and length."""
         return {
             "displayers": self._screenplay_tree.checked_displayers(),
             "views": self._checked_sp_views(),
@@ -1911,6 +1931,8 @@ class BatchRunDialog(QDialog):
             "format": self._sp_format.currentData(),
             "fps": self._sp_fps.value(),
             "quality": self._sp_quality.currentData(),
+            "start_time": self._sp_start.value(),
+            "anim_length": self._sp_length.value(),
         }
 
     def _on_save_screenplay(self) -> None:

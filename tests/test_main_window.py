@@ -1003,6 +1003,9 @@ def test_batch_run_dialog_save_screenplay(app, monkeypatch):
         views=["Top"],
     )
     dlg = BatchRunDialog(results=[result], settings=Settings())
+    assert dlg._sp_start.value() == 0.0
+    assert dlg._sp_length.value() == 0.0
+    assert dlg._sp_length.specialValueText() == "Auto"
     root = dlg._screenplay_tree.invisibleRootItem()
     fly = root.child(0)
     fly.setCheckState(0, Qt.CheckState.Checked)
@@ -1011,6 +1014,8 @@ def test_batch_run_dialog_save_screenplay(app, monkeypatch):
     dlg._sp_format.setCurrentIndex(dlg._sp_format.findData("mov"))
     dlg._sp_fps.setValue(60)
     dlg._sp_quality.setCurrentIndex(dlg._sp_quality.findData("medium"))
+    dlg._sp_start.setValue(1.5)
+    dlg._sp_length.setValue(8.0)
 
     monkeypatch.setattr(
         brd.QInputDialog, "getText",
@@ -1024,6 +1029,7 @@ def test_batch_run_dialog_save_screenplay(app, monkeypatch):
     assert item.data(Qt.ItemDataRole.UserRole) == {
         "displayers": {"Fly": ["P"]}, "views": [],
         "resolution": "2160p", "format": "mov", "fps": 60, "quality": "medium",
+        "start_time": 1.5, "anim_length": 8.0,
     }
     dlg.close()
 
