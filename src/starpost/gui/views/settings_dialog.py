@@ -86,6 +86,15 @@ def _csv(text: str) -> list[str]:
     return [t.strip() for t in text.split(",") if t.strip()]
 
 
+def _unit_system_combo() -> QComboBox:
+    """A combo box for choosing the unit system ("default"/"si"/"imperial")."""
+    combo = QComboBox()
+    combo.addItem("Default (no conversion)", "default")
+    combo.addItem("SI", "si")
+    combo.addItem("Imperial", "imperial")
+    return combo
+
+
 def _path_row(
     line: QLineEdit, on_browse, tooltip: str = "Browse for a file or folder"
 ) -> QHBoxLayout:
@@ -536,6 +545,8 @@ class SettingsDialog(QDialog):
         self._zero_threshold.setValidator(validator)
         self._zero_threshold.setPlaceholderText("1e-05")
 
+        self._report_unit_system = _unit_system_combo()
+
         form = QFormLayout()
         form.addRow("Decimal places", self._decimals)
         dec_hint = QLabel("Number of decimals shown for report values in the table.")
@@ -555,6 +566,11 @@ class SettingsDialog(QDialog):
         zt_hint.setObjectName("hint")
         zt_hint.setWordWrap(True)
         form.addRow("", zt_hint)
+        form.addRow("Unit system", self._report_unit_system)
+        us_hint = QLabel("Convert report values shown in the table to this system.")
+        us_hint.setObjectName("hint")
+        us_hint.setWordWrap(True)
+        form.addRow("", us_hint)
         return self._wrap(form)
 
     def _build_plots_page(self) -> QWidget:
@@ -595,6 +611,8 @@ class SettingsDialog(QDialog):
         self._residual.setPlaceholderText("residual, residuals")
         self._force = QLineEdit()
         self._force.setPlaceholderText("force, drag, lift, moment, cd, cl")
+
+        self._plot_unit_system = _unit_system_combo()
 
         form = QFormLayout()
         form.addRow("", self._hide_empty_monitors)
@@ -650,6 +668,11 @@ class SettingsDialog(QDialog):
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         form.addRow("", hint)
+        form.addRow("Unit system", self._plot_unit_system)
+        pus_hint = QLabel("Convert monitor plot data shown on the plot to this system.")
+        pus_hint.setObjectName("hint")
+        pus_hint.setWordWrap(True)
+        form.addRow("", pus_hint)
         return self._wrap(form)
 
     def _build_scenes_page(self) -> QWidget:
@@ -1580,6 +1603,8 @@ class SettingsDialog(QDialog):
         self._decimals.setValue(s.report_decimals)
         self._hide_empty.setChecked(s.hide_empty_reports)
         self._zero_threshold.setText(f"{s.zero_threshold:g}")
+        ri = self._report_unit_system.findData(s.report_unit_system)
+        self._report_unit_system.setCurrentIndex(ri if ri >= 0 else 0)
 
         self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
@@ -1587,6 +1612,8 @@ class SettingsDialog(QDialog):
         self._hover_show_name.setChecked(s.hover_show_monitor_name)
         self._hover_x_decimals.setValue(s.hover_x_decimals)
         self._hover_y_decimals.setValue(s.hover_y_decimals)
+        pi = self._plot_unit_system.findData(s.plot_unit_system)
+        self._plot_unit_system.setCurrentIndex(pi if pi >= 0 else 0)
 
         enabled_stats = set(s.region_stats)
         for i in range(self._region_stats.count()):
@@ -1656,6 +1683,7 @@ class SettingsDialog(QDialog):
             s.zero_threshold = abs(float(self._zero_threshold.text()))
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
+        s.report_unit_system = self._report_unit_system.currentData()
         s.hide_empty_monitors = self._hide_empty_monitors.isChecked()
         try:
             s.monitor_zero_threshold = abs(float(self._monitor_zero_threshold.text()))
@@ -1665,6 +1693,7 @@ class SettingsDialog(QDialog):
         s.hover_show_monitor_name = self._hover_show_name.isChecked()
         s.hover_x_decimals = self._hover_x_decimals.value()
         s.hover_y_decimals = self._hover_y_decimals.value()
+        s.plot_unit_system = self._plot_unit_system.currentData()
         s.region_stats = [
             self._region_stats.item(i).text()
             for i in range(self._region_stats.count())

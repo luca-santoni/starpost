@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
             decimals=settings.report_decimals,
             zero_threshold=settings.zero_threshold,
         )
+        self.report_table.set_unit_system(settings.report_unit_system)
         self.scene_view = SceneView()
         self.screenplay_view = ScreenplayView()
         # The plot view is built lazily (see the plot_view property): it drags
@@ -219,6 +220,7 @@ class MainWindow(QMainWindow):
             )
             pv.set_region_stats(s.region_stats)
             pv.set_smooth_width(s.moving_average_width)
+            pv.set_unit_system(s.plot_unit_system)
             pv.set_text_scale(s.appearance.text_scale)
             pv.apply_theme(s.appearance.mode)
             # The per-monitor selection lives in the selection panel's plot
@@ -1426,7 +1428,9 @@ class MainWindow(QMainWindow):
             # empty-store call — only when a comparison is actually drawn.
             from starpost.batch.aggregator import reports_wide_frame
 
-            df = reports_wide_frame(results, selected)
+            df = reports_wide_frame(
+                results, selected, unit_system=self.settings.report_unit_system
+            )
             if hide_zero:
                 df = _drop_zero_report_columns(df, self.settings.zero_threshold)
             # Display with sims across the top and reports down the side
@@ -1741,6 +1745,7 @@ class MainWindow(QMainWindow):
         self.data_list.set_accent(self.settings.appearance.accent)
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
+        self.report_table.set_unit_system(self.settings.report_unit_system)
         self.plot_view.set_filter(
             self.settings.hide_empty_monitors,
             self.settings.monitor_zero_threshold,
@@ -1752,6 +1757,7 @@ class MainWindow(QMainWindow):
         )
         self.plot_view.set_region_stats(self.settings.region_stats)
         self.plot_view.set_smooth_width(self.settings.moving_average_width)
+        self.plot_view.set_unit_system(self.settings.plot_unit_system)
         self.plot_view.set_text_scale(self.settings.appearance.text_scale)
         self.plot_view.apply_theme(self.settings.appearance.mode)
         # The hide-empty/threshold settings change which reports and monitors
