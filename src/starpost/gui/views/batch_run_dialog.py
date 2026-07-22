@@ -361,6 +361,11 @@ class _SavedPlotPropertiesDialog(QDialog):
         def _px(v) -> str:
             return f"{v:g} px" if v is not None else "—"
 
+        def _unit_system(v) -> str:
+            return {
+                "si": "SI", "imperial": "Imperial",
+            }.get(v, "Default (no conversion)")
+
         form = QFormLayout()
         form.setHorizontalSpacing(24)
         form.addRow("Plot title:", QLabel(_or_dash(data.get("title", ""))))
@@ -370,6 +375,9 @@ class _SavedPlotPropertiesDialog(QDialog):
         form.addRow("Axis label size:", QLabel(_pt(data.get("axis_label_size"))))
         form.addRow("Aspect ratio:", QLabel(_or_dash(data.get("aspect", ""))))
         form.addRow("Theme:", QLabel((data.get("theme") or "").capitalize() or "—"))
+        form.addRow(
+            "Unit system:", QLabel(_unit_system(data.get("unit_system") or "default"))
+        )
         form.addRow("Legend scale:", QLabel(_scale(data.get("legend_scale"))))
         form.addRow("Line thickness:", QLabel(_px(data.get("line_width"))))
         form.addRow("File format:", QLabel(_or_dash(data.get("format", ""))))
@@ -1675,6 +1683,12 @@ class BatchRunDialog(QDialog):
         self._plot_theme.addItem("Dark", "dark")
         self._plot_theme.currentIndexChanged.connect(self._preview_set_theme)
 
+        self._plot_unit_system = QComboBox()
+        self._plot_unit_system.addItem("Default (no conversion)", "default")
+        self._plot_unit_system.addItem("SI", "si")
+        self._plot_unit_system.addItem("Imperial", "imperial")
+        self._plot_unit_system.currentIndexChanged.connect(self._render_preview)
+
         # Legend size: midpoint is the natural size (1.0×), scaling down (left) or
         # up (right) symmetrically — same mapping as the Export dialog's slider.
         self._legend_scale = QSlider(Qt.Orientation.Horizontal)
@@ -1704,6 +1718,7 @@ class BatchRunDialog(QDialog):
         form.addRow("Y axis label", self._plot_ylabel)
         form.addRow("Axis label size", self._axis_label_size)
         form.addRow("Theme", self._plot_theme)
+        form.addRow("Unit system", self._plot_unit_system)
         form.addRow("Legend scale", self._legend_scale)
         form.addRow("Line thickness", self._line_width)
         form.addRow(self._plot_grid)
@@ -1816,6 +1831,7 @@ class BatchRunDialog(QDialog):
             "monitors": monitors,
             "monitor_colors": monitor_colors,
             "theme": self._plot_theme.currentData(),
+            "unit_system": self._plot_unit_system.currentData(),
             "legend_scale": self._legend_factor(self._legend_scale.value()),
             "legend_offset": list(legend_offset) if legend_offset else None,
             "line_width": self._line_width_for(self._line_width.value()),
@@ -1869,6 +1885,9 @@ class BatchRunDialog(QDialog):
             self._legend_scale.setValue(self._legend_slider(data["legend_scale"]))
         if data.get("line_width") is not None:
             self._line_width.setValue(self._line_width_slider(data["line_width"]))
+        ui = self._plot_unit_system.findData(data.get("unit_system") or "default")
+        if ui >= 0:
+            self._plot_unit_system.setCurrentIndex(ui)
         # Monitor selection triggers _render_preview (draws the plots + swatches).
         self._monitor_tree.set_selection(data.get("monitors") or {})
         # Colours need the curves drawn first (above).
@@ -2080,6 +2099,7 @@ class BatchRunDialog(QDialog):
         if plots:
             # Selection first (no render), so show_plots draws it in one pass.
             self._preview.set_monitor_selection(selection, render=False)
+            self._preview.set_unit_system(self._plot_unit_system.currentData())
             self._preview.show_plots(plots)
         else:
             self._preview.clear()
