@@ -183,3 +183,22 @@ def test_saved_view_splits_drops_malformed():
                                "junk": [1, 2]}}
     )
     assert s.saved_view_splits == {}
+
+
+def test_unit_system_defaults_and_round_trip():
+    s = Settings()
+    assert s.report_unit_system == "default"
+    assert s.plot_unit_system == "default"
+    s.report_unit_system = "imperial"
+    s.plot_unit_system = "si"
+    restored = Settings.from_dict(s.to_dict())
+    assert restored.report_unit_system == "imperial"
+    assert restored.plot_unit_system == "si"
+
+
+def test_unit_system_bad_value_coerces_to_default():
+    restored = Settings.from_dict(
+        {"report_unit_system": "furlongs", "plot_unit_system": 5}
+    )
+    assert restored.report_unit_system == "default"
+    assert restored.plot_unit_system == "default"

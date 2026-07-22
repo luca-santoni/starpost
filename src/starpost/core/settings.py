@@ -12,6 +12,7 @@ from typing import Optional
 
 import yaml
 
+from starpost.core.units import normalize_system as _norm_unit_system
 from starpost.utils.paths import (
     batch_profiles_dir,
     harden_file,
@@ -223,6 +224,10 @@ class Settings:
     export_plot_format: str = "PNG"     # PNG | JPG | TIFF | PDF
     export_plot_theme: str = "dark"     # "dark" | "light"
 
+    # Unit system for the live views ("default" | "si" | "imperial").
+    report_unit_system: str = "default"   # main-UI Reports table
+    plot_unit_system: str = "default"     # main-UI monitor plots
+
     # Remembered Scenes/Screenplays "Saved views" divider positions — a map of
     # section -> [top, saved_views] pixel sizes. Pure UI state; restored on launch.
     saved_view_splits: dict = field(default_factory=dict)
@@ -337,6 +342,8 @@ class Settings:
             export_report_format=str(d.get("export_report_format", "CSV")),
             export_plot_format=str(d.get("export_plot_format", "PNG")),
             export_plot_theme=str(d.get("export_plot_theme", "dark")),
+            report_unit_system=_norm_unit_system(d.get("report_unit_system")),
+            plot_unit_system=_norm_unit_system(d.get("plot_unit_system")),
             saved_view_splits=_clean_view_splits(d.get("saved_view_splits")),
         )
 
@@ -394,6 +401,8 @@ class Settings:
             "export_report_format": self.export_report_format,
             "export_plot_format": self.export_plot_format,
             "export_plot_theme": self.export_plot_theme,
+            "report_unit_system": self.report_unit_system,
+            "plot_unit_system": self.plot_unit_system,
             "saved_view_splits": self.saved_view_splits,
         }
 
