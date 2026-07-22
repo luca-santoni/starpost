@@ -10,6 +10,7 @@ from typing import Optional
 
 import pandas as pd
 
+from starpost.core.units import convert_value
 from starpost.data.models import SimResult
 
 
@@ -17,9 +18,11 @@ def reports_wide_frame(
     results: list[SimResult],
     selected: Optional[set[str]] = None,
     include_units: bool = True,
+    unit_system: str = "default",
 ) -> pd.DataFrame:
     """Wide report table: rows = sims, columns = "Report [units]" (units embedded
-    only when ``include_units``)."""
+    only when ``include_units``). Values and embedded units are converted to
+    ``unit_system`` ("default" | "si" | "imperial")."""
     units: dict[str, str] = {}
     rows: list[dict] = []
     for res in results:
@@ -27,8 +30,9 @@ def reports_wide_frame(
         for rep in res.reports:
             if selected is not None and rep.name not in selected:
                 continue
-            units.setdefault(rep.name, rep.units)
-            row[rep.name] = rep.value
+            value, unit = convert_value(rep.value, rep.units, unit_system)
+            units.setdefault(rep.name, unit)
+            row[rep.name] = value
         rows.append(row)
 
     df = pd.DataFrame(rows).set_index("sim") if rows else pd.DataFrame()
@@ -46,11 +50,12 @@ def reports_long_frame(
     results: list[SimResult],
     selected: Optional[set[str]] = None,
     include_units: bool = True,
+    unit_system: str = "default",
 ) -> pd.DataFrame:
     """Tall report table — the transpose of :func:`reports_wide_frame`: a "Report"
     column of names (units embedded when ``include_units``) and one value column
     per sim, i.e. one row per report."""
-    wide = reports_wide_frame(results, selected, include_units)
+    wide = reports_wide_frame(results, selected, include_units, unit_system)
     if wide.empty:
         return pd.DataFrame(columns=["Report"])
     long = wide.T

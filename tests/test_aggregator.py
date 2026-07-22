@@ -1,3 +1,5 @@
+import pytest
+
 from starpost.batch.aggregator import reports_long_frame, reports_wide_frame
 from starpost.data.models import Report, SimResult
 
@@ -42,3 +44,17 @@ def test_long_frame_respects_selection_and_units_toggle():
     a = _sim("caseA", [("Drag Force", 12.0, "N"), ("Lift Force", 3.0, "N")])
     df = reports_long_frame([a], selected={"Drag Force"}, include_units=False)
     assert list(df["Report"]) == ["Drag Force"]  # no units, only the selection
+
+
+def test_wide_frame_converts_to_imperial():
+    a = _sim("caseA", [("Drag Force", 100.0, "N")])
+    df = reports_wide_frame([a], unit_system="imperial")
+    assert "Drag Force [lbf]" in df.columns
+    assert df.loc["caseA", "Drag Force [lbf]"] == pytest.approx(22.4808943, rel=1e-6)
+
+
+def test_wide_frame_default_leaves_units_raw():
+    a = _sim("caseA", [("Drag Force", 100.0, "N")])
+    df = reports_wide_frame([a], unit_system="default")
+    assert "Drag Force [N]" in df.columns
+    assert df.loc["caseA", "Drag Force [N]"] == 100.0

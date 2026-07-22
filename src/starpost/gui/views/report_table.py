@@ -96,6 +96,7 @@ class ReportTable(QWidget):
         # Single-file view header for the value column: the data set's name
         # (set by show_single). Falls back to "Value" until a result is shown.
         self._value_label = "Value"
+        self._unit_system = "default"
 
         header = self._table.horizontalHeader()
         header.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -115,6 +116,14 @@ class ReportTable(QWidget):
         self._zero_threshold = max(0.0, float(threshold))
         if self._df is not None:
             self.show_dataframe(self._df)
+
+    def set_unit_system(self, system: str) -> None:
+        """Set the unit system used for the single-file view and re-render."""
+        self._unit_system = system
+        if self._df is not None and _SINGLE_COLUMNS.issubset(self._df.columns):
+            # Comparison frames arrive pre-converted from the aggregator; only
+            # the single-file frame is (re)built from raw reports here.
+            pass
 
     def clear(self) -> None:
         """Blank the table — used when all loaded data is cleared."""
@@ -233,10 +242,16 @@ class ReportTable(QWidget):
                 r for r in reports
                 if r.value is None or abs(r.value) >= self._zero_threshold
             ]
+        from starpost.core.units import convert_value
+
+        converted = [convert_value(r.value, r.units, self._unit_system) for r in reports]
         # Pin the columns so an empty result is a 0-row table (with headers)
         # rather than a column-less frame the table model can't query.
         df = pd.DataFrame(
-            [{"report": r.name, "value": r.value, "units": r.units} for r in reports],
+            [
+                {"report": r.name, "value": v, "units": unit}
+                for r, (v, unit) in zip(reports, converted)
+            ],
             columns=["report", "value", "units"],
         )
         # Label the value column with this data set's name in the display.
