@@ -472,6 +472,11 @@ The **Reports** tab (centre): a numeric table of report values.
   selected sims are dropped when *Hide empty reports* is on.
 - Values are formatted to the configured **decimal places**; magnitudes below
   the **zero threshold** display as `0`.
+- The **Unit system** setting (Settings → Reports — Default / SI / Imperial)
+  converts displayed values and the **Units** column accordingly (e.g. a force
+  report shows `lbf` under Imperial); unknown or dimensionless units pass
+  through unchanged. This only affects the live table — exports and the
+  portable data CSV stay in the sim's original units.
 - **Right-click the table header** → **sort menu** (active sort checkmarked):
   **Name (A–Z / Z–A)**, **Value (ascending / descending)**, **Units (A–Z /
   Z–A)**. In comparison mode, "Value" orders rows by the across-sim mean.
@@ -487,6 +492,11 @@ The **Plots** tab (centre): the interactive monitor-plot viewer (pyqtgraph).
   (e.g. *Force (lbf)*), inferred from the monitor's unit — Force, Pressure, Mass
   Flow, Velocity, Temperature, etc.; an unrecognised unit shows the unit alone,
   and mixed or unit-less series show *Value*.
+- The **Unit system** setting (Settings → Plots — Default / SI / Imperial)
+  converts each plotted series and the Y-axis label to match (e.g. *Force
+  (lbf)* under Imperial); unrecognised or dimensionless series are left as-is.
+  Like the Reports table, this only affects the live plot — exports keep the
+  original units.
 - In per-file mode each series gets a distinct colour; in comparison mode every
   line — each **(data set, monitor)** pair — gets its own colour, so monitors
   stay distinguishable even within one data set.
@@ -879,9 +889,10 @@ so the wizard is always driven by these buttons.
 
 **Batch profile bar (top).** A **Batch profile** selector with **Load** and
 **Save as…** stores a whole Run-batch setup — the chosen reports (along with the
-**report format**, **Include units** and **Combined report** settings), and the
-saved plots, scenes and screenplays — under a name for reuse, so loading a profile
-restores all of them. These batch profiles are **separate** from the report/plot
+**report format**, **unit system**, **Include units** and **Combined report**
+settings), and the saved plots (each with its own unit system), scenes and
+screenplays — under a name for reuse, so loading a profile restores all of
+them. These batch profiles are **separate** from the report/plot
 profiles used by the main view, and are also listed under Settings → Profiles →
 **Batch profiles**.
 
@@ -894,17 +905,21 @@ profiles used by the main view, and are also listed under Settings → Profiles 
   Plots / Scenes choices (assuming every file shares the same reports, plots and
   scenes), so you can configure the run without extracting all of them first.
 - **Reports** — a checklist of every report (all ticked by default), plus
-  **File format** (CSV / TSV / XLSX / ODS), **Include units**, and **Combined
-  report** (on by default) — which also writes one report combining every data
-  set (one column per sim) at the archive root, alongside the per-data-set report
-  files in their folders.
+  **File format** (CSV / TSV / XLSX / ODS), a global **Unit system** (Default /
+  SI / Imperial, applied to every report written by this run), **Include
+  units**, and **Combined report** (on by default) — which also writes one
+  report combining every data set (one column per sim) at the archive root,
+  alongside the per-data-set report files in their folders.
 - **Plots** — the same monitor tree, per-monitor colour swatches, live preview
-  window and plot options as the Export dialog's Plots tab. **Add Plot** captures
-  the current setup as a named entry in the **Saved Plots** list (each remembers
-  its title, axis labels, sizes, theme, legend, line width, grid, format, and
-  monitor selection + colours). Right-click a saved plot for **Preview** (loads
-  its captured settings back into the controls and preview), **Properties** (a
-  read-only view of what it captured), or **Delete**.
+  window and plot options as the Export dialog's Plots tab, plus a per-plot
+  **Unit system** (Default / SI / Imperial) that converts that plot's series
+  and Y-axis label. **Add Plot** captures the current setup as a named entry in
+  the **Saved Plots** list (each remembers its title, axis labels, sizes,
+  theme, legend, line width, grid, format, unit system, and monitor selection +
+  colours). Right-click a saved plot for **Preview** (loads its captured
+  settings — including its unit system — back into the controls and preview),
+  **Properties** (a read-only view of what it captured, including its unit
+  system), or **Delete**.
 - **Scenes** — the same scene → displayer tree and **Saved views** list as the
   main Scenes view, plus **Image resolution** and **Image format**. **Save Scene**
   captures the current selection as a named entry in the **Saved Scenes** list;
@@ -948,8 +963,9 @@ Opened from the top bar's **Run batch → Express batch**. This is the fast path
 users who already have a saved **batch profile**: rather than stepping through the
 six-tab wizard, you pick a profile and sources, set the archive options, and run.
 The profile supplies everything about the output — the reports (with their
-**report format**, **Include units** and **Combined report** settings), the saved
-plots, the saved scenes, and the saved screenplays.
+**report format**, **unit system**, **Include units** and **Combined report**
+settings), the saved plots (each with its own unit system), the saved scenes,
+and the saved screenplays.
 
 **Layout (top to bottom):**
 
@@ -996,8 +1012,8 @@ The pages, in nav order:
 | **License** | **Mode** — *POD key + license server* or *License file*. For POD: **POD key** (masked as `••••` with a **Show/Hide** toggle) and **License server** (`<port>@<server>`). For license file: **License file** (+ Browse…). Irrelevant fields are disabled per mode. |
 | **Appearance** | **Theme** (Dark / Light); **Accent presets** (eight swatches: Amber, Blue, Teal, Green, Orange, Red, Purple, Pink); **Custom accent** (hex field + Pick… + preview chip); **Checkmarks → Match with theme** toggle + **Checkmark colour** (used when not matching); **Node dots → Match with theme** toggle + **Node colour** (the Files-tab leaf-row dots; follow the accent when matching, mirroring the checkmark controls); **Folders → Use default colour** toggle + **Folder colour** (tints the Files-tab folder icons); **Text size** (1.0×–1.5× multiplier scaling every button/label, and the main view's plot title/axis labels; 1.0× is the original size). All changes **preview live** across the whole UI. |
 | **Files** | **Show file path** — list full paths in the Files panel instead of just names. |
-| **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
-| **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
+| **Reports** | **Unit system** (Default / SI / Imperial — converts values and units shown in the live Reports table, single and comparison); **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
+| **Plots** | **Unit system** (Default / SI / Imperial — converts each live monitor series and its Y-axis label); **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
 | **Scenes** | Scene-rendering output options: **Image resolution** (1080p / 2160p) and **Image format** (JPG / PNG). |
 | **Screenplays** | Screenplay-recording output options: **Movie resolution** (1080p / 2160p), **Movie format** (MP4 / AVI / MOV), **Frame rate (fps)**, **Quality** (Low / Medium / High), **Start time (s)** and **Animation length (s)** (Auto = each screenplay's own length; recording always begins at the start time rather than the screenplay's preferred start), and **Screenplays per license** (how many screenplays record per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |

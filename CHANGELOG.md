@@ -5,6 +5,16 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### New Features
+- **Unit conversion for reports and monitor plots** — Settings → Reports and
+  Settings → Plots each gain a "Unit system" dropdown (Default / SI /
+  Imperial) applied to the live views (reports table, including comparison
+  mode, and monitor plots with a converted Y-axis label). The Run-batch
+  window adds a global reports unit system and a per-plot unit system saved
+  with each plot; express-batch honours the saved reports unit system too.
+  Conversion is display/export-only — cached data stays raw, and unknown or
+  dimensionless units pass through unchanged.
+
 ### Fixes
 - **Selected folder icon now inverts** — in the Files and Data tabs, a selected
   folder's icon recolours to the accent's contrast colour (like its name)
