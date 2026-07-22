@@ -118,12 +118,14 @@ class ReportTable(QWidget):
             self.show_dataframe(self._df)
 
     def set_unit_system(self, system: str) -> None:
-        """Set the unit system used for the single-file view and re-render."""
+        """Set the unit system for the single-file view.
+
+        Does NOT re-render: the caller re-runs ``show_single`` (via the main
+        window's view refresh) so the frame is rebuilt from the raw reports.
+        Re-rendering the cached ``self._df`` here would double-convert, since
+        the single-file frame it holds is already in the current unit system.
+        """
         self._unit_system = system
-        if self._df is not None and _SINGLE_COLUMNS.issubset(self._df.columns):
-            # Comparison frames arrive pre-converted from the aggregator; only
-            # the single-file frame is (re)built from raw reports here.
-            pass
 
     def clear(self) -> None:
         """Blank the table — used when all loaded data is cleared."""

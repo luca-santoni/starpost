@@ -71,6 +71,8 @@ _UNITS: dict[str, _UnitDef] = {
     "m/s": _UnitDef("Velocity", 1.0), "km/h": _UnitDef("Velocity", 1.0 / 3.6),
     "ft/s": _UnitDef("Velocity", 0.3048), "mph": _UnitDef("Velocity", 0.44704),
     # Temperature (base K) — affine
+    # Assumes ABSOLUTE temperatures; a temperature-difference value would be
+    # mis-shifted by the offset below.
     "K": _UnitDef("Temperature", 1.0, 0.0),
     "degC": _UnitDef("Temperature", 1.0, 273.15),
     "C": _UnitDef("Temperature", 1.0, 273.15),
