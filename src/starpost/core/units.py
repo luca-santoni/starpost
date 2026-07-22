@@ -92,6 +92,17 @@ _UNITS: dict[str, _UnitDef] = {
     "m": _UnitDef("Length", 1.0), "mm": _UnitDef("Length", 1e-3),
     "cm": _UnitDef("Length", 1e-2), "km": _UnitDef("Length", 1e3),
     "in": _UnitDef("Length", 0.0254), "ft": _UnitDef("Length", 0.3048),
+    # Area (base m^2)
+    "m^2": _UnitDef("Area", 1.0), "m2": _UnitDef("Area", 1.0),
+    "cm^2": _UnitDef("Area", 1e-4), "mm^2": _UnitDef("Area", 1e-6),
+    "km^2": _UnitDef("Area", 1e6),
+    "ft^2": _UnitDef("Area", 0.09290304), "in^2": _UnitDef("Area", 0.00064516),
+    # Volume (base m^3)
+    "m^3": _UnitDef("Volume", 1.0), "m3": _UnitDef("Volume", 1.0),
+    "cm^3": _UnitDef("Volume", 1e-6), "mm^3": _UnitDef("Volume", 1e-9),
+    "L": _UnitDef("Volume", 1e-3),
+    "ft^3": _UnitDef("Volume", 0.028316846592), "in^3": _UnitDef("Volume", 1.6387064e-5),
+    "gal": _UnitDef("Volume", 0.003785411784),
     # Density (base kg/m^3)
     "kg/m^3": _UnitDef("Density", 1.0), "kg/m3": _UnitDef("Density", 1.0),
     "lb/ft^3": _UnitDef("Density", 16.018463374),
@@ -118,6 +129,8 @@ _TARGETS: dict[str, dict[str, str]] = {
     "Power": {"si": "W", "imperial": "hp"},
     "Energy": {"si": "J", "imperial": "BTU"},
     "Length": {"si": "m", "imperial": "ft"},
+    "Area": {"si": "m^2", "imperial": "ft^2"},
+    "Volume": {"si": "m^3", "imperial": "ft^3"},
     "Density": {"si": "kg/m^3", "imperial": "lb/ft^3"},
     "Angular Velocity": {"si": "rad/s", "imperial": "rpm"},
     "Frequency": {"si": "Hz", "imperial": "Hz"},

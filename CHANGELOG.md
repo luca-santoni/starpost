@@ -13,7 +13,9 @@ All notable changes to StarPost are recorded here. Versions follow the
   window adds a global reports unit system and a per-plot unit system saved
   with each plot; express-batch honours the saved reports unit system too.
   Conversion is display/export-only — cached data stays raw, and unknown or
-  dimensionless units pass through unchanged.
+  dimensionless units pass through unchanged. Covers force, moment, pressure,
+  mass/volumetric flow, velocity, temperature, mass, power, energy, length,
+  area, volume, density, and angular velocity.
 
 ### Fixes
 - **Selected folder icon now inverts** — in the Files and Data tabs, a selected

@@ -31,6 +31,36 @@ def test_velocity_ms_to_fts():
     assert val == pytest.approx(3.280839895, rel=1e-6)
 
 
+def test_area_m2_to_ft2():
+    val, unit = u.convert_value(1.0, "m^2", "imperial")
+    assert unit == "ft^2"
+    assert val == pytest.approx(10.7639104, rel=1e-6)
+
+
+def test_area_ft2_to_si():
+    val, unit = u.convert_value(10.7639104, "ft^2", "si")
+    assert unit == "m^2"
+    assert val == pytest.approx(1.0, rel=1e-6)
+
+
+def test_area_bare_m2_alias():
+    val, unit = u.convert_value(1.0, "m2", "imperial")
+    assert unit == "ft^2"
+    assert val == pytest.approx(10.7639104, rel=1e-6)
+
+
+def test_volume_m3_to_ft3():
+    val, unit = u.convert_value(1.0, "m^3", "imperial")
+    assert unit == "ft^3"
+    assert val == pytest.approx(35.3146667, rel=1e-6)
+
+
+def test_volume_ft3_to_si():
+    val, unit = u.convert_value(35.3146667, "ft^3", "si")
+    assert unit == "m^3"
+    assert val == pytest.approx(1.0, rel=1e-6)
+
+
 def test_temperature_kelvin_to_fahrenheit_affine():
     val, unit = u.convert_value(300.0, "K", "imperial")
     assert unit == "degF"
