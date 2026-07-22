@@ -129,6 +129,7 @@ class ExpressBatchDialog(QDialog):
             reports=reports,
             report_format=profile.report_format.lower(),
             include_units=profile.include_units,
+            report_unit_system=profile.report_unit_system,
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
             saved_screenplays=saved_screenplays,

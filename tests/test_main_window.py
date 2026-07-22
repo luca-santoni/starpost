@@ -2660,6 +2660,7 @@ def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
             "displayers": {"Iso": ["P"]}, "views": [], "resolution": "1080p",
             "format": "mp4", "fps": 30, "quality": "high"}}],
         report_format="XLSX", include_units=False, combined_report=False,
+        report_unit_system="imperial",
     ).save()
 
     result = _sim_result_with_data()  # sim_name "caseA"
@@ -2691,6 +2692,7 @@ def test_express_dialog_builds_config_from_profile(app, monkeypatch, tmp_path):
     assert cfg.report_format == "xlsx"
     assert cfg.include_units is False
     assert cfg.combined_report is False
+    assert cfg.report_unit_system == "imperial"
     assert cfg.archive_format == "7z"
     assert cfg.include_dataset_csv is True
     assert [s.name for s in cfg.sources] == ["caseA"]
