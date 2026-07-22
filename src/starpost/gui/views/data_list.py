@@ -37,7 +37,8 @@ from PySide6.QtWidgets import (
 # tabs look identical. Both tag item type at UserRole+1, so the dash delegate
 # (which skips folders) works unchanged for data rows too.
 from starpost.gui import shortcuts
-from starpost.gui.views.file_list import _draw_tree_lines, _tinted_icon
+from starpost.gui.theme import DEFAULT_ACCENT, contrast_color
+from starpost.gui.views.file_list import _draw_tree_lines, _folder_icon
 from starpost.gui.widgets import (
     DangerMenuItem,
     clear_item_view_hover,
@@ -255,16 +256,21 @@ class DataListPanel(QWidget):
     # A folder's name and its contained data set names, for aggregate properties.
     folder_properties_requested = Signal(object, object)
 
-    def __init__(self, parent=None, *, folder_color: str = "") -> None:
+    def __init__(
+        self, parent=None, *, folder_color: str = "", accent: str = DEFAULT_ACCENT
+    ) -> None:
         super().__init__(parent)
         # Active tab-wide sort, kept in sync with the right-click menu's checkmark.
         self._sort_mode = DEFAULT_SORT
         # Folder icon: the standard one, optionally tinted to a chosen colour
-        # ("" = leave the default icon as-is). Mirrors the Files tab.
+        # ("" = leave the default icon as-is), with a Selected-mode variant in the
+        # accent's contrast colour so a selected folder inverts. Mirrors the Files
+        # tab.
         self._base_folder_icon = self.style().standardIcon(
             QStyle.StandardPixmap.SP_DirIcon
         )
         self._folder_color = folder_color or ""
+        self._accent = accent or DEFAULT_ACCENT
         self._folder_icon = self._build_folder_icon()
 
         self._tree = _DataTree()
@@ -394,6 +400,20 @@ class DataListPanel(QWidget):
         if color == self._folder_color:
             return
         self._folder_color = color
+        self._rebuild_folder_icon()
+
+    def set_accent(self, accent: str) -> None:
+        """Update the accent so a selected folder's icon keeps a contrasting
+        colour on the highlight. Mirrors the Files tab."""
+        accent = accent or DEFAULT_ACCENT
+        if accent == self._accent:
+            return
+        self._accent = accent
+        self._rebuild_folder_icon()
+
+    def _rebuild_folder_icon(self) -> None:
+        """Rebuild the folder icon (normal + selected variants) and re-apply it
+        to every folder item."""
         self._folder_icon = self._build_folder_icon()
         for item in self._tree._iter_all():
             if _is_folder(item):
@@ -423,9 +443,11 @@ class DataListPanel(QWidget):
         return item.data(0, _SORT_ROLE) or DEFAULT_SORT
 
     def _build_folder_icon(self):
-        if not self._folder_color:
-            return self._base_folder_icon
-        return _tinted_icon(self._base_folder_icon, self._folder_color)
+        return _folder_icon(
+            self._base_folder_icon,
+            self._folder_color,
+            contrast_color(self._accent),
+        )
 
     # --- iteration -------------------------------------------------------
     def _iter_data(self, parent: QTreeWidgetItem | None = None):

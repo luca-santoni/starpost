@@ -132,6 +132,44 @@ def test_leaf_dot_has_contrasting_selected_variant(app):
     assert (selected.red(), selected.green(), selected.blue()) == (0x1E, 0x1E, 0x1E)
 
 
+def test_folder_icon_inverts_when_selected(app):
+    """The folder icon carries a Selected-mode pixmap recoloured to the accent's
+    contrast colour, so a selected folder's icon inverts to a contrasting
+    silhouette on the accent highlight, like its name — rather than keeping its
+    same-hue silhouette (which Qt's default selected tint barely changes)."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QColor, QIcon, QPixmap
+
+    from starpost.gui.views import file_list as fl
+
+    base_pm = QPixmap(32, 32)
+    base_pm.fill(QColor("#000000"))  # a fully-opaque silhouette to recolour
+    icon = fl._folder_icon(QIcon(base_pm), "#ffc829", "#1e1e1e")
+    size = QSize(32, 32)
+    normal = icon.pixmap(size, QIcon.Mode.Normal).toImage().pixelColor(16, 16)
+    selected = icon.pixmap(size, QIcon.Mode.Selected).toImage().pixelColor(16, 16)
+    assert (normal.red(), normal.green(), normal.blue()) == (0xFF, 0xC8, 0x29)
+    assert (selected.red(), selected.green(), selected.blue()) == (0x1E, 0x1E, 0x1E)
+
+
+def test_data_folder_icon_carries_accent_contrast_selected_variant(app):
+    """The Data tab threads the accent through too, so its folder rows get the
+    same inverting Selected-mode icon as the Files tab."""
+    from PySide6.QtGui import QIcon
+
+    from starpost.gui.views.data_list import DataListPanel
+
+    panel = DataListPanel(folder_color="#ffc829", accent="#ffffff")
+    panel._make_folder_item("F")  # builds via the shared folder-icon path
+    icon = panel._folder_icon
+    normal = icon.pixmap(32, 32, QIcon.Mode.Normal).toImage().pixelColor(16, 16)
+    selected = icon.pixmap(32, 32, QIcon.Mode.Selected).toImage().pixelColor(16, 16)
+    # A tinted normal silhouette, a contrasting (#1e1e1e for white accent) one
+    # when selected — the two must differ.
+    assert normal.rgb() != selected.rgb()
+    assert (selected.red(), selected.green(), selected.blue()) == (0x1E, 0x1E, 0x1E)
+
+
 def test_single_top_bar_has_menu_and_window_buttons(app):
     """One fixed top bar holds the badge and menu items on the left and the
     version plus integrated window buttons on the right (STAR-CCM+ style)."""

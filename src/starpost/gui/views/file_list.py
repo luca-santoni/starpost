@@ -68,9 +68,8 @@ def _is_folder(item: QTreeWidgetItem) -> bool:
     return item.data(0, _TYPE_ROLE) == "folder"
 
 
-def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
-    """Recolour ``base``'s silhouette to ``color`` (keeping its alpha), e.g. to
-    tint the standard folder icon to the user's chosen folder colour."""
+def _recolor_pixmap(base: QIcon, color: str, size: int = 32) -> QPixmap:
+    """``base``'s silhouette recoloured to ``color`` (keeping its alpha)."""
     pixmap = base.pixmap(QSize(size, size))
     tinted = QPixmap(pixmap.size())
     tinted.fill(Qt.GlobalColor.transparent)
@@ -79,7 +78,30 @@ def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
     painter.fillRect(tinted.rect(), QColor(color))
     painter.end()
-    return QIcon(tinted)
+    return tinted
+
+
+def _tinted_icon(base: QIcon, color: str, size: int = 32) -> QIcon:
+    """Recolour ``base``'s silhouette to ``color`` (keeping its alpha), e.g. to
+    tint the standard folder icon to the user's chosen folder colour."""
+    return QIcon(_recolor_pixmap(base, color, size))
+
+
+def _folder_icon(
+    base: QIcon, color: str, selected_color: str, size: int = 32
+) -> QIcon:
+    """The folder icon: ``base`` tinted to ``color`` (or ``base`` unchanged when
+    ``color`` is ""), plus a Selected-mode pixmap whose silhouette is recoloured
+    to ``selected_color``. The selected variant makes a highlighted folder's icon
+    invert to a contrasting colour on the accent row — like its name — instead of
+    keeping a same-hue silhouette (which Qt's default selected tint barely
+    changes). Mirrors the leaf dot's ``_dot_icon`` selected variant."""
+    if color:
+        icon = QIcon(_recolor_pixmap(base, color, size))
+    else:
+        icon = QIcon(base.pixmap(QSize(size, size)))
+    icon.addPixmap(_recolor_pixmap(base, selected_color, size), QIcon.Mode.Selected)
+    return icon
 
 
 # Leaf items (.sim files, data sets) get a small round "node" icon, mirroring
@@ -239,12 +261,14 @@ class FileListPanel(QWidget):
             QStyle.StandardPixmap.SP_DirIcon
         )
         self._folder_color = folder_color or ""
+        # The accent's contrast colour drives both the selected-row leaf dot and
+        # the selected folder icon, so set it before building either.
+        self._accent = accent or DEFAULT_ACCENT
         self._folder_icon = self._build_folder_icon()
         # Leaf node dot: coloured to a chosen colour ("" = the STAR-CCM+ blue),
         # with a contrasting variant (the accent's contrast colour) for the
         # selected row so the dot stays visible on the accent highlight.
         self._node_color = node_color or _LEAF_COLOR
-        self._accent = accent or DEFAULT_ACCENT
         self._file_icon = _dot_icon(self._node_color, contrast_color(self._accent))
 
         self._tree = _FileTree()
@@ -346,10 +370,14 @@ class FileListPanel(QWidget):
         return item.data(0, _SORT_ROLE) or DEFAULT_SORT
 
     def _build_folder_icon(self) -> QIcon:
-        """The folder icon for the active colour ("" keeps the default icon)."""
-        if not self._folder_color:
-            return self._base_folder_icon
-        return _tinted_icon(self._base_folder_icon, self._folder_color)
+        """The folder icon for the active colour ("" keeps the default icon),
+        with a Selected-mode variant that inverts to the accent's contrast
+        colour so a highlighted folder's icon inverts like its name."""
+        return _folder_icon(
+            self._base_folder_icon,
+            self._folder_color,
+            contrast_color(self._accent),
+        )
 
     def set_folder_color(self, color: str) -> None:
         """Tint every folder icon to ``color``; an empty string restores the
@@ -373,12 +401,17 @@ class FileListPanel(QWidget):
         self._rebuild_file_icon()
 
     def set_accent(self, accent: str) -> None:
-        """Update the accent so the selected-row dot keeps a contrasting colour."""
+        """Update the accent so the selected-row dot and folder icon keep a
+        contrasting colour on the highlight."""
         accent = accent or DEFAULT_ACCENT
         if accent == self._accent:
             return
         self._accent = accent
         self._rebuild_file_icon()
+        self._folder_icon = self._build_folder_icon()
+        for item in self._iter_all():
+            if _is_folder(item):
+                item.setIcon(0, self._folder_icon)
 
     def _rebuild_file_icon(self) -> None:
         """Rebuild the leaf dot icon (normal + selected variants) and re-apply it

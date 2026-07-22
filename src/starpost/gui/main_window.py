@@ -136,7 +136,8 @@ class MainWindow(QMainWindow):
             accent=settings.appearance.accent,
         )
         self.data_list = DataListPanel(
-            folder_color=settings.appearance.resolved_folder_color()
+            folder_color=settings.appearance.resolved_folder_color(),
+            accent=settings.appearance.accent,
         )
         self.selection = SelectionPanel()
         # Restore the remembered Scenes/Screenplays "Saved views" divider splits.
@@ -1737,6 +1738,7 @@ class MainWindow(QMainWindow):
         self.data_list.set_folder_color(folder_color)
         self.file_list.set_node_color(self.settings.appearance.resolved_node())
         self.file_list.set_accent(self.settings.appearance.accent)
+        self.data_list.set_accent(self.settings.appearance.accent)
         self.report_table.set_decimals(self.settings.report_decimals)
         self.report_table.set_zero_threshold(self.settings.zero_threshold)
         self.plot_view.set_filter(

@@ -5,6 +5,12 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### Fixes
+- **Selected folder icon now inverts** — in the Files and Data tabs, a selected
+  folder's icon recolours to the accent's contrast colour (like its name)
+  instead of keeping its same-hue silhouette, so it stays legible on the accent
+  highlight. Mirrors the leaf node dot's selected variant.
+
 ### New Features
 - **Screenplay recording length & start time** — Settings → Screenplays gains
   "Start time (s)" and "Animation length (s)" (Auto = each screenplay's own
