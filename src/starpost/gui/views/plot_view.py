@@ -30,6 +30,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from starpost.core.units import (
+    conversion_factors,
+    quantity_for_unit as _quantity_for_unit,
+    target_unit,
+)
 from starpost.data.models import MonitorPlot
 from starpost.gui import shortcuts
 from starpost.gui.plot_style import (  # noqa: F401 (re-exported for importers)
@@ -102,60 +107,15 @@ REGION_STAT_LABELS: list[str] = [s.label for s in REGION_STATS]
 # importers (e.g. the export dialog).
 
 
-# Physical quantity each unit measures, so the Y axis reads "Force (lbf)" rather
-# than just "lbf". Keys are the unit strings STAR-CCM+ emits, matched
-# case-sensitively so kN (force) stays distinct from kn (knot). Units not listed
-# fall back to showing the unit alone; extend this map as new units come up.
-_UNIT_QUANTITY: dict[str, str] = {
-    # Force
-    "N": "Force", "kN": "Force", "MN": "Force", "lbf": "Force", "kgf": "Force",
-    "dyn": "Force",
-    # Moment / torque
-    "N-m": "Moment", "N*m": "Moment", "Nm": "Moment",
-    "lbf-ft": "Moment", "lbf*ft": "Moment", "lbf-in": "Moment", "lbf*in": "Moment",
-    # Pressure
-    "Pa": "Pressure", "kPa": "Pressure", "MPa": "Pressure", "hPa": "Pressure",
-    "bar": "Pressure", "mbar": "Pressure", "psi": "Pressure", "atm": "Pressure",
-    # Mass flow
-    "kg/s": "Mass Flow", "g/s": "Mass Flow", "lb/s": "Mass Flow",
-    "lbm/s": "Mass Flow", "kg/h": "Mass Flow",
-    # Volume flow
-    "m^3/s": "Volumetric Flow Rate", "m3/s": "Volumetric Flow Rate", "L/s": "Volumetric Flow Rate",
-    "cfm": "Volumetric Flow Rate", "gpm": "Volumetric Flow Rate",
-    # Velocity
-    "m/s": "Velocity", "km/h": "Velocity", "ft/s": "Velocity", "mph": "Velocity",
-    # Temperature
-    "K": "Temperature", "C": "Temperature", "F": "Temperature", "R": "Temperature",
-    "degC": "Temperature", "degF": "Temperature",
-    # Mass
-    "kg": "Mass", "g": "Mass", "lb": "Mass", "lbm": "Mass", "mg": "Mass",
-    # Power / energy
-    "W": "Power", "kW": "Power", "MW": "Power", "hp": "Power",
-    "J": "Energy", "kJ": "Energy", "MJ": "Energy", "BTU": "Energy",
-    # Length
-    "m": "Length", "mm": "Length", "cm": "Length", "km": "Length",
-    "in": "Length", "ft": "Length",
-    # Density
-    "kg/m^3": "Density", "kg/m3": "Density", "lb/ft^3": "Density",
-    # Rotation / frequency / time
-    "rad/s": "Angular Velocity", "rpm": "Angular Velocity", "deg/s": "Angular Velocity",
-    "Hz": "Frequency", "kHz": "Frequency",
-    "s": "Time", "ms": "Time", "min": "Time", "hr": "Time",
-}
-
-
-def _quantity_for_unit(unit: str) -> str:
-    """The physical quantity a unit measures ("lbf" -> "Force"), or "" if the unit
-    isn't recognised."""
-    return _UNIT_QUANTITY.get(unit.strip(), "")
-
-
-def _y_label_for(names: list[str]) -> str:
-    """Y-axis label from the plotted series' unit: "<Quantity> (<unit>)" (e.g.
-    "Force (lbf)") when they share one unit that maps to a known quantity; the
-    unit alone when the unit is unknown; "Value" when units are mixed or absent
-    (no single label can describe the axis)."""
-    units = {u for u in (_series_unit(n) for n in names) if u}
+def _y_label_for(names: list[str], system: str = "default") -> str:
+    """Y-axis label from the plotted series' units, converted to ``system``:
+    "<Quantity> (<unit>)" when they share one known unit, the unit alone when
+    unknown, "Value" when units are mixed or absent."""
+    units = {
+        target_unit(u, system)
+        for u in (_series_unit(n) for n in names)
+        if u
+    }
     if len(units) != 1:
         return "Value"
     unit = next(iter(units))
@@ -575,6 +535,8 @@ class PlotView(QWidget):
         # window width set from the plot settings).
         self._smooth = False
         self._smooth_width = 10
+        # Unit system applied to drawn series' values ("default" | "si" | "imperial").
+        self._unit_system = "default"
 
         # Empty-monitor filtering (mirrors the Reports settings).
         self._hide_empty = True
@@ -698,6 +660,11 @@ class PlotView(QWidget):
         if self._smooth and self._mode is not None:
             self._render()
 
+    def set_unit_system(self, system: str) -> None:
+        """Set the unit system applied to drawn plot data and re-render."""
+        self._unit_system = system
+        self._render()
+
     def toggle_smooth(self) -> None:
         """Toggle the "Smooth data" checkbox — the Alt+Shift+S shortcut path.
         Goes through click() so it behaves exactly like the mouse."""
@@ -714,6 +681,12 @@ class PlotView(QWidget):
         if not self._smooth:
             return y
         return _moving_average(y, self._smooth_width)
+
+    def _converted(self, name: str, y):
+        """Scale a series' y-values into the active unit system (per-series, by
+        the unit parsed from its name). Returns a numpy array."""
+        factor, shift, _ = conversion_factors(_series_unit(name), self._unit_system)
+        return np.asarray(y, dtype=float) * factor + shift
 
     def set_title_size(self, pt: float) -> None:
         """Set the plot title's font size (points) and refresh the labels."""
@@ -1107,9 +1080,10 @@ class PlotView(QWidget):
                 self._drawn_colors[s.name] = color
                 drawn.append(s.name)
                 x, y = _series_arrays(s)
+                y = self._converted(s.name, y)
                 specs.append((x, self._smoothed(y), s.name, color))
         title = ", ".join(p.name for p in plots)
-        self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn))
+        self._reset(title, any(p.y_log for p in plots), _y_label_for(drawn, self._unit_system))
         for x, y, name, color in specs:
             label = _display_name(name)
             self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=self._line_width))
@@ -1156,9 +1130,10 @@ class PlotView(QWidget):
                     disp = _display_name(s.name)
                     label = f"{sim_name}: {disp}" if multi else sim_name
                     x, y = _series_arrays(s)
+                    y = self._converted(s.name, y)
                     specs.append((x, self._smoothed(y), label, color))
         title = ", ".join(name for name, _ in categories) + " (comparison)"
-        self._reset(title, y_log, _y_label_for(drawn))
+        self._reset(title, y_log, _y_label_for(drawn, self._unit_system))
         for x, y, label, color in specs:
             self._plot.plot(x, y, name=label, pen=pg.mkPen(color, width=self._line_width))
             self._record_curve(x, y, label, color)

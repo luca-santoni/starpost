@@ -289,3 +289,27 @@ def test_legend_offset_round_trips_across_sizes(app):
     assert abs(frac2[0] - frac[0]) < 0.02 and abs(frac2[1] - frac[1]) < 0.02
     src.deleteLater()
     dst.deleteLater()
+
+
+def test_y_label_reflects_converted_unit():
+    names = ["Drag (N)"]
+    assert _y_label_for(names) == "Force (N)"
+    assert _y_label_for(names, "imperial") == "Force (lbf)"
+
+
+def test_set_unit_system_converts_drawn_y_values(app):
+    from starpost.data.models import MonitorPlot, PlotSeries
+
+    pv = PlotView()
+    plot = MonitorPlot(
+        name="Drag", series=[PlotSeries(name="Drag (N)", x=[1, 2], y=[100.0, 200.0])]
+    )
+    # Series start deselected until picked (see "Don't auto-plot monitors");
+    # pre-select this one so show_plots actually draws a curve to inspect.
+    pv.set_monitor_selection({"Drag": ["Drag (N)"]}, render=False)
+    pv.set_unit_system("imperial")
+    pv.show_plots([plot])
+    # The recorded (drawn) curve holds converted y-values.
+    ys = list(pv._curves[-1]["y"])
+    assert ys[0] == pytest.approx(22.4808943, rel=1e-6)
+    assert ys[1] == pytest.approx(44.9617886, rel=1e-6)
