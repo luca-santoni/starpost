@@ -3,9 +3,12 @@
 StarPost is a standalone desktop tool to automate STAR-CCM+ post-processing: it extracts
 **report values** and **monitor plots** (residuals, forces vs. iteration) from
 solved `.sim` files, lets you view and compare them, and exports tables to
-**CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**. It can also
-**render scene stills** (images) from a `.sim`'s scenes — choosing which
-scalar/vector displayers are shown and which saved camera view to render from.
+**CSV / TSV / XLSX / ODS** and plots to **PNG / JPG / TIFF / PDF**. It also
+captures each sim's **metadata** (solution state, mesh, regions, physics, the
+Geometry ▸ Parts tree) at extraction, and can **render scene stills** (images)
+and **record screenplays** (animations) to **movie files** from a `.sim`'s
+scenes — choosing which scalar/vector displayers are shown and which saved
+camera view to render from.
 
 Runs on **Linux and Windows**.
 
@@ -47,15 +50,19 @@ StarPost does **not** parse them directly. Instead it:
 1. Generates a Java macro from a template (`src/starpost/macros/`).
 2. Runs it via `starccm+ -batch <macro> <file.sim>` (one license checkout per
    file, sequential — license-safe).
-3. The macro exports **all** reports and monitor plots to CSV in an output dir
-   (and lists the sim's scenes, their scalar/vector displayers, and its saved
-   views); StarPost parses those and caches them.
+3. The macro exports **all** reports and monitor plots to CSV in an output dir,
+   captures the sim's **metadata** (solution state, mesh, regions, physics, the
+   Geometry ▸ Parts tree, tags, STAR-CCM+ version), and lists the sim's scenes,
+   their scalar/vector displayers, its screenplays, and its saved views;
+   StarPost parses those and caches them.
 4. The GUI filters the cached data by your selection/profile for viewing and
    export. Re-selecting never re-runs STAR-CCM+.
-5. **Scene rendering** is a separate, on-demand pass: from the **Scenes** tab you
-   pick scenes (and which displayers/saved view to show) and click **Run** to
-   render them to image stills via a second macro. Because rendering goes through
-   OpenGL and is memory-heavy, it is kept apart from the numeric extraction.
+5. **Scene rendering** and **screenplay recording** are separate, on-demand
+   passes: from the **Scenes** / **Screenplays** tabs you pick scenes or
+   screenplays (and which displayers/saved view to show) and click **Run** /
+   **Record** to produce image stills or movie files via a second macro. Because
+   this goes through OpenGL and is memory-heavy, it is kept apart from the
+   numeric extraction.
 
 A licensed STAR-CCM+ installation must be present on the machine.
 
@@ -63,7 +70,16 @@ A licensed STAR-CCM+ installation must be present on the machine.
 
 - **Batch extraction** of all report values and monitor plots from multiple
   `.sim` files, run sequentially (one license checkout at a time) with a live
-  log and progress bar, and a crash-recovery cache.
+  log and progress bar, and a crash-recovery cache. The same pass also captures
+  each sim's **metadata** — solution state, mesh counts + pipeline, regions,
+  physics, the Geometry ▸ Parts tree, tags and STAR-CCM+ version — with no extra
+  license checkout.
+- **Tabbed Properties window** — right-click any file or data set → **Properties**
+  (`Ctrl+P`) for a tabbed view: **General** (size, report/monitor/iteration
+  counts), **Parts** (the Geometry ▸ Parts tree), **Mesh** (cell/face/vertex
+  counts + mesh-operation pipeline), **Regions** (continuum, boundary types,
+  interfaces) and **Physics** (models, solvers, stopping criteria). Data sets
+  extracted before this feature show a re-extract hint on those tabs.
 - **Files / Data panels** — build a reusable list of `.sim` files (the *Files*
   tab), then pick which extracted **Data** sets feed the views by ticking them.
   **Both** tabs support **virtual folders** (nest, drag-drop, sort per folder)
@@ -101,10 +117,11 @@ A licensed STAR-CCM+ installation must be present on the machine.
     scale, line thickness, title/axis-label text sizes, a grid toggle, theme, and
     aspect ratio.
 - **Run batch** (toolbar → *Run batch*) — a guided wizard (**Source → Reports →
-  Plots → Scenes → Summary**) that bundles the chosen report tables, saved plot
-  images and saved scene stills — and, optionally, each data set's portable CSV —
-  into a **single archive** (a `.zip` or `.7z`, one folder per data set), the
-  format chosen on the Summary tab. Whole setups can be saved and reloaded as
+  Plots → Scenes → Screenplays → Summary**) that bundles the chosen report
+  tables, saved plot images, saved scene stills and saved screenplay movies —
+  and, optionally, each data set's portable CSV — into a **single archive**
+  (a `.zip` or `.7z`, one folder per data set), the format chosen on the Summary
+  tab. Whole setups can be saved and reloaded as
   **batch profiles**. The toolbar **Run batch** button is a hover dropdown:
   **Full Batch** opens this wizard, while **Express batch** runs an existing
   batch profile quickly — choose the profile and sources, set the archive
@@ -122,8 +139,24 @@ A licensed STAR-CCM+ installation must be present on the machine.
     configurable core count) with a configurable number of **scenes per license
     checkout**, closing each scene after its hardcopy to limit memory use. A
     first-open warning notes that rendering is memory-heavy (≥16 GB recommended).
+- **Screenplay recording** (the **Screenplays** tab) — record a `.sim`'s
+  STAR-CCM+ screenplays (animations) to **movie files** (**MP4 / AVI / MOV**,
+  **1080p / 2160p**), with a configurable frame rate, encoder quality, recording
+  **start time** and **animation length** (Auto = each screenplay's own length).
+  It uses the same screenplay → displayer tree and shared **Saved views** list
+  as the Scenes tab; **Record** produces one movie per selection, shown in a
+  **poster-framed gallery** (double-click to play in the system player;
+  right-click → **Properties**). Discovery and recording require **STAR-CCM+
+  2022 or newer**; the recorder is invoked reflectively, so a mismatch fails
+  only that screenplay, never the whole run.
+- **File menu & keyboard shortcuts** — a menu-bar-style top bar with a **File**
+  menu (Add ▸ Files… / Folder…, Import / Export data) and the **Run batch**
+  menu; keyboard shortcuts cover tab switching, the batch dialogs, add/import/
+  export, select-all/clear, run/record, smoothing and the Files/Data list
+  actions (shown in menus and tooltips; full list in
+  [`docs/starpost_hotkeys.txt`](docs/starpost_hotkeys.txt)).
 - **In-app settings dialog** — STAR-CCM+ paths, licensing (with a masked POD
-  key), file/report/plot/scene display options, export defaults, profile management
+  key), file/report/plot/scene/screenplay display options, export defaults, profile management
   (view details / delete), a **dark/light theme with custom accent, checkmark, node-dot and
   folder colours** and an **adjustable text size** previewed live, a reset, and a
   *Clear all temp files* action.
@@ -141,10 +174,12 @@ A licensed STAR-CCM+ installation must be present on the machine.
 - **A local, licensed STAR-CCM+ installation** (its executable path is set in
   Settings). The UI opens and is fully navigable without one — STAR-CCM+ is only
   needed to actually extract data from `.sim` files.
-- **Scene rendering** additionally needs working **graphics** (a GPU/display, or
-  an offscreen GL context on headless machines) and is **memory-heavy**:
-  **≥16 GB** of system RAM is recommended, and closing other programs first helps
-  avoid out-of-memory errors.
+- **Scene rendering / screenplay recording** additionally need working
+  **graphics** (a GPU/display, or an offscreen GL context on headless machines)
+  and are **memory-heavy**: **≥16 GB** of system RAM is recommended, and closing
+  other programs first helps avoid out-of-memory errors. **Screenplay recording**
+  further requires **STAR-CCM+ 2022 or newer** (older releases show no
+  screenplays to record).
 - OS: **Linux or Windows**.
 - Python dependencies: see [`requirements.txt`](requirements.txt) /
   [`pyproject.toml`](pyproject.toml).
@@ -175,9 +210,13 @@ Key fields:
   (`export_report_format`, `export_plot_format`, `export_plot_theme`),
   `appearance` (theme, accent, checkmark + folder colours), and
   `check_updates_on_startup`.
-- `media` — scene-rendering options: `image_format` (jpg/png),
-  `image_resolution` (1080p/2160p), `magnification`, `render_np` (parallel cores
-  for `starccm+ -np`), and `scenes_per_checkout`.
+- `media` — scene-rendering and screenplay-recording options: `image_format`
+  (jpg/png), `image_resolution` (1080p/2160p), `magnification`, `render_np`
+  (parallel cores for `starccm+ -np`), `scenes_per_checkout`, and the movie
+  settings `movie_format` (mp4/avi/mov), `movie_resolution` (1080p/2160p),
+  `movie_fps`, `movie_quality` (low/medium/high), `movie_start_time`,
+  `movie_anim_length` (0 = each screenplay's own length), and
+  `screenplays_per_checkout`.
 
 Extraction **profiles** (saved report/plot selections, the monitors shown per
 plot, and axis overrides) live alongside the settings file in `profiles/*.yaml`
@@ -192,18 +231,22 @@ Windows `%LOCALAPPDATA%\starpost\`).
 2. **Files** tab → *Add files…* to add individual `.sim` files, or *Add folder…*
    to import a folder's `.sim` files into a new internal folder named after it.
 3. Extract the files into the workspace — **double-click** one, or select several
-   and **right-click → Open**. STAR-CCM+ runs once per file and the results appear
-   in the **Data** tab.
+   and **right-click → Load file**. STAR-CCM+ runs once per file and the results
+   appear in the **Data** tab. (Right-click → **Properties** for a sim's mesh,
+   regions, physics and Parts tree.)
 4. Tick **Data** sets to view (two or more → comparison), then use the
    **Reports** and **Plots** tabs plus the right-hand selection panel to filter.
    Save a selection as a **Profile** to reuse it later.
 5. **Export…** (toolbar) writes report tables and/or plot images — or use **Run
-   batch** (toolbar) to bundle reports, plots and scenes into a single archive.
-6. *(Optional)* On the **Scenes** tab, tick one **Data** set, pick scenes (and
-   their displayers / a saved view), and click **Run** to render image stills.
+   batch** (toolbar) to bundle reports, plots, scenes and screenplays into a
+   single archive.
+6. *(Optional)* On the **Scenes** / **Screenplays** tabs, tick one **Data** set,
+   pick scenes or screenplays (and their displayers / a saved view), and click
+   **Run** / **Record** to produce image stills or movie files.
 
 Re-selecting, comparing, and re-exporting never re-run STAR-CCM+ — extraction
-happens once and is cached. (Scene rendering does run STAR-CCM+ again, on demand.)
+happens once and is cached. (Scene rendering and screenplay recording do run
+STAR-CCM+ again, on demand.)
 
 ## Documentation
 

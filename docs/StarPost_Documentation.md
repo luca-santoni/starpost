@@ -2,11 +2,13 @@
 
 > Application name: **StarPost** (Python package / import name: `starpost`)
 > Repository: `starpost`
-> Version: **2.5.0**
+> Version: **2.6.0**
 > Status: cross-platform (Linux + Windows) GUI with batch extraction, the
 > Files/Data workspace (virtual folders + portable data import/export), an
 > interactive plot viewer (per-monitor colours, optional moving-average
-> smoothing), **on-demand scene-still rendering** (the Scenes tab: scene →
+> smoothing), **sim-properties capture** (solution state, mesh, regions,
+> physics and the Geometry ▸ Parts tree, shown in a tabbed Properties window),
+> **on-demand scene-still rendering** (the Scenes tab: scene →
 > scalar/vector displayer selection, saved-view rendering, parallel/`-np`
 > rendering, a thumbnail gallery with Properties), **on-demand screenplay
 > recording** (the Screenplays tab: screenplay → displayer selection, saved-view
@@ -22,7 +24,7 @@
 > version-specific operation still being validated (see
 > [Limitations](#4-limitations)). Screenplay recording additionally requires
 > STAR-CCM+ 2022 or newer (see [3.6b Screenplays view](#36b-screenplays-view)).
-> Document last updated: 2026-07-13
+> Document last updated: 2026-07-22
 
 ---
 
@@ -99,6 +101,15 @@ gallery (see [Screenplay recording](#screenplay-recording) and the
 - Extracts **all report values** (name, value, units) from each file.
 - Extracts **all monitor plots** (value vs. iteration), including multi-series
   plots such as residuals (continuity, momentum components, energy, etc.).
+- Captures the sim's own **metadata** in the same pass (no extra license
+  checkout): the **solution state** (iteration, physical time, CPU/elapsed
+  time), **mesh** cell/face/vertex counts and the mesh-operation pipeline
+  (meshers, base size, surface sizes, prism layers), **regions** with their
+  boundary-type breakdown and physics continuum, the **physics** models,
+  solvers and stopping criteria per continuum, the **Geometry ▸ Parts** tree
+  (composites, sub-assemblies and leaf parts with surface/curve counts),
+  interfaces, tags, and the **STAR-CCM+ version** used. Shown in the tabbed
+  [Properties window](#33-files-panel) and carried in the portable data CSV.
 - Uses an **extract-all-then-filter** strategy: a single pass per file (one
   license checkout) dumps everything; filtering happens in the app afterward, so
   changing the selection never re-runs STAR-CCM+.
@@ -130,8 +141,14 @@ gallery (see [Screenplay recording](#screenplay-recording) and the
 - **Portable data import/export**: a loaded data set can be written to a
   self-contained StarPost CSV and re-imported later (into any StarPost instance)
   **without STAR-CCM+** — useful for sharing results or archiving them.
-- **Properties** on any file, data set, or folder (size plus report / monitor /
-  iteration counts).
+- **Properties** on any file, data set, or folder — a **tabbed window**:
+  **General** (size plus report / monitor / iteration counts), **Parts** (the
+  Geometry ▸ Parts tree), **Mesh** (cell/face/vertex counts and the
+  mesh-operation pipeline), **Regions** (each region's continuum, boundary-type
+  breakdown and the interfaces) and **Physics** (each continuum's models,
+  solvers and stopping criteria). The Parts/Mesh/Regions/Physics tabs are read
+  from the captured sim properties; data sets extracted before that feature show
+  a re-extract hint instead. Folder Properties still show combined size + count.
 
 ### Viewing (in-app)
 - **Per-file mode** (one Data set ticked): that simulation's reports and plots.
@@ -205,8 +222,9 @@ gallery (see [Screenplay recording](#screenplay-recording) and the
 ### Screenplay recording
 - **On-demand screenplay recording** from the **Screenplays** tab: record a
   `.sim`'s STAR-CCM+ screenplays (animations) to **movie files** (**MP4 / AVI /
-  MOV**), at **1080p** or **2160p**, with a configurable frame rate and encoder
-  quality.
+  MOV**), at **1080p** or **2160p**, with a configurable frame rate, encoder
+  quality, **start time** and **animation length** (length **Auto** = each
+  screenplay's own length, matching STAR-CCM+'s Write Animation dialog).
 - **Screenplay → displayer selection**: a tree, identical in behaviour to the
   Scenes tree — each screenplay is a checkable parent and its scene's
   **scalar/vector displayers** are checkable children — only the ticked
@@ -435,7 +453,10 @@ bar's **File** menu (or their hotkeys):
 - **Import data…** (`Alt+Shift+I`) — load one or more **portable StarPost CSVs**
   (as written by Export data) straight into the workspace, with no `.sim` or
   STAR-CCM+ needed. Files that don't match the format are reported and skipped;
-  name collisions prompt to overwrite or keep.
+  name collisions prompt to overwrite or keep. The portable CSV is now
+  **format v3** (it carries the captured sim properties as `prop` rows);
+  **v2** files still import, but **v3** files do not import into a pre-v3
+  StarPost release.
 - **Export data…** (`Alt+Shift+E`) — opens a dialog listing the loaded data sets
   (pre-ticked to the current selection) where you choose which to dump to
   portable StarPost CSV (one re-importable file per data set).
@@ -571,8 +592,11 @@ tick exactly one.
 
 **Settings → Screenplays** (see [3.10](#310-settings-dialog)) configures the
 recorded movie's **resolution** (1080p / 2160p), **container** (MP4 / AVI /
-MOV), **frame rate**, **encoder quality**, and how many **screenplays per
-license checkout** are recorded in one STAR-CCM+ session.
+MOV), **frame rate**, **encoder quality**, the recording **start time** and
+**animation length** (length **Auto** = each screenplay's own length), and how
+many **screenplays per license checkout** are recorded in one STAR-CCM+ session.
+Recording always begins at the configured start time (default 0) rather than
+the screenplay's own preferred start time.
 
 > Screenplay discovery and recording require **STAR-CCM+ 2022 or newer** (the
 > release that introduced first-class Screenplays). On older installs the
@@ -888,8 +912,10 @@ profiles used by the main view, and are also listed under Settings → Profiles 
   captured scene with its scalar/vector displayers) or **Delete**.
 - **Screenplays** — the same screenplay → displayer tree and a **Saved views**
   list as the main Screenplays view, plus per-entry **Movie resolution**,
-  **Movie format** (MP4 / AVI / MOV), **Frame rate** and **Quality** options.
-  **Save Screenplay** captures the current selection (with those movie options)
+  **Movie format** (MP4 / AVI / MOV), **Frame rate**, **Quality**, **Start
+  time (s)** and **Animation length (s)** (Auto = the screenplay's own length)
+  options. **Save Screenplay** captures the current selection (with those movie
+  options, including the start time and length)
   as a named entry in the **Saved Screenplays** list; right-click one for
   **Properties** (its movie options, saved views, and each captured screenplay
   with its scalar/vector displayers) or **Delete**. Each saved screenplay records
@@ -973,7 +999,7 @@ The pages, in nav order:
 | **Reports** | **Decimal places** (0–15), **Hide empty reports**, **Zero threshold** (scientific notation accepted; magnitudes below it show as 0 and, if hiding is on, are hidden). |
 | **Plots** | **Hide empty monitors** + **Zero threshold**; **Moving average width** (window size for the plot's **Smooth data** toggle; 1 = no smoothing); **Show name when hovering**; **Hover X decimals** / **Hover Y decimals**; **Statistics** (checkable list — Avg, Median, Std Dev, Var, Min, Max, Range — controlling the Shift+drag region table); **Residual keywords** and **Force keywords** (comma-separated; drive the log/linear axis classification). |
 | **Scenes** | Scene-rendering output options: **Image resolution** (1080p / 2160p) and **Image format** (JPG / PNG). |
-| **Screenplays** | Screenplay-recording output options: **Movie resolution** (1080p / 2160p), **Movie format** (MP4 / AVI / MOV), **Frame rate (fps)**, **Quality** (Low / Medium / High), and **Screenplays per license** (how many screenplays record per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
+| **Screenplays** | Screenplay-recording output options: **Movie resolution** (1080p / 2160p), **Movie format** (MP4 / AVI / MOV), **Frame rate (fps)**, **Quality** (Low / Medium / High), **Start time (s)** and **Animation length (s)** (Auto = each screenplay's own length; recording always begins at the start time rather than the screenplay's preferred start), and **Screenplays per license** (how many screenplays record per STAR-CCM+ session/license checkout; 1 = one each, safest for memory). |
 | **Export** | Defaults the Export dialog pre-fills: **Default report format** (CSV / TSV / XLSX / ODS), **Default plot format** (PNG / JPG / TIFF / PDF), and **Default plot theme** (Light / Dark). These only pre-fill the dialog; any export can still override them. |
 | **Profiles** | Two sections. **Report/plot profiles** — one row per profile (Default first); **Show Details** opens a read-only window listing the profile's selected **Reports**, **Plots** (with the monitors shown per group), and **Statistics**; **Delete** (not shown for Default) removes the profile after confirmation, immediately. **Batch profiles** — the saved [Run batch dialog](#39a-run-batch-dialog) selections, each with **Show Details** (its reports, saved plots and saved scenes — right-click a saved plot or scene there for **Properties**) and **Delete**. |
 | **Misc** | **Show setup menu on startup** (the welcome wizard); **Check for updates on application startup**; **Check for updates** (manual check now); **Reset settings** — restores Files/Reports/Plots/Export/Appearance/Misc to defaults and reloads the Default profile (STAR-CCM+, License, and saved Profiles are left untouched), applied and saved immediately; **Clear all temp files** — deletes cached logs, the crash-recovery cache, generated icons, downloaded updates, and leftover macro folders after a confirmation listing what will go (settings and profiles are untouched). |
@@ -1269,10 +1295,21 @@ Defined in `src/starpost/data/models.py`:
   `movie`), optional `error`, plus provenance for the Properties window:
   `sim_path`, `displayers` (the visible ones), `view`, and `poster` (movie-kind
   only: absolute path to the exported poster-frame PNG).
+- **`PropertyGroup`** — one entity's captured sim properties: `section`
+  (`"mesh"`, `"region"`, `"physics"`, …), `name` (the entity, `""` for
+  sim-wide sections), and `entries[]` (key/value string pairs in extraction
+  order). Values are kept as **generic strings** — the key set drifts across
+  STAR-CCM+ releases, so anything numeric is parsed at the point of use.
+- **`SimProperties`** — the sim's metadata for one file: `groups[]` of
+  `PropertyGroup`, with a `get(section, name)` lookup. Consumed by the
+  Properties window's Parts/Mesh/Regions/Physics tabs
+  (`data/parts_tree.py`, `data/prop_rows.py` build the tree/row models).
 - **`SimResult`** — everything from one `.sim`: `sim_path`, `reports[]`,
   `plots[]`, `scenes[]` (with displayers), `views[]` (saved-view names),
   `screenplays[]` (with their scene's displayers), `media[]` (rendered stills +
-  recorded movies), `extracted_at` timestamp, optional batch-level `error`.
+  recorded movies), `properties` (a `SimProperties`, or `None` for results
+  extracted before that feature — never part of `signature()`), `extracted_at`
+  timestamp, optional batch-level `error`.
   Helpers: `sim_name`, `report_names()`, `plot_names()`, `scene_names()`,
   `screenplay_names()`, and `signature()` (report + plot names, for the
   homogeneity check — scenes/views/screenplays/media are excluded).
@@ -1401,8 +1438,10 @@ starpost/                           (repo; app/package = "starpost")
     │
     ├── data/                       Data model & storage
     │   ├── models.py               Report, PlotSeries, MonitorPlot, SimResult, PlotKind,
-    │   │                           Scene/Displayer, MediaArtifact (rendered stills)
-    │   ├── portable.py             Round-trippable StarPost-CSV (Import / Export Data)
+    │   │                           Scene/Displayer, MediaArtifact, SimProperties/PropertyGroup
+    │   ├── parts_tree.py           Builds the Geometry > Parts tree for the Properties window
+    │   ├── prop_rows.py            Builds the Mesh / Regions / Physics rows for Properties
+    │   ├── portable.py             Round-trippable StarPost-CSV (Import / Export Data; format v3)
     │   └── store.py                ResultStore: in-memory + JSON crash cache; homogeneity
     │
     ├── gui/                        PySide6 user interface
@@ -1574,8 +1613,16 @@ PYTHONPATH=src python -m pytest tests/ -q
   batching; per-displayer visibility and saved-view cameras; one exported
   poster frame per movie; a poster-framed gallery with open-in-system-player /
   right-click Properties / Clear screenplays; Settings → Screenplays (movie
-  format, resolution, frame rate, quality); and reuse of the Scenes tab's
-  first-open memory warning.
+  format, resolution, frame rate, quality, and — v2.6.0 — a recording start
+  time and animation length, honoured by the run-batch and Save Screenplay
+  options too); and reuse of the Scenes tab's first-open memory warning.
+- **Sim-properties capture & Properties window (v2.6.0)** — the extraction pass
+  also records the sim's solution state, mesh counts + mesh-operation pipeline,
+  regions/boundaries/interfaces, physics models/solvers/stopping criteria, the
+  Geometry ▸ Parts tree, tags and STAR-CCM+ version, all on the same license
+  checkout and persisted through the crash-recovery cache. Shown in the tabbed
+  Properties window (General / Parts / Mesh / Regions / Physics) and carried in
+  the portable data CSV (bumped to format v3; v2 files still import).
 - **Cross-platform** config/cache/log locations via platformdirs; packaged Linux
   AppImage and Windows Inno Setup installer.
 - Unit tests for parser, classifier, aggregator, license flags, profile
