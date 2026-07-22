@@ -1261,6 +1261,8 @@ class SettingsDialog(QDialog):
         s.export_report_format = d.export_report_format
         s.export_plot_format = d.export_plot_format
         s.export_plot_theme = d.export_plot_theme
+        s.report_unit_system = d.report_unit_system
+        s.plot_unit_system = d.plot_unit_system
         s.save()
 
         # Mirror the reset into the form; the appearance setters live-preview it.
@@ -1308,6 +1310,10 @@ class SettingsDialog(QDialog):
         self._export_plot_format.setCurrentIndex(pi if pi >= 0 else 0)
         ti = self._export_plot_theme.findData(d.export_plot_theme)
         self._export_plot_theme.setCurrentIndex(ti if ti >= 0 else 0)
+        rui = self._report_unit_system.findData(d.report_unit_system)
+        self._report_unit_system.setCurrentIndex(rui if rui >= 0 else 0)
+        pui = self._plot_unit_system.findData(d.plot_unit_system)
+        self._plot_unit_system.setCurrentIndex(pui if pui >= 0 else 0)
 
         # The reset is committed, so a later Cancel must not revert the new theme.
         self._orig_mode = s.appearance.mode

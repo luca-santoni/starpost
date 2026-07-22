@@ -50,3 +50,18 @@ def test_unit_dropdowns_load_and_save(app):
     dlg._on_accept()
     assert s.report_unit_system == "default"
     assert s.plot_unit_system == "imperial"
+
+
+def test_reset_restores_unit_systems(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    s = Settings()
+    s.report_unit_system = "imperial"
+    s.plot_unit_system = "si"
+    dlg = SettingsDialog(s)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: QMessageBox.Yes)
+    dlg._reset_settings()
+    assert s.report_unit_system == "default"
+    assert s.plot_unit_system == "default"
+    assert dlg._report_unit_system.currentData() == "default"
+    assert dlg._plot_unit_system.currentData() == "default"
