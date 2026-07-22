@@ -61,6 +61,7 @@ class BatchConfig:
     reports: set[str] = field(default_factory=set)
     report_format: str = "csv"          # csv | tsv | xlsx | ods
     include_units: bool = True
+    report_unit_system: str = "default"  # default | si | imperial
     saved_plots: list[dict] = field(default_factory=list)
     saved_scenes: list[dict] = field(default_factory=list)
     saved_screenplays: list[dict] = field(default_factory=list)
@@ -323,7 +324,8 @@ def build_batch_archive(
             if config.reports:
                 steps.at(f"Writing reports for {source.name}…")
                 df = reports_long_frame(
-                    [result], config.reports, config.include_units
+                    [result], config.reports, config.include_units,
+                    config.report_unit_system,
                 )
                 rpath = folder / f"reports.{config.report_format.lower()}"
                 write_report_table(df, rpath, config.report_format)
@@ -387,7 +389,8 @@ def build_batch_archive(
         if combined and combined_results:
             steps.at("Writing combined report…")
             df = reports_long_frame(
-                combined_results, config.reports, config.include_units
+                combined_results, config.reports, config.include_units,
+                config.report_unit_system,
             )
             cpath = out_root / f"reports_combined.{config.report_format.lower()}"
             write_report_table(df, cpath, config.report_format)

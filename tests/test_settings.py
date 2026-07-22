@@ -24,6 +24,22 @@ def isolated_profiles(monkeypatch, tmp_path):
     return profiles
 
 
+@pytest.fixture
+def isolated_batch_profiles(monkeypatch, tmp_path):
+    """Redirect batch-profile storage to a temp dir (mirrors ``isolated_profiles``).
+
+    ``BatchProfile`` resolves through ``starpost.core.settings.batch_profiles_dir``,
+    a separate directory from Profiles; patch it directly so tests never touch
+    the real per-OS batch_profiles dir.
+    """
+    batch_profiles = tmp_path / "batch_profiles"
+    batch_profiles.mkdir()
+    monkeypatch.setattr(
+        "starpost.core.settings.batch_profiles_dir", lambda: batch_profiles
+    )
+    return batch_profiles
+
+
 @pytest.mark.skipif(
     sys.platform == "win32", reason="POSIX mode bits not meaningful on Windows"
 )
@@ -161,6 +177,20 @@ def test_batch_profile_round_trips_saved_screenplays():
     cfg.BatchProfile(name="Movies", saved_screenplays=entries).save()
     loaded = cfg.BatchProfile.load("Movies")
     assert loaded.saved_screenplays == entries
+
+
+def test_batch_profile_round_trips_report_unit_system(isolated_batch_profiles):
+    from starpost.core.settings import BatchProfile
+
+    bp = BatchProfile(name="p", report_unit_system="imperial")
+    bp.save()
+    assert BatchProfile.load("p").report_unit_system == "imperial"
+
+
+def test_batch_profile_defaults_report_unit_system():
+    from starpost.core.settings import BatchProfile
+
+    assert BatchProfile(name="p").report_unit_system == "default"
 
 
 def test_round_trips_saved_view_splits():

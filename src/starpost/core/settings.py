@@ -500,6 +500,7 @@ class BatchProfile:
     saved_screenplays: list[dict] = field(default_factory=list)
     report_format: str = "CSV"       # CSV | TSV | XLSX | ODS
     include_units: bool = True
+    report_unit_system: str = "default"
     combined_report: bool = True
 
     def path(self) -> Path:
@@ -514,6 +515,7 @@ class BatchProfile:
             "saved_screenplays": list(self.saved_screenplays),
             "report_format": self.report_format,
             "include_units": self.include_units,
+            "report_unit_system": self.report_unit_system,
             "combined_report": self.combined_report,
         }
         self.path().write_text(
@@ -535,6 +537,7 @@ class BatchProfile:
             saved_screenplays=list(data.get("saved_screenplays", [])),
             report_format=str(data.get("report_format", "CSV")),
             include_units=bool(data.get("include_units", True)),
+            report_unit_system=_norm_unit_system(data.get("report_unit_system")),
             combined_report=bool(data.get("combined_report", True)),
         )
 

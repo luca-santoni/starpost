@@ -1012,6 +1012,7 @@ class BatchRunDialog(QDialog):
             saved_screenplays=self._saved_entries(self._saved_screenplays),
             report_format=self._report_format.currentText(),
             include_units=self._report_include_units.isChecked(),
+            report_unit_system=self._report_unit_system.currentData(),
             combined_report=self._report_combined.isChecked(),
         )
 
@@ -1042,6 +1043,11 @@ class BatchRunDialog(QDialog):
         idx = self._report_format.findText(profile.report_format)
         if idx >= 0:
             self._report_format.setCurrentIndex(idx)
+        ri = self._report_unit_system.findData(
+            getattr(profile, "report_unit_system", "default")
+        )
+        if ri >= 0:
+            self._report_unit_system.setCurrentIndex(ri)
         self._report_include_units.setChecked(profile.include_units)
         self._report_combined.setChecked(profile.combined_report)
 
@@ -1209,6 +1215,10 @@ class BatchRunDialog(QDialog):
 
         self._report_format = QComboBox()
         self._report_format.addItems(["CSV", "TSV", "XLSX", "ODS"])
+        self._report_unit_system = QComboBox()
+        self._report_unit_system.addItem("Default (no conversion)", "default")
+        self._report_unit_system.addItem("SI", "si")
+        self._report_unit_system.addItem("Imperial", "imperial")
         self._report_include_units = QCheckBox("Include units")
         self._report_include_units.setChecked(True)
         # No "Separate files" option here (unlike the Export dialog): the batch
@@ -1224,6 +1234,8 @@ class BatchRunDialog(QDialog):
         options.addWidget(self._header("Options"))
         options.addWidget(QLabel("File format"))
         options.addWidget(self._report_format)
+        options.addWidget(QLabel("Units"))
+        options.addWidget(self._report_unit_system)
         options.addWidget(self._report_include_units)
         options.addWidget(self._report_combined)
         options.addStretch(1)
@@ -2285,6 +2297,7 @@ class BatchRunDialog(QDialog):
             reports=reports,
             report_format=self._report_format.currentText().lower(),
             include_units=self._report_include_units.isChecked(),
+            report_unit_system=self._report_unit_system.currentData(),
             saved_plots=saved_plots,
             saved_scenes=saved_scenes,
             saved_screenplays=saved_screenplays,
