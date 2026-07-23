@@ -161,3 +161,28 @@ def _sort_children(node: PartNode) -> None:
 
 def _count(value: Optional[str]) -> int:
     return int(value) if value and value.isdigit() else 0
+
+
+def iter_part_names(tree: PartsTree) -> list[str]:
+    """Every node name in the parts tree — composites and leaves — depth-first
+    in tree (alphabetical) order. Empty list for a tree with no parts."""
+    names: list[str] = []
+
+    def walk(node: PartNode) -> None:
+        names.append(node.name)
+        for child in node.children:
+            walk(child)
+
+    for root in tree.roots:
+        walk(root)
+    return names
+
+
+def matching_parts(tree: PartsTree, query: str) -> list[str]:
+    """Part names containing ``query`` (case-insensitive substring). An empty
+    or whitespace-only query returns every name."""
+    q = query.strip().casefold()
+    names = iter_part_names(tree)
+    if not q:
+        return names
+    return [n for n in names if q in n.casefold()]

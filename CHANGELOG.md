@@ -6,10 +6,15 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### New Features
+- **Part Search window** — Tools → Part Search opens a searchable window: type
+  part-name text into the search bar and the list of loaded data sets filters
+  to only those containing a matching part, expanded to show which parts
+  matched. Double-click any row to open that data set's Properties. Reads
+  cached part data only — no STAR-CCM+ re-run.
 - **"Tools" menu in the top bar** — a new toolbar dropdown sits between Export
   and Settings, with entries for Correlation, Convergence, and Part Search.
-  The menu and its entries are UI scaffolding only for now — no actions are
-  wired up yet.
+  Correlation and Convergence are UI scaffolding only for now; Part Search is
+  functional (see above).
 - **Unit conversion for reports and monitor plots** — Settings → Reports and
   Settings → Plots each gain a "Unit system" dropdown (Default / SI /
   Imperial) applied to the live views (reports table, including comparison

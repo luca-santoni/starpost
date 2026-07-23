@@ -544,7 +544,8 @@ class MainWindow(QMainWindow):
         tools_menu = BarMenu(self._tools_button, owner=self._tools_button, sibling_bar=tb)
         tools_menu.addAction("Correlation")
         tools_menu.addAction("Convergence")
-        tools_menu.addAction("Part Search")
+        part_search_act = tools_menu.addAction("Part Search")
+        part_search_act.triggered.connect(self._open_part_search)
         self._tools_button.setMenu(tools_menu)
         self._tools_menu = tools_menu
         tb.addWidget(self._tools_button)
@@ -1550,6 +1551,26 @@ class MainWindow(QMainWindow):
         ]
         total = sum(sim_csv_size(r) for r in results)
         DataFolderPropertiesDialog(name, total, len(data_names), self).exec()
+
+    def _open_part_search(self) -> None:
+        """Tools → Part Search: open the non-modal window for finding which
+        loaded data sets contain a given part (reads cached parts only)."""
+        from starpost.gui.views.part_search_dialog import PartSearchDialog
+
+        dlg = getattr(self, "_part_search_dialog", None)
+        if dlg is not None:
+            try:
+                visible = dlg.isVisible()
+            except RuntimeError:
+                visible = False  # underlying C++ dialog already deleted
+            if visible:
+                dlg.reload()
+                dlg.raise_()
+                dlg.activateWindow()
+                return
+            dlg.deleteLater()  # drop the stale hidden instance before replacing
+        self._part_search_dialog = PartSearchDialog(self.store, self)
+        self._part_search_dialog.show()
 
     def _import_data(self) -> None:
         """'Import' (Data tab): load one or more portable StarPost data CSVs

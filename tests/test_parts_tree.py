@@ -2,7 +2,11 @@
 alphabetically sorted tree matching STAR-CCM+'s Geometry > Parts display.
 Fixtures use the real path format observed on the 2506 install."""
 from starpost.data.models import PropertyGroup, SimProperties
-from starpost.data.parts_tree import build_parts_tree
+from starpost.data.parts_tree import (
+    build_parts_tree,
+    iter_part_names,
+    matching_parts,
+)
 
 
 def _g(section, name, *entries):
@@ -139,3 +143,30 @@ def test_no_properties_or_no_part_data_is_empty():
     assert build_parts_tree(SimProperties()).empty
     only_mesh = SimProperties(groups=[_g("mesh", "", ("cell_count", "5"))])
     assert build_parts_tree(only_mesh).empty
+
+
+def test_iter_part_names_includes_composites_and_leaves():
+    names = iter_part_names(build_parts_tree(_props()))
+    # Composites (roots) and their leaves are all present.
+    assert "Tires" in names            # composite
+    assert "Front tire" in names       # nested leaf
+    assert "wing front 5" in names     # nested leaf
+    assert "SDM25-Body-CFD-12" in names  # top-level leaf/root
+
+
+def test_matching_parts_is_case_insensitive_substring():
+    tree = build_parts_tree(_props())
+    assert matching_parts(tree, "tire") == ["Tires", "Front tire"]
+    assert matching_parts(tree, "TIRE") == ["Tires", "Front tire"]
+
+
+def test_matching_parts_empty_query_returns_all():
+    tree = build_parts_tree(_props())
+    assert matching_parts(tree, "") == iter_part_names(tree)
+    assert matching_parts(tree, "   ") == iter_part_names(tree)
+
+
+def test_matching_parts_no_part_data_is_empty():
+    empty = build_parts_tree(None)
+    assert iter_part_names(empty) == []
+    assert matching_parts(empty, "tire") == []

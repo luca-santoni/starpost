@@ -2924,3 +2924,27 @@ def test_file_menu_actions_call_slots(app, monkeypatch):
         action.trigger()
     assert calls == ["files", "folder", "import", "export"]
     win.close()
+
+
+def test_part_search_action_opens_window(app):
+    """Tools → Part Search opens (and stashes) a PartSearchDialog."""
+    from starpost.gui.views.part_search_dialog import PartSearchDialog
+
+    win = mw.MainWindow(Settings())
+    act = next(a for a in win._tools_menu.actions() if a.text() == "Part Search")
+    act.trigger()
+    assert isinstance(win._part_search_dialog, PartSearchDialog)
+    win._part_search_dialog.close()
+    win.close()
+
+
+def test_part_search_reopen_reuses_visible_window(app):
+    """Re-triggering while the window is open reuses it rather than duplicating."""
+    win = mw.MainWindow(Settings())
+    act = next(a for a in win._tools_menu.actions() if a.text() == "Part Search")
+    act.trigger()
+    first = win._part_search_dialog
+    act.trigger()
+    assert win._part_search_dialog is first
+    win._part_search_dialog.close()
+    win.close()
