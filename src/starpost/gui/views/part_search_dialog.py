@@ -51,6 +51,7 @@ class PartSearchDialog(QDialog):
         # (sim_name, sim_path, parts_tree) snapshot; refreshed on reopen.
         self._sims: list[tuple[str, str, object]] = []
         self.reload()
+        self._search.setFocus()
 
     def reload(self) -> None:
         """Re-snapshot the loaded data sets and re-filter. Called on reopen so a

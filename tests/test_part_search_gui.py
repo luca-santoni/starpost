@@ -84,3 +84,49 @@ def test_rows_carry_sim_path_for_double_click(app):
     child = top.child(0)
     assert top.data(0, Qt.ItemDataRole.UserRole) == "/a/caseA.sim"
     assert child.data(0, Qt.ItemDataRole.UserRole) == "/a/caseA.sim"
+
+
+def test_double_click_opens_properties_for_the_row_sim(app, monkeypatch):
+    import starpost.gui.views.properties_dialog as pd
+
+    calls = {}
+
+    class _StubDialog:
+        def __init__(self, path, result=None, parent=None, size_bytes=None):
+            calls["path"] = str(path)
+            calls["sim"] = getattr(result, "sim_name", None)
+
+        def exec(self):
+            calls["exec"] = True
+
+    monkeypatch.setattr(pd, "PropertiesDialog", _StubDialog)
+
+    store = _Store([_sim("/a/caseA.sim", "Front tire")])
+    dlg = PartSearchDialog(store)
+    child = dlg._tree.invisibleRootItem().child(0).child(0)
+    dlg._open_properties(child, 0)
+    assert calls == {"path": "/a/caseA.sim", "sim": "caseA", "exec": True}
+
+
+def test_double_click_missing_result_is_noop(app, monkeypatch):
+    import starpost.gui.views.properties_dialog as pd
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    opened = {}
+
+    class _StubDialog:
+        def __init__(self, *a, **k):
+            opened["made"] = True
+
+        def exec(self):
+            pass
+
+    monkeypatch.setattr(pd, "PropertiesDialog", _StubDialog)
+    store = _Store([_sim("/a/caseA.sim", "Front tire")])
+    dlg = PartSearchDialog(store)
+    ghost = QTreeWidgetItem(["gone"])
+    ghost.setData(0, Qt.ItemDataRole.UserRole, "/a/does-not-exist.sim")
+    dlg._open_properties(ghost, 0)
+    assert opened == {}

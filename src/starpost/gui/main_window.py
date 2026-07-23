@@ -1558,11 +1558,17 @@ class MainWindow(QMainWindow):
         from starpost.gui.views.part_search_dialog import PartSearchDialog
 
         dlg = getattr(self, "_part_search_dialog", None)
-        if dlg is not None and dlg.isVisible():
-            dlg.reload()
-            dlg.raise_()
-            dlg.activateWindow()
-            return
+        if dlg is not None:
+            try:
+                visible = dlg.isVisible()
+            except RuntimeError:
+                visible = False  # underlying C++ dialog already deleted
+            if visible:
+                dlg.reload()
+                dlg.raise_()
+                dlg.activateWindow()
+                return
+            dlg.deleteLater()  # drop the stale hidden instance before replacing
         self._part_search_dialog = PartSearchDialog(self.store, self)
         self._part_search_dialog.show()
 
