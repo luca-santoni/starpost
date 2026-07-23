@@ -531,6 +531,24 @@ class MainWindow(QMainWindow):
         self._refresh_menu_icons()
         export_action = tb.addAction("Export…", self._export)
         export_action.setToolTip("Export the selected reports and plots to files")
+
+        # "Tools" dropdown (click-opens like Run batch): a home for auxiliary
+        # analyses. The entries are UI-only for now — no slots wired yet.
+        self._tools_button = BarMenuButton()
+        self._tools_button.setObjectName("toolsMenuButton")
+        self._tools_button.setText("Tools")
+        self._tools_button.setAutoRaise(True)
+        self._tools_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._tools_button.setToolTip("Auxiliary analysis tools")
+        tools_menu = BarMenu(self._tools_button, owner=self._tools_button, sibling_bar=tb)
+        tools_menu.addAction("Correlation")
+        tools_menu.addAction("Convergence")
+        tools_menu.addAction("Part Search")
+        self._tools_button.setMenu(tools_menu)
+        self._tools_menu = tools_menu
+        tb.addWidget(self._tools_button)
+
         settings_action = tb.addAction("Settings…", self._open_settings)
         settings_action.setToolTip("Open the application settings")
 

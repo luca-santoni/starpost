@@ -6,6 +6,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### New Features
+- **"Tools" menu in the top bar** — a new toolbar dropdown sits between Export
+  and Settings, with entries for Correlation, Convergence, and Part Search.
+  The menu and its entries are UI scaffolding only for now — no actions are
+  wired up yet.
 - **Unit conversion for reports and monitor plots** — Settings → Reports and
   Settings → Plots each gain a "Unit system" dropdown (Default / SI /
   Imperial) applied to the live views (reports table, including comparison
