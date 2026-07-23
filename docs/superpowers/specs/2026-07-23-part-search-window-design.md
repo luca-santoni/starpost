@@ -49,8 +49,8 @@ New file `src/starpost/gui/views/part_search_dialog.py`.
   parts tree — both composite/group names and leaf parts. Live, on every
   keystroke (`QLineEdit.textChanged`).
 - **Interaction**: double-clicking either a data-set row or a part row opens
-  that sim's existing `PropertiesDialog` (which defaults to showing the Parts
-  tab context), reusing the pattern from `_show_data_properties`.
+  that sim's existing `PropertiesDialog` (which contains the browsable Parts
+  tab), reusing the pattern from `_show_data_properties`.
 - **Data source**: `self.store.all()` filtered to `r.error is None`;
   `build_parts_tree(r.properties)` per sim. Sims extracted before the parts
   feature have empty trees and simply never match — no special-casing.
