@@ -1188,7 +1188,9 @@ class SettingsDialog(QDialog):
         about = QLabel(
             "StarPost is a standalone desktop tool to automate STAR-CCM+ "
             "post-processing. It extracts report values and monitor plots for "
-            "comparison and exports them for spreadsheet manipulation."
+            "comparison and exports them for spreadsheet manipulation. It also "
+            "renders scene stills and records screenplay movies from your "
+            "solved simulations."
         )
         about.setWordWrap(True)
 
