@@ -2950,6 +2950,15 @@ def test_part_search_reopen_reuses_visible_window(app):
     win.close()
 
 
+def test_legend_opacity_applied_by_plot_view_builder(app):
+    # The lazy plot-view builder must apply the persisted legend opacity at
+    # build time, before any _apply_settings_to_views() call. Accessing
+    # win.plot_view triggers the build.
+    win = mw.MainWindow(Settings(legend_opacity=0.6))
+    assert win.plot_view._legend_opacity == 0.6
+    win.close()
+
+
 def test_settings_legend_opacity_applied_to_plot_view(app):
     """The legend_opacity setting is applied to the plot view at build time
     and whenever settings are applied."""
