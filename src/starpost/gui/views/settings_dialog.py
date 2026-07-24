@@ -587,6 +587,11 @@ class SettingsDialog(QDialog):
         self._moving_average_width.setRange(1, 999)
         self._moving_average_width.setValue(10)
 
+        self._legend_opacity = QSpinBox()
+        self._legend_opacity.setRange(0, 100)
+        self._legend_opacity.setSuffix("%")
+        self._legend_opacity.setValue(20)
+
         self._hover_show_name = QCheckBox("Show name when hovering")
 
         self._hover_x_decimals = QSpinBox()
@@ -636,6 +641,14 @@ class SettingsDialog(QDialog):
         ma_hint.setObjectName("hint")
         ma_hint.setWordWrap(True)
         form.addRow("", ma_hint)
+        form.addRow("Legend opacity", self._legend_opacity)
+        lo_hint = QLabel(
+            "Opacity of the box behind the plot legend; lower is more "
+            "see-through, so curves show through it."
+        )
+        lo_hint.setObjectName("hint")
+        lo_hint.setWordWrap(True)
+        form.addRow("", lo_hint)
         form.addRow("", self._hover_show_name)
         hover_hint = QLabel(
             "When selected, monitor names are shown when hovering over a monitor."
@@ -1275,6 +1288,7 @@ class SettingsDialog(QDialog):
         self._hide_empty_monitors.setChecked(d.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{d.monitor_zero_threshold:g}")
         self._moving_average_width.setValue(d.moving_average_width)
+        self._legend_opacity.setValue(round(d.legend_opacity * 100))
         self._hover_show_name.setChecked(d.hover_show_monitor_name)
         self._hover_x_decimals.setValue(d.hover_x_decimals)
         self._hover_y_decimals.setValue(d.hover_y_decimals)
@@ -1617,6 +1631,7 @@ class SettingsDialog(QDialog):
         self._hide_empty_monitors.setChecked(s.hide_empty_monitors)
         self._monitor_zero_threshold.setText(f"{s.monitor_zero_threshold:g}")
         self._moving_average_width.setValue(s.moving_average_width)
+        self._legend_opacity.setValue(round(s.legend_opacity * 100))
         self._hover_show_name.setChecked(s.hover_show_monitor_name)
         self._hover_x_decimals.setValue(s.hover_x_decimals)
         self._hover_y_decimals.setValue(s.hover_y_decimals)
@@ -1698,6 +1713,7 @@ class SettingsDialog(QDialog):
         except ValueError:
             pass  # keep previous value if the field is blank/invalid
         s.moving_average_width = self._moving_average_width.value()
+        s.legend_opacity = self._legend_opacity.value() / 100.0
         s.hover_show_monitor_name = self._hover_show_name.isChecked()
         s.hover_x_decimals = self._hover_x_decimals.value()
         s.hover_y_decimals = self._hover_y_decimals.value()

@@ -65,3 +65,13 @@ def test_reset_restores_unit_systems(app, monkeypatch):
     assert s.plot_unit_system == "default"
     assert dlg._report_unit_system.currentData() == "default"
     assert dlg._plot_unit_system.currentData() == "default"
+
+
+def test_legend_opacity_loads_and_collects(app):
+    s = Settings()
+    s.legend_opacity = 0.5
+    dlg = SettingsDialog(s)
+    assert dlg._legend_opacity.value() == 50
+    dlg._legend_opacity.setValue(35)
+    dlg._on_accept()
+    assert s.legend_opacity == 0.35
