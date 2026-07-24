@@ -81,6 +81,10 @@ hover_show_monitor_name: false
 hover_x_decimals: 0
 hover_y_decimals: 4
 
+# Opacity of the box drawn behind the plot legend (0.0 = fully transparent,
+# 1.0 = solid). Lower values let plot curves show through the legend.
+legend_opacity: 0.2
+
 # Statistics listed in the table shown when Shift+dragging a region on the plot.
 # Available: Avg, Median, Std Dev, Var, Min, Max, Range. Editable in-app via
 # Settings -> Plots -> Statistics.

@@ -232,3 +232,20 @@ def test_unit_system_bad_value_coerces_to_default():
     )
     assert restored.report_unit_system == "default"
     assert restored.plot_unit_system == "default"
+
+
+def test_legend_opacity_default():
+    s = Settings.from_dict({})
+    assert s.legend_opacity == 0.2
+
+
+def test_legend_opacity_round_trip():
+    s = Settings.from_dict({"legend_opacity": 0.5})
+    d = s.to_dict()
+    assert d["legend_opacity"] == 0.5
+    assert Settings.from_dict(d).legend_opacity == 0.5
+
+
+def test_legend_opacity_clamped_on_load():
+    assert Settings.from_dict({"legend_opacity": 1.7}).legend_opacity == 1.0
+    assert Settings.from_dict({"legend_opacity": -0.3}).legend_opacity == 0.0
