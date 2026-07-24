@@ -51,3 +51,13 @@ def test_saved_plot_captures_and_restores_unit_system(app, batch_dialog):
     dlg._plot_unit_system.setCurrentIndex(dlg._plot_unit_system.findData("default"))
     dlg._apply_plot(data)
     assert dlg._plot_unit_system.currentData() == "imperial"
+
+
+def test_saved_plot_captures_and_restores_legend_opacity(app, batch_dialog):
+    dlg = batch_dialog
+    dlg._legend_opacity.setValue(50)
+    data = dlg._capture_plot()
+    assert data["legend_opacity"] == 0.5
+    dlg._legend_opacity.setValue(0)
+    dlg._apply_plot(data)
+    assert dlg._legend_opacity.value() == 50

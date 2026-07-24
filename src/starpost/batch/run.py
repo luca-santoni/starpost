@@ -112,6 +112,7 @@ def render_saved_plot(result: SimResult, plot_data: dict, settings, path) -> boo
     view.set_grid_visible(bool(plot_data.get("grid", True)))
     for key, setter in (
         ("legend_scale", view.set_legend_scale),
+        ("legend_opacity", view.set_legend_opacity),
         ("line_width", view.set_line_width),
         ("title_size", view.set_title_size),
         ("axis_label_size", view.set_axis_label_size),

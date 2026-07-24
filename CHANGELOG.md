@@ -6,6 +6,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### New Features
+- **Legend transparency** — the box behind a plot legend can now be made
+  see-through so curves show through it. Set the default under
+  Settings ▸ Plots ▸ *Legend opacity* (default 20%), and override it per
+  export with the *Legend opacity* slider in the Export and Run batch dialogs.
 - **Reports & Monitors trees in the Properties window** — the General tab now
   lists a data set's reports and monitors as browsable, expandable trees
   instead of bare counts. Reports show by name; monitors are grouped as
