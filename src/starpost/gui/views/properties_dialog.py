@@ -1,8 +1,8 @@
 """'Properties' window for a .sim file / data set: a General tab with its size
-on disk and, once extracted, its report/monitor/iteration counts, a Parts tab
-showing the sim's Geometry > Parts tree, and Mesh / Regions / Physics tabs
-listing the mesh pipeline, regions/boundaries/interfaces and physics setup
-(all read from the extracted sim properties).
+on disk and, once extracted, browsable Reports and Monitors trees plus an
+iteration count, a Parts tab showing the sim's Geometry > Parts tree, and Mesh /
+Regions / Physics tabs listing the mesh pipeline, regions/boundaries/interfaces
+and physics setup (all read from the extracted sim properties).
 """
 from __future__ import annotations
 
