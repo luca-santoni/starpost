@@ -10,6 +10,8 @@ All notable changes to StarPost are recorded here. Versions follow the
   see-through so curves show through it. Set the default under
   Settings ▸ Plots ▸ *Legend opacity* (default 20%), and override it per
   export with the *Legend opacity* slider in the Export and Run batch dialogs.
+  The legend is outlined with a thin border in the foreground colour so its
+  perimeter stays easy to see even when the box is fully transparent.
 - **Reports & Monitors trees in the Properties window** — the General tab now
   lists a data set's reports and monitors as browsable, expandable trees
   instead of bare counts. Reports show by name; monitors are grouped as

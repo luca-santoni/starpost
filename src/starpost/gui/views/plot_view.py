@@ -624,11 +624,15 @@ class PlotView(QWidget):
 
     def _apply_legend_brush(self) -> None:
         """Paint the legend's background box in the current plot-background
-        colour at the chosen opacity. Re-applied on theme change so the box
-        matches the (possibly new) background while keeping its opacity."""
+        colour at the chosen opacity, and outline it with a thin border in the
+        foreground colour. Re-applied on theme change so the box matches the
+        (possibly new) background while keeping its opacity. The border stays
+        fully opaque regardless of the fill opacity so the legend's perimeter is
+        always easy to see — even when the box itself is transparent."""
         color = pg.mkColor(self._bg)
         color.setAlpha(round(self._legend_opacity * 255))
         self._legend.setBrush(pg.mkBrush(color))
+        self._legend.setPen(pg.mkPen(self._fg, width=1))
 
     def legend_offset(self) -> tuple[float, float] | None:
         """The legend's position as a fraction (fx, fy) of the plot area, so a
