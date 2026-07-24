@@ -442,6 +442,7 @@ class PlotView(QWidget):
         self._legend.setParentItem(plot_item.vb)
         plot_item.legend = self._legend
         self._legend_scale = 1.0  # legend size multiplier (export menu slider)
+        self._legend_opacity = 0.2  # alpha of the legend's background box (0–1)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
         # Hint shown centred over the plot when nothing is drawn. Kept subtle
@@ -585,6 +586,7 @@ class PlotView(QWidget):
         self._drawn_pair_colors: dict[tuple[str, str], str] = {}
         self._plot.setBackground(self._bg)
         self._style_stats_label()
+        self._apply_legend_brush()
 
     # --- public entry points --------------------------------------------
     def apply_theme(self, mode: str) -> None:
@@ -593,6 +595,7 @@ class PlotView(QWidget):
         self._fg = "#1f1f1f" if light else "#e6e6e6"
         self._bg = "#ffffff" if light else "#1e1e1e"
         self._plot.setBackground(self._bg)
+        self._apply_legend_brush()
         self._style_stats_label()
         for name in ("left", "bottom", "right", "top"):
             ax = self._plot.getAxis(name)
@@ -611,6 +614,21 @@ class PlotView(QWidget):
         the natural size; the factor carries through to the exported image."""
         self._legend_scale = factor
         self._legend.setScale(factor)
+
+    def set_legend_opacity(self, frac: float) -> None:
+        """Set the opacity of the legend's background box (0 = transparent,
+        1 = solid). The box is tinted to the plot background so curves show
+        through it; the value carries through to the exported image."""
+        self._legend_opacity = min(1.0, max(0.0, float(frac)))
+        self._apply_legend_brush()
+
+    def _apply_legend_brush(self) -> None:
+        """Paint the legend's background box in the current plot-background
+        colour at the chosen opacity. Re-applied on theme change so the box
+        matches the (possibly new) background while keeping its opacity."""
+        color = pg.mkColor(self._bg)
+        color.setAlpha(round(self._legend_opacity * 255))
+        self._legend.setBrush(pg.mkBrush(color))
 
     def legend_offset(self) -> tuple[float, float] | None:
         """The legend's position as a fraction (fx, fy) of the plot area, so a

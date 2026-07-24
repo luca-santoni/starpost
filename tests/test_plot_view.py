@@ -313,3 +313,33 @@ def test_set_unit_system_converts_drawn_y_values(app):
     ys = list(pv._curves[-1]["y"])
     assert ys[0] == pytest.approx(22.4808943, rel=1e-6)
     assert ys[1] == pytest.approx(44.9617886, rel=1e-6)
+
+
+# --- legend opacity (background brush alpha) --------------------------------
+def test_set_legend_opacity_sets_brush_alpha(app):
+    pv = PlotView()
+    pv.set_legend_opacity(0.2)
+    assert pv._legend.brush().color().alpha() == 51  # round(0.2 * 255)
+    pv.set_legend_opacity(1.0)
+    assert pv._legend.brush().color().alpha() == 255
+
+
+def test_set_legend_opacity_clamps(app):
+    pv = PlotView()
+    pv.set_legend_opacity(5.0)
+    assert pv._legend.brush().color().alpha() == 255
+    pv.set_legend_opacity(-1.0)
+    assert pv._legend.brush().color().alpha() == 0
+
+
+def test_apply_theme_preserves_opacity_and_retints_box(app):
+    pv = PlotView()
+    pv.set_legend_opacity(0.4)
+    pv.apply_theme("light")
+    c = pv._legend.brush().color()
+    assert c.alpha() == round(0.4 * 255)
+    assert (c.red(), c.green(), c.blue()) == (255, 255, 255)  # light bg
+    pv.apply_theme("dark")
+    c = pv._legend.brush().color()
+    assert c.alpha() == round(0.4 * 255)
+    assert (c.red(), c.green(), c.blue()) == (30, 30, 30)  # dark bg #1e1e1e
