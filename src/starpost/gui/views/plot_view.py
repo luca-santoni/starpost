@@ -442,7 +442,7 @@ class PlotView(QWidget):
         self._legend.setParentItem(plot_item.vb)
         plot_item.legend = self._legend
         self._legend_scale = 1.0  # legend size multiplier (export menu slider)
-        self._legend_opacity = 0.2  # alpha of the legend's background box (0–1)
+        self._legend_opacity = 0.8  # alpha of the legend's background box (0–1)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
         # Hint shown centred over the plot when nothing is drawn. Kept subtle

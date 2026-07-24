@@ -8,7 +8,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 ### New Features
 - **Legend transparency** — the box behind a plot legend can now be made
   see-through so curves show through it. Set the default under
-  Settings ▸ Plots ▸ *Legend opacity* (default 20%), and override it per
+  Settings ▸ Plots ▸ *Legend opacity* (default 80%, a mostly-opaque box that
+  hides the grid behind it like STAR-CCM+'s legend), and override it per
   export with the *Legend opacity* slider in the Export and Run batch dialogs.
   The legend is outlined with a thin border in the foreground colour so its
   perimeter stays easy to see even when the box is fully transparent.

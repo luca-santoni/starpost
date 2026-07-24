@@ -590,7 +590,7 @@ class SettingsDialog(QDialog):
         self._legend_opacity = QSpinBox()
         self._legend_opacity.setRange(0, 100)
         self._legend_opacity.setSuffix("%")
-        self._legend_opacity.setValue(20)
+        self._legend_opacity.setValue(80)
 
         self._hover_show_name = QCheckBox("Show name when hovering")
 

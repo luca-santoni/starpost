@@ -316,6 +316,15 @@ def test_set_unit_system_converts_drawn_y_values(app):
 
 
 # --- legend opacity (background brush alpha) --------------------------------
+def test_default_legend_opacity_is_mostly_opaque(app):
+    # Default models STAR-CCM+'s legend: a mostly-opaque box that hides the
+    # grid behind it. This is also the render-time fallback for old saved
+    # plots with no captured legend_opacity.
+    pv = PlotView()
+    assert pv._legend_opacity == 0.8
+    assert pv._legend.brush().color().alpha() == round(0.8 * 255)  # 204
+
+
 def test_set_legend_opacity_sets_brush_alpha(app):
     pv = PlotView()
     pv.set_legend_opacity(0.2)

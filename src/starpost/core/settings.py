@@ -195,7 +195,7 @@ class Settings:
     # Window size (in points) of the moving average applied when "Smooth data"
     # is enabled under the plot. 1 leaves the data unchanged.
     moving_average_width: int = 10
-    legend_opacity: float = 0.2  # opacity of the plot legend's background box (0–1)
+    legend_opacity: float = 0.8  # opacity of the plot legend's background box (0–1)
     hover_show_monitor_name: bool = False  # include monitor name in the hover label
     hover_x_decimals: int = 0  # decimal places shown for the hover X coordinate
     hover_y_decimals: int = 4  # decimal places shown for the hover Y coordinate
@@ -327,7 +327,7 @@ class Settings:
             hide_empty_monitors=bool(d.get("hide_empty_monitors", True)),
             monitor_zero_threshold=float(d.get("monitor_zero_threshold", 1e-5)),
             moving_average_width=max(1, int(d.get("moving_average_width", 10))),
-            legend_opacity=min(1.0, max(0.0, float(d.get("legend_opacity", 0.2)))),
+            legend_opacity=min(1.0, max(0.0, float(d.get("legend_opacity", 0.8)))),
             hover_show_monitor_name=bool(d.get("hover_show_monitor_name", False)),
             hover_x_decimals=int(d.get("hover_x_decimals", 0)),
             hover_y_decimals=int(d.get("hover_y_decimals", 4)),
