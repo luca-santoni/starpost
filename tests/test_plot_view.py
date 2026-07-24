@@ -341,31 +341,34 @@ def test_set_legend_opacity_clamps(app):
     assert pv._legend.brush().color().alpha() == 0
 
 
-def test_apply_theme_preserves_opacity_and_retints_box(app):
+def test_apply_theme_preserves_opacity_and_repaints_panel(app):
+    # The fill is a theme panel tone (distinct from the plot background) so the
+    # box reads as a solid panel; opacity is preserved across a theme change.
     pv = PlotView()
     pv.set_legend_opacity(0.4)
     pv.apply_theme("light")
     c = pv._legend.brush().color()
     assert c.alpha() == round(0.4 * 255)
-    assert (c.red(), c.green(), c.blue()) == (255, 255, 255)  # light bg
+    assert (c.red(), c.green(), c.blue()) == (240, 240, 240)  # near-white panel
     pv.apply_theme("dark")
     c = pv._legend.brush().color()
     assert c.alpha() == round(0.4 * 255)
-    assert (c.red(), c.green(), c.blue()) == (30, 30, 30)  # dark bg #1e1e1e
+    assert (c.red(), c.green(), c.blue()) == (58, 58, 58)  # raised dark-gray panel
 
 
-def test_legend_has_visible_muted_gray_border(app):
+def test_legend_has_visible_light_gray_border(app):
     from PySide6.QtCore import Qt
 
     pv = PlotView()
     # A faint box must still show a clear perimeter, so the border stays fully
-    # opaque regardless of the fill opacity. It is a fixed mid-gray in both
-    # themes (not the theme foreground), so it never goes stark white in dark
-    # mode.
+    # opaque regardless of the fill opacity. It is a fixed light-gray in both
+    # themes (not the theme foreground), and 2 px wide so it reads clearly above
+    # the 1 px grid lines behind it.
     pv.set_legend_opacity(0.0)
     for mode in ("light", "dark"):
         pv.apply_theme(mode)
         pen = pv._legend.pen()
         assert pen.style() != Qt.PenStyle.NoPen  # a border is drawn
         assert pen.color().alpha() == 255  # edge stays visible even at 0 fill
-        assert (pen.color().red(), pen.color().green(), pen.color().blue()) == (85, 85, 85)
+        assert (pen.color().red(), pen.color().green(), pen.color().blue()) == (153, 153, 153)
+        assert pen.width() == 2  # thicker than the 1 px grid lines
