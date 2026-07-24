@@ -551,6 +551,7 @@ class ExportDialog(QDialog):
         self._preview.set_region_stats(s.region_stats)
         # Theme the preview to the Export default so it matches the Theme combo.
         self._preview.apply_theme(s.export_plot_theme)
+        self._preview.set_legend_opacity(s.legend_opacity)
 
     def _on_tab_changed(self, _index) -> None:
         """Open the preview window beside the Plots tab; hide it otherwise."""
@@ -676,6 +677,15 @@ class ExportDialog(QDialog):
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._on_legend_scale_changed)
 
+        # Legend opacity: 0 (fully transparent box) to 100 (solid), seeded from
+        # the saved Plots setting so it matches the main window's legend.
+        self._legend_opacity = QSlider(Qt.Orientation.Horizontal)
+        self._legend_opacity.setRange(0, 100)
+        _lo = self._settings.legend_opacity if self._settings else 0.2
+        self._legend_opacity.setValue(round(_lo * 100))
+        self._legend_opacity.setToolTip("Opacity of the box behind the plot legend")
+        self._legend_opacity.valueChanged.connect(self._on_legend_opacity_changed)
+
         # Line thickness: a slider that sets the pen width of every line on the
         # plot, from thin (left) to thick (right). Opens at the default width.
         self._line_width = QSlider(Qt.Orientation.Horizontal)
@@ -722,6 +732,7 @@ class ExportDialog(QDialog):
         form.addRow("Axis label size", self._axis_label_size)
         form.addRow("Theme", self._plot_theme)
         form.addRow("Legend scale", self._legend_scale)
+        form.addRow("Legend opacity", self._legend_opacity)
         form.addRow("Line thickness", self._line_width)
         form.addRow("Show grid", self._show_grid)
         form.addRow("Format", self._plot_format)
@@ -735,6 +746,9 @@ class ExportDialog(QDialog):
 
     def _on_legend_scale_changed(self, value: int) -> None:
         self._preview.set_legend_scale(self._legend_factor(value))
+
+    def _on_legend_opacity_changed(self, value: int) -> None:
+        self._preview.set_legend_opacity(value / 100.0)
 
     @staticmethod
     def _line_width_for(value: int) -> float:

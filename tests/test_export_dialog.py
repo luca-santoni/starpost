@@ -80,3 +80,31 @@ def test_export_dialog_seeds_legend_offset(app):
         assert abs(off[0] - 0.65) < 0.03 and abs(off[1] - 0.25) < 0.03
     finally:
         dlg.deleteLater()
+
+
+def test_export_dialog_seeds_legend_opacity_from_settings(app):
+    from starpost.core.settings import Settings
+    from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
+    from starpost.gui.views.export_dialog import ExportDialog
+
+    s = Settings()
+    s.legend_opacity = 0.5
+    result = SimResult(
+        sim_path="/c/a.sim",
+        plots=[MonitorPlot("G", [PlotSeries("A", [1, 2, 3], [1, 2, 3])],
+                           kind=PlotKind.FORCE)],
+    )
+    dlg = ExportDialog(
+        data_names=["a"], checked_names=["a"],
+        monitor_groups={"G": ["A"]}, checked_groups=["G"],
+        checked_monitors={"G": ["A"]}, results=[result], settings=s,
+    )
+    try:
+        dlg.show()
+        dlg._tabs.setCurrentWidget(dlg._plots_tab)  # builds + seeds the preview
+        for _ in range(6):
+            app.processEvents()
+        assert dlg._legend_opacity.value() == 50
+        assert dlg._preview._legend_opacity == 0.5
+    finally:
+        dlg.deleteLater()
