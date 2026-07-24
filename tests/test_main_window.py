@@ -2948,3 +2948,13 @@ def test_part_search_reopen_reuses_visible_window(app):
     assert win._part_search_dialog is first
     win._part_search_dialog.close()
     win.close()
+
+
+def test_settings_legend_opacity_applied_to_plot_view(app):
+    """The legend_opacity setting is applied to the plot view at build time
+    and whenever settings are applied."""
+    win = mw.MainWindow(Settings())
+    win.settings.legend_opacity = 0.6
+    win._apply_settings_to_views()
+    assert win.plot_view._legend_opacity == 0.6
+    win.close()
