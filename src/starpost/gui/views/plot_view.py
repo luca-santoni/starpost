@@ -72,6 +72,11 @@ class _StayOpenMenu(QMenu):
 # readout to appear — keeps the tooltip from showing when nowhere near a line.
 _HOVER_PX = 25.0
 
+# Colour of the thin border drawn around the legend box. A fixed mid-gray
+# (rather than the theme foreground) so the edge reads as a subtle outline on
+# both light and dark plots without going stark white in dark mode.
+_LEGEND_BORDER = "#555555"
+
 
 @dataclass(frozen=True)
 class RegionStat:
@@ -624,15 +629,16 @@ class PlotView(QWidget):
 
     def _apply_legend_brush(self) -> None:
         """Paint the legend's background box in the current plot-background
-        colour at the chosen opacity, and outline it with a thin border in the
-        foreground colour. Re-applied on theme change so the box matches the
-        (possibly new) background while keeping its opacity. The border stays
-        fully opaque regardless of the fill opacity so the legend's perimeter is
-        always easy to see — even when the box itself is transparent."""
+        colour at the chosen opacity, and outline it with a thin muted-gray
+        border. Re-applied on theme change so the box matches the (possibly new)
+        background while keeping its opacity. The border is a fixed mid-gray
+        (readable on both light and dark plots) and stays fully opaque
+        regardless of the fill opacity, so the legend's perimeter is always easy
+        to see — even when the box itself is transparent."""
         color = pg.mkColor(self._bg)
         color.setAlpha(round(self._legend_opacity * 255))
         self._legend.setBrush(pg.mkBrush(color))
-        self._legend.setPen(pg.mkPen(self._fg, width=1))
+        self._legend.setPen(pg.mkPen(_LEGEND_BORDER, width=1))
 
     def legend_offset(self) -> tuple[float, float] | None:
         """The legend's position as a fraction (fx, fy) of the plot area, so a

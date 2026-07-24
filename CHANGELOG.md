@@ -11,8 +11,9 @@ All notable changes to StarPost are recorded here. Versions follow the
   Settings ▸ Plots ▸ *Legend opacity* (default 80%, a mostly-opaque box that
   hides the grid behind it like STAR-CCM+'s legend), and override it per
   export with the *Legend opacity* slider in the Export and Run batch dialogs.
-  The legend is outlined with a thin border in the foreground colour so its
-  perimeter stays easy to see even when the box is fully transparent.
+  The legend is outlined with a thin muted-gray border so its perimeter stays
+  easy to see on both light and dark plots, even when the box is fully
+  transparent.
 - **Reports & Monitors trees in the Properties window** — the General tab now
   lists a data set's reports and monitors as browsable, expandable trees
   instead of bare counts. Reports show by name; monitors are grouped as

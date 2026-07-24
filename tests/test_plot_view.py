@@ -354,18 +354,18 @@ def test_apply_theme_preserves_opacity_and_retints_box(app):
     assert (c.red(), c.green(), c.blue()) == (30, 30, 30)  # dark bg #1e1e1e
 
 
-def test_legend_has_visible_border_tracking_theme(app):
+def test_legend_has_visible_muted_gray_border(app):
     from PySide6.QtCore import Qt
 
     pv = PlotView()
     # A faint box must still show a clear perimeter, so the border stays fully
-    # opaque regardless of the fill opacity and follows the theme foreground.
+    # opaque regardless of the fill opacity. It is a fixed mid-gray in both
+    # themes (not the theme foreground), so it never goes stark white in dark
+    # mode.
     pv.set_legend_opacity(0.0)
-    pv.apply_theme("light")
-    pen = pv._legend.pen()
-    assert pen.style() != Qt.PenStyle.NoPen  # a border is drawn
-    assert pen.color().alpha() == 255  # edge stays visible even at 0 fill
-    assert (pen.color().red(), pen.color().green(), pen.color().blue()) == (31, 31, 31)
-    pv.apply_theme("dark")
-    c = pv._legend.pen().color()
-    assert (c.red(), c.green(), c.blue()) == (230, 230, 230)  # dark fg #e6e6e6
+    for mode in ("light", "dark"):
+        pv.apply_theme(mode)
+        pen = pv._legend.pen()
+        assert pen.style() != Qt.PenStyle.NoPen  # a border is drawn
+        assert pen.color().alpha() == 255  # edge stays visible even at 0 fill
+        assert (pen.color().red(), pen.color().green(), pen.color().blue()) == (85, 85, 85)
