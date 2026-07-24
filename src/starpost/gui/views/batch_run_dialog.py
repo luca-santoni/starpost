@@ -361,6 +361,9 @@ class _SavedPlotPropertiesDialog(QDialog):
         def _px(v) -> str:
             return f"{v:g} px" if v is not None else "—"
 
+        def _pct(v) -> str:
+            return f"{round(v * 100)}%" if v is not None else "—"
+
         def _unit_system(v) -> str:
             return {
                 "si": "SI", "imperial": "Imperial",
@@ -379,6 +382,7 @@ class _SavedPlotPropertiesDialog(QDialog):
             "Unit system:", QLabel(_unit_system(data.get("unit_system") or "default"))
         )
         form.addRow("Legend scale:", QLabel(_scale(data.get("legend_scale"))))
+        form.addRow("Legend opacity:", QLabel(_pct(data.get("legend_opacity"))))
         form.addRow("Line thickness:", QLabel(_px(data.get("line_width"))))
         form.addRow("File format:", QLabel(_or_dash(data.get("format", ""))))
 
@@ -1709,6 +1713,15 @@ class BatchRunDialog(QDialog):
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._preview_set_legend_scale)
 
+        # Legend opacity: 0 (transparent box) to 100 (solid), seeded from the
+        # saved Plots setting — same control as the Export dialog.
+        self._legend_opacity = QSlider(Qt.Orientation.Horizontal)
+        self._legend_opacity.setRange(0, 100)
+        _lo = self._settings.legend_opacity if self._settings else 0.2
+        self._legend_opacity.setValue(round(_lo * 100))
+        self._legend_opacity.setToolTip("Opacity of the box behind the plot legend")
+        self._legend_opacity.valueChanged.connect(self._preview_set_legend_opacity)
+
         # Line thickness: pen width of every line, thin (left) to thick (right).
         self._line_width = QSlider(Qt.Orientation.Horizontal)
         self._line_width.setRange(0, 100)
@@ -1732,6 +1745,7 @@ class BatchRunDialog(QDialog):
         form.addRow("Theme", self._plot_theme)
         form.addRow("Unit system", self._plot_unit_system)
         form.addRow("Legend scale", self._legend_scale)
+        form.addRow("Legend opacity", self._legend_opacity)
         form.addRow("Line thickness", self._line_width)
         form.addRow(self._plot_grid)
         form.addRow("Format", self._plot_format)
@@ -1790,6 +1804,7 @@ class BatchRunDialog(QDialog):
         )
         self._preview.set_region_stats(s.region_stats)
         self._preview.apply_theme(s.export_plot_theme)
+        self._preview.set_legend_opacity(s.legend_opacity)
         idx = self._plot_theme.findData(s.export_plot_theme)
         if idx >= 0:
             self._plot_theme.setCurrentIndex(idx)
@@ -1845,6 +1860,7 @@ class BatchRunDialog(QDialog):
             "theme": self._plot_theme.currentData(),
             "unit_system": self._plot_unit_system.currentData(),
             "legend_scale": self._legend_factor(self._legend_scale.value()),
+            "legend_opacity": self._legend_opacity.value() / 100.0,
             "legend_offset": list(legend_offset) if legend_offset else None,
             "line_width": self._line_width_for(self._line_width.value()),
             "grid": self._plot_grid.isChecked(),
@@ -1895,6 +1911,8 @@ class BatchRunDialog(QDialog):
             )
         if data.get("legend_scale") is not None:
             self._legend_scale.setValue(self._legend_slider(data["legend_scale"]))
+        if data.get("legend_opacity") is not None:
+            self._legend_opacity.setValue(round(data["legend_opacity"] * 100))
         if data.get("line_width") is not None:
             self._line_width.setValue(self._line_width_slider(data["line_width"]))
         ui = self._plot_unit_system.findData(data.get("unit_system") or "default")
@@ -2193,6 +2211,9 @@ class BatchRunDialog(QDialog):
 
     def _preview_set_legend_scale(self, value) -> None:
         self._preview.set_legend_scale(self._legend_factor(value))
+
+    def _preview_set_legend_opacity(self, value) -> None:
+        self._preview.set_legend_opacity(value / 100.0)
 
     def _preview_set_title_size(self, value) -> None:
         self._preview.set_title_size(
