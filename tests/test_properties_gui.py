@@ -1,5 +1,5 @@
-"""Tabbed Properties dialog: General tab carries the classic summary, the
-Parts tab shows the Geometry > Parts tree from extracted sim properties."""
+"""Tabbed Properties dialog: General tab shows browsable Reports and Monitors
+trees plus an iteration count; Parts tab shows the Geometry > Parts tree."""
 import pytest
 
 from starpost.data.models import (
@@ -55,15 +55,15 @@ def test_dialog_has_general_and_parts_tabs(app, tmp_path):
     assert dlg.windowTitle() == "Properties — caseA.sim"
 
 
-def test_general_tab_keeps_classic_summary(app, tmp_path):
-    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result(),
-                           size_bytes=2048)
+def test_general_tab_keeps_summary_form(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result(), size_bytes=2048)
     general = dlg.tabs.widget(0)
     texts = _labels(general)
     assert "File size" in texts and "2.0 KB" in texts
-    assert "Reports" in texts and "1" in texts
-    assert "Monitors" in texts
     assert "Iterations" in texts and "2" in texts
+    # The old flat count rows are gone; counts now live in the tree headings.
+    assert "Reports (1)" in texts
+    assert any(t.startswith("Monitors — ") for t in texts)
 
 
 def test_general_tab_unextracted_note(app, tmp_path):
@@ -71,6 +71,36 @@ def test_general_tab_unextracted_note(app, tmp_path):
     texts = _labels(dlg.tabs.widget(0))
     assert any("Open the file to extract" in t for t in texts)
     assert "—" in texts
+
+
+def test_reports_tree_lists_report_names(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    tree = dlg.tabs.widget(0).reports_tree
+    assert tree is not None
+    names = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
+    assert names == ["Drag"]
+
+
+def test_monitors_tree_has_plots_with_series_children(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    tree = dlg.tabs.widget(0).monitors_tree
+    assert tree is not None and tree.topLevelItemCount() == 1
+    plot = tree.topLevelItem(0)
+    assert plot.text(0) == "Residuals"
+    assert [plot.child(i).text(0) for i in range(plot.childCount())] == ["Continuity"]
+
+
+def test_monitors_heading_counts_plots_and_series(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    texts = _labels(dlg.tabs.widget(0))
+    assert "Monitors — 1 plot, 1 series" in texts
+
+
+def test_general_tab_unextracted_has_no_trees(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", None)
+    general = dlg.tabs.widget(0)
+    assert general.reports_tree is None
+    assert general.monitors_tree is None
 
 
 def test_parts_tab_shows_the_tree(app, tmp_path):
@@ -215,3 +245,47 @@ def test_new_tabs_without_data_show_reextract_note(app, tmp_path):
         tab = dlg.tabs.widget(index)
         assert tab.tree is None
         assert any("Re-extract" in t for t in _labels(tab)), what
+
+
+def test_multi_report_multi_plot_with_series_ordering(app, tmp_path):
+    """Assert reports and monitors maintain list order; heading counts correctly."""
+    res = SimResult(
+        sim_path="/cases/caseA.sim",
+        reports=[
+            Report(name="Drag", value=12.5, units="N"),
+            Report(name="Lift", value=25.0, units="N"),
+        ],
+        plots=[
+            MonitorPlot(name="Residuals",
+                       series=[PlotSeries(name="Continuity",
+                                         x=[1.0, 2.0], y=[0.1, 0.2])]),
+            MonitorPlot(name="Forces",
+                       series=[PlotSeries(name="X", x=[1.0, 2.0], y=[1.0, 2.0]),
+                              PlotSeries(name="Y", x=[1.0, 2.0], y=[3.0, 4.0])]),
+        ],
+    )
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", res)
+    general = dlg.tabs.widget(0)
+
+    # Reports tree: top-level names in list order
+    reports_tree = general.reports_tree
+    report_names = [reports_tree.topLevelItem(i).text(0)
+                    for i in range(reports_tree.topLevelItemCount())]
+    assert report_names == ["Drag", "Lift"]
+
+    # Monitors tree: 2 top-level plots in list order
+    monitors_tree = general.monitors_tree
+    assert monitors_tree.topLevelItemCount() == 2
+    plot_names = [monitors_tree.topLevelItem(i).text(0)
+                  for i in range(monitors_tree.topLevelItemCount())]
+    assert plot_names == ["Residuals", "Forces"]
+
+    # Multi-series plot (Forces) children in series order
+    forces_plot = monitors_tree.topLevelItem(1)
+    series_names = [forces_plot.child(i).text(0)
+                    for i in range(forces_plot.childCount())]
+    assert series_names == ["X", "Y"]
+
+    # Monitors heading counts 2 plots, 3 series total
+    texts = _labels(general)
+    assert "Monitors — 2 plots, 3 series" in texts

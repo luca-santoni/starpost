@@ -6,6 +6,11 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### New Features
+- **Reports & Monitors trees in the Properties window** — the General tab now
+  lists a data set's reports and monitors as browsable, expandable trees
+  instead of bare counts. Reports show by name; monitors are grouped as
+  plot ▸ series, matching STAR-CCM+'s own structure. File size and Iterations
+  stay as a summary above them. Reads cached data only — no STAR-CCM+ re-run.
 - **Part Search window** — Tools → Part Search opens a searchable window: type
   part-name text into the search bar and the list of loaded data sets filters
   to only those containing a matching part, expanded to show which parts

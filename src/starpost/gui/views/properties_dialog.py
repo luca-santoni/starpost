@@ -1,8 +1,8 @@
 """'Properties' window for a .sim file / data set: a General tab with its size
-on disk and, once extracted, its report/monitor/iteration counts, a Parts tab
-showing the sim's Geometry > Parts tree, and Mesh / Regions / Physics tabs
-listing the mesh pipeline, regions/boundaries/interfaces and physics setup
-(all read from the extracted sim properties).
+on disk and, once extracted, browsable Reports and Monitors trees plus an
+iteration count, a Parts tab showing the sim's Geometry > Parts tree, and Mesh /
+Regions / Physics tabs listing the mesh pipeline, regions/boundaries/interfaces
+and physics setup (all read from the extracted sim properties).
 """
 from __future__ import annotations
 
@@ -50,9 +50,7 @@ class PropertiesDialog(QDialog):
         self.setWindowTitle(f"Properties — {path.name}")
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(
-            _general_tab(path, result, size_bytes), "General"
-        )
+        self.tabs.addTab(_GeneralTab(path, result, size_bytes), "General")
         self.tabs.addTab(_PartsTab(result), "Parts")
         props = result.properties if result is not None else None
         self.tabs.addTab(_RowsTab(build_mesh_rows(props), "mesh"), "Mesh")
@@ -71,49 +69,88 @@ class PropertiesDialog(QDialog):
         self.resize(520, 400)
 
 
-def _general_tab(path: Path, result, size_bytes: int | None) -> QWidget:
-    """The classic summary form: file size and, once the file has been
-    extracted, its report/monitor/iteration counts."""
-    # When size_bytes is given (e.g. the Data tab passes the data set's
-    # portable-CSV size), use it; otherwise measure the file on disk.
-    if size_bytes is not None:
-        size = _human_size(size_bytes)
-    else:
-        try:
-            size = _human_size(path.stat().st_size)
-        except OSError:  # file moved/deleted/unreadable
-            size = "—"
+def _count_phrase(n: int, noun: str) -> str:
+    """`"1 plot"` / `"3 plots"` — singular noun for exactly one. Nouns already
+    ending in "s" (e.g. "series") are left unpluralized."""
+    if n == 1 or noun.endswith("s"):
+        return f"{n} {noun}"
+    return f"{n} {noun}s"
 
-    # Reports/monitors/iterations only exist once the file is extracted. A
-    # monitor is a single series; iterations is the longest series' length.
-    extracted = result is not None and result.error is None
-    if extracted:
-        reports = str(len(result.reports))
-        monitors = str(sum(len(p.series) for p in result.plots))
-        iterations = str(
-            max(
-                (len(s.x) for p in result.plots for s in p.series),
-                default=0,
-            )
+
+class _GeneralTab(QWidget):
+    """The summary tab: File size and Iterations as a small form, plus a
+    Reports tree (names) and a Monitors tree (plot ▸ series). ``reports_tree``
+    and ``monitors_tree`` are None until the file has been extracted."""
+
+    def __init__(self, path: Path, result, size_bytes: int | None, parent=None) -> None:
+        super().__init__(parent)
+        self.reports_tree = None
+        self.monitors_tree = None
+
+        # When size_bytes is given (e.g. the Data tab passes the data set's
+        # portable-CSV size), use it; otherwise measure the file on disk.
+        if size_bytes is not None:
+            size = _human_size(size_bytes)
+        else:
+            try:
+                size = _human_size(path.stat().st_size)
+            except OSError:  # file moved/deleted/unreadable
+                size = "—"
+
+        # Reports/monitors/iterations only exist once the file is extracted.
+        # Iterations is the longest series' length.
+        extracted = result is not None and result.error is None
+        iterations = (
+            str(max((len(s.x) for p in result.plots for s in p.series), default=0))
+            if extracted
+            else "—"
         )
-    else:
-        reports = monitors = iterations = "—"
 
-    form = QFormLayout()
-    form.addRow("File size", QLabel(size))
-    form.addRow("Reports", QLabel(reports))
-    form.addRow("Monitors", QLabel(monitors))
-    form.addRow("Iterations", QLabel(iterations))
+        form = QFormLayout()
+        form.addRow("File size", QLabel(size))
+        form.addRow("Iterations", QLabel(iterations))
 
-    tab = QWidget()
-    layout = QVBoxLayout(tab)
-    layout.addLayout(form)
-    if not extracted:
-        note = QLabel("Open the file to extract its reports and monitors.")
-        note.setWordWrap(True)
-        layout.addWidget(note)
-    layout.addStretch(1)
-    return tab
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+
+        if not extracted:
+            note = QLabel("Open the file to extract its reports and monitors.")
+            note.setWordWrap(True)
+            layout.addWidget(note)
+            layout.addStretch(1)
+            return
+
+        # Reports section: a heading with the count, then a names-only tree.
+        layout.addWidget(QLabel(f"Reports ({len(result.reports)})"))
+        self.reports_tree = _name_tree()
+        for report in result.reports:
+            self.reports_tree.addTopLevelItem(QTreeWidgetItem([report.name]))
+        layout.addWidget(self.reports_tree)
+
+        # Monitors section: heading counts plots and series; tree is plot ▸ series.
+        series_total = sum(len(p.series) for p in result.plots)
+        heading = (
+            f"Monitors — {_count_phrase(len(result.plots), 'plot')}, "
+            f"{_count_phrase(series_total, 'series')}"
+        )
+        layout.addWidget(QLabel(heading))
+        self.monitors_tree = _name_tree()
+        for plot in result.plots:
+            plot_item = QTreeWidgetItem([plot.name])
+            for s in plot.series:
+                plot_item.addChild(QTreeWidgetItem([s.name]))
+            self.monitors_tree.addTopLevelItem(plot_item)
+        layout.addWidget(self.monitors_tree)
+
+
+def _name_tree() -> QTreeWidget:
+    """A single-column, header-hidden, alternating-row tree for name lists —
+    the shared look of the General tab's Reports and Monitors trees."""
+    tree = QTreeWidget()
+    tree.setColumnCount(1)
+    tree.setHeaderHidden(True)
+    tree.setAlternatingRowColors(True)
+    return tree
 
 
 class _PartsTab(QWidget):
