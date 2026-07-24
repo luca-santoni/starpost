@@ -55,15 +55,15 @@ def test_dialog_has_general_and_parts_tabs(app, tmp_path):
     assert dlg.windowTitle() == "Properties — caseA.sim"
 
 
-def test_general_tab_keeps_classic_summary(app, tmp_path):
-    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result(),
-                           size_bytes=2048)
+def test_general_tab_keeps_summary_form(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result(), size_bytes=2048)
     general = dlg.tabs.widget(0)
     texts = _labels(general)
     assert "File size" in texts and "2.0 KB" in texts
-    assert "Reports" in texts and "1" in texts
-    assert "Monitors" in texts
     assert "Iterations" in texts and "2" in texts
+    # The old flat count rows are gone; counts now live in the tree headings.
+    assert "Reports (1)" in texts
+    assert any(t.startswith("Monitors — ") for t in texts)
 
 
 def test_general_tab_unextracted_note(app, tmp_path):
@@ -71,6 +71,36 @@ def test_general_tab_unextracted_note(app, tmp_path):
     texts = _labels(dlg.tabs.widget(0))
     assert any("Open the file to extract" in t for t in texts)
     assert "—" in texts
+
+
+def test_reports_tree_lists_report_names(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    tree = dlg.tabs.widget(0).reports_tree
+    assert tree is not None
+    names = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
+    assert names == ["Drag"]
+
+
+def test_monitors_tree_has_plots_with_series_children(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    tree = dlg.tabs.widget(0).monitors_tree
+    assert tree is not None and tree.topLevelItemCount() == 1
+    plot = tree.topLevelItem(0)
+    assert plot.text(0) == "Residuals"
+    assert [plot.child(i).text(0) for i in range(plot.childCount())] == ["Continuity"]
+
+
+def test_monitors_heading_counts_plots_and_series(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", _result())
+    texts = _labels(dlg.tabs.widget(0))
+    assert "Monitors — 1 plot, 1 series" in texts
+
+
+def test_general_tab_unextracted_has_no_trees(app, tmp_path):
+    dlg = PropertiesDialog(tmp_path / "caseA.sim", None)
+    general = dlg.tabs.widget(0)
+    assert general.reports_tree is None
+    assert general.monitors_tree is None
 
 
 def test_parts_tab_shows_the_tree(app, tmp_path):
