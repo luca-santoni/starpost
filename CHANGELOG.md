@@ -40,6 +40,10 @@ All notable changes to StarPost are recorded here. Versions follow the
   area, volume, density, and angular velocity.
 
 ### Improvements
+- **Unbuilt Tools entries marked "(coming soon)"** — Tools ▸ *Correlation* and
+  *Convergence* have no implementation yet, so they now read
+  "Correlation (coming soon)" / "Convergence (coming soon)" and are greyed out
+  instead of looking like working entries that do nothing when clicked.
 - **Smaller default legend** — plot legends now draw at 75% of pyqtgraph's
   natural size, taking up roughly half the plot area they did before. The
   Export and Run batch dialogs open their *Legend scale* sliders at the same

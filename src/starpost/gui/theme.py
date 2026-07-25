@@ -394,6 +394,10 @@ QMenu {
 }
 QMenu::item { padding: 4px 22px 4px 10px; }
 QMenu::item:selected { background: $accent; color: $on_accent; }
+/* QMenu's own `color` above would otherwise paint disabled entries (e.g. the
+   Tools dropdown's "coming soon" placeholders) in the normal text colour. */
+QMenu::item:disabled { color: $dis_text; }
+QMenu::item:disabled:selected { background: transparent; color: $dis_text; }
 """
 )
 

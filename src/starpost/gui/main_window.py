@@ -543,8 +543,13 @@ class MainWindow(QMainWindow):
         self._tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._tools_button.setToolTip("Auxiliary analysis tools")
         tools_menu = BarMenu(self._tools_button, owner=self._tools_button, sibling_bar=tb)
-        tools_menu.addAction("Correlation")
-        tools_menu.addAction("Convergence")
+        # Not built yet: tagged "(coming soon)" and disabled, so they read as
+        # grayed-out placeholders rather than entries that do nothing when
+        # clicked. Drop the suffix and the setDisabled call when wiring them up.
+        for name in ("Correlation", "Convergence"):
+            act = tools_menu.addAction(f"{name} (coming soon)")
+            act.setDisabled(True)
+            act.setToolTip(f"{name} is not available yet")
         part_search_act = tools_menu.addAction("Part Search")
         part_search_act.triggered.connect(self._open_part_search)
         self._tools_button.setMenu(tools_menu)

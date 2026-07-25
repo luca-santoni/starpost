@@ -2928,6 +2928,30 @@ def test_file_menu_actions_call_slots(app, monkeypatch):
     win.close()
 
 
+def test_unbuilt_tools_are_marked_coming_soon_and_disabled(app):
+    """Correlation and Convergence have no implementation yet, so they carry a
+    "(coming soon)" tag and are disabled — the theme paints disabled menu items
+    in the muted text colour, which is what greys them out."""
+    win = mw.MainWindow(Settings())
+    entries = {a.text(): a for a in win._tools_menu.actions()}
+    for name in ("Correlation", "Convergence"):
+        act = entries[f"{name} (coming soon)"]
+        assert not act.isEnabled()
+    # The working entry is untagged and still usable.
+    assert entries["Part Search"].isEnabled()
+    win.close()
+
+
+def test_disabled_menu_items_use_the_muted_text_colour(app):
+    """Without an explicit rule, QMenu's own `color` would paint disabled entries
+    in the normal text colour, so "(coming soon)" would not look greyed out."""
+    from starpost.gui import theme
+
+    for mode, palette in (("dark", theme._DARK), ("light", theme._LIGHT)):
+        qss = theme.build_stylesheet(mode)
+        assert f"QMenu::item:disabled {{ color: {palette['dis_text']}; }}" in qss
+
+
 def test_part_search_action_opens_window(app):
     """Tools → Part Search opens (and stashes) a PartSearchDialog."""
     from starpost.gui.views.part_search_dialog import PartSearchDialog
