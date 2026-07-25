@@ -10,6 +10,7 @@ same Reports/Plots split.
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
@@ -43,7 +44,12 @@ from PySide6.QtWidgets import (
 
 from starpost.core.settings import DEFAULT_PROFILE_NAME, Profile, list_profiles
 from starpost.gui.views.data_list import _CheckList
-from starpost.gui.views.plot_view import _COLORS, PlotView, _display_name
+from starpost.gui.views.plot_view import (
+    _COLORS,
+    LEGEND_SCALE_DEFAULT,
+    PlotView,
+    _display_name,
+)
 from starpost.gui.widgets import UniformTabBar
 
 # Geometry of a single colour swatch drawn next to a monitor, and the gap between
@@ -670,10 +676,12 @@ class ExportDialog(QDialog):
             self._select_combo(self._plot_format, self._settings.export_plot_format)
 
         # Legend size: a slider whose mid-point is the natural size (1.0×) and
-        # which scales the legend down (left) or up (right) symmetrically.
+        # which scales the legend down (left) or up (right) symmetrically. It
+        # opens at the size the plot window itself draws the legend, so the
+        # export starts out matching what's on screen.
         self._legend_scale = QSlider(Qt.Orientation.Horizontal)
         self._legend_scale.setRange(0, 100)
-        self._legend_scale.setValue(50)  # middle of the track == default 1.0×
+        self._legend_scale.setValue(self._legend_slider(LEGEND_SCALE_DEFAULT))
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._on_legend_scale_changed)
 
@@ -743,6 +751,11 @@ class ExportDialog(QDialog):
         midpoint (50) at 1.0×. Each half spans one octave, so the ends are 0.5×
         (left) and 2.0× (right) and the growth is smooth across the centre."""
         return 2.0 ** ((value - 50) / 50.0)
+
+    @staticmethod
+    def _legend_slider(factor: float) -> int:
+        """The slider position that yields ``factor`` (inverse of _legend_factor)."""
+        return round(50 + 50 * math.log2(factor)) if factor > 0 else 50
 
     def _on_legend_scale_changed(self, value: int) -> None:
         self._preview.set_legend_scale(self._legend_factor(value))

@@ -76,6 +76,7 @@ from starpost.gui.views.export_dialog import (
 )
 from starpost.gui.views.plot_view import (
     _COLORS,
+    LEGEND_SCALE_DEFAULT,
     PlotView,
     _display_name,
     _series_is_empty,
@@ -1707,9 +1708,11 @@ class BatchRunDialog(QDialog):
 
         # Legend size: midpoint is the natural size (1.0×), scaling down (left) or
         # up (right) symmetrically — same mapping as the Export dialog's slider.
+        # Opens at the size the plot window draws the legend, so a new saved plot
+        # starts out matching what's on screen.
         self._legend_scale = QSlider(Qt.Orientation.Horizontal)
         self._legend_scale.setRange(0, 100)
-        self._legend_scale.setValue(50)  # middle of the track == default 1.0×
+        self._legend_scale.setValue(self._legend_slider(LEGEND_SCALE_DEFAULT))
         self._legend_scale.setToolTip("Scale the plot legend smaller or larger")
         self._legend_scale.valueChanged.connect(self._preview_set_legend_scale)
 

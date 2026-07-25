@@ -53,6 +53,18 @@ def test_saved_plot_captures_and_restores_unit_system(app, batch_dialog):
     assert dlg._plot_unit_system.currentData() == "imperial"
 
 
+def test_legend_scale_slider_opens_at_the_plot_window_default(app, batch_dialog):
+    # A new saved plot must start out at the size the plot window itself draws
+    # the legend, not at the slider's 1.0x midpoint.
+    from starpost.gui.views.plot_view import LEGEND_SCALE_DEFAULT
+
+    dlg = batch_dialog
+    assert dlg._legend_scale.value() < 50  # below the natural-size midpoint
+    assert dlg._capture_plot()["legend_scale"] == pytest.approx(
+        LEGEND_SCALE_DEFAULT, abs=0.01
+    )
+
+
 def test_saved_plot_captures_and_restores_legend_opacity(app, batch_dialog):
     dlg = batch_dialog
     dlg._legend_opacity.setValue(50)

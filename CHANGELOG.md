@@ -39,6 +39,13 @@ All notable changes to StarPost are recorded here. Versions follow the
   mass/volumetric flow, velocity, temperature, mass, power, energy, length,
   area, volume, density, and angular velocity.
 
+### Improvements
+- **Smaller default legend** — plot legends now draw at 75% of pyqtgraph's
+  natural size, taking up roughly half the plot area they did before. The
+  Export and Run batch dialogs open their *Legend scale* sliders at the same
+  size, so what the plot window shows is what they render; the sliders still
+  reach the old sizes, and already-saved batch plots keep the size they stored.
+
 ### Fixes
 - **Selected folder icon now inverts** — in the Files and Data tabs, a selected
   folder's icon recolours to the accent's contrast colour (like its name)

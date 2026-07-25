@@ -315,6 +315,30 @@ def test_set_unit_system_converts_drawn_y_values(app):
     assert ys[1] == pytest.approx(44.9617886, rel=1e-6)
 
 
+# --- legend size ------------------------------------------------------------
+def test_legend_opens_smaller_than_natural_size(app):
+    # The legend is drawn below pyqtgraph's natural size so it covers less of
+    # the plot; the scale is on the item from the start, not only once a plot
+    # has been rendered.
+    from starpost.gui.views.plot_view import LEGEND_SCALE_DEFAULT
+
+    assert LEGEND_SCALE_DEFAULT == 0.75
+    pv = PlotView()
+    assert pv._legend_scale == LEGEND_SCALE_DEFAULT
+    assert pv._legend.scale() == LEGEND_SCALE_DEFAULT
+
+
+def test_rendering_keeps_the_default_legend_scale(app):
+    pv = PlotView()
+    plot = MonitorPlot(
+        name="Forces", series=[PlotSeries(name="Drag", x=[1.0, 2.0], y=[3.0, 4.0])]
+    )
+    pv.show_plots([plot])
+    pv._selectors["Forces"].select_all()
+    pv._render()
+    assert pv._legend.scale() == 0.75
+
+
 # --- legend opacity (background brush alpha) --------------------------------
 def test_default_legend_opacity_is_mostly_opaque(app):
     # Default models STAR-CCM+'s legend: a mostly-opaque box that hides the

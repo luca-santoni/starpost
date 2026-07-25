@@ -78,6 +78,12 @@ _HOVER_PX = 25.0
 _LEGEND_BORDER = "#999999"
 _LEGEND_BORDER_WIDTH = 1
 
+# Size the legend is drawn at out of the box, as a multiple of pyqtgraph's
+# natural size. Kept below 1.0 so the box covers less of the plot; the Export
+# and Run batch dialogs open their Legend scale sliders here too, so what the
+# plot window shows is what those render.
+LEGEND_SCALE_DEFAULT = 0.75
+
 # The legend box is filled with the plot background itself (white on a light
 # plot, near-black on a dark one), so it disappears into empty plot area and only
 # reads as a box where it covers the grid or a curve. Its perimeter comes from
@@ -456,7 +462,8 @@ class PlotView(QWidget):
         # the hover readout and region overlay, which must stay on top.
         self._legend.setZValue(10)
         plot_item.legend = self._legend
-        self._legend_scale = 1.0  # legend size multiplier (export menu slider)
+        self._legend_scale = LEGEND_SCALE_DEFAULT  # size multiplier (export slider)
+        self._legend.setScale(self._legend_scale)
         self._legend_opacity = 0.8  # alpha of the legend's background box (0–1)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
         # Raise the ViewBox above the axes. pyqtgraph draws the grid from the

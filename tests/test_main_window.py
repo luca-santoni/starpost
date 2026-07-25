@@ -860,11 +860,13 @@ def test_batch_run_dialog_monitor_color_swatches(app):
 
 def test_batch_run_dialog_legend_scale(app):
     """The legend-scale slider applies to the preview and saves with the plot:
-    mid is 1.0×, ends are 0.5×/2.0×, and the factor is captured."""
+    mid is 1.0×, ends are 0.5×/2.0×, and the factor is captured. It opens at the
+    plot window's own legend size, which sits below the natural-size midpoint."""
     import starpost.gui.views.batch_run_dialog as brd
+    from starpost.gui.views.plot_view import LEGEND_SCALE_DEFAULT
 
     dlg = brd.BatchRunDialog(monitor_groups={"Residuals": ["Continuity"]})
-    assert dlg._legend_scale.value() == 50  # opens at the natural size
+    assert dlg._legend_scale.value() == dlg._legend_slider(LEGEND_SCALE_DEFAULT)
     assert dlg._legend_factor(50) == 1.0
     assert dlg._legend_factor(0) == 0.5 and dlg._legend_factor(100) == 2.0
 

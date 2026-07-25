@@ -82,6 +82,26 @@ def test_export_dialog_seeds_legend_offset(app):
         dlg.deleteLater()
 
 
+def test_export_dialog_legend_scale_opens_at_the_plot_window_default(app):
+    from starpost.gui.views.export_dialog import ExportDialog
+    from starpost.gui.views.plot_view import LEGEND_SCALE_DEFAULT
+
+    dlg = ExportDialog(
+        data_names=["a"], checked_names=["a"],
+        monitor_groups={"G": ["A"]}, checked_groups=["G"],
+        checked_monitors={"G": ["A"]}, results=[],
+    )
+    try:
+        # The export opens matching the on-screen legend size rather than the
+        # slider's 1.0x midpoint.
+        assert dlg._legend_scale.value() < 50
+        assert dlg._legend_factor(dlg._legend_scale.value()) == pytest.approx(
+            LEGEND_SCALE_DEFAULT, abs=0.01
+        )
+    finally:
+        dlg.deleteLater()
+
+
 def test_export_dialog_seeds_legend_opacity_from_settings(app):
     from starpost.core.settings import Settings
     from starpost.data.models import MonitorPlot, PlotKind, PlotSeries, SimResult
