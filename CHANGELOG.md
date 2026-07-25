@@ -6,9 +6,10 @@ All notable changes to StarPost are recorded here. Versions follow the
 ## [Unreleased]
 
 ### New Features
-- **Legend panel** — the plot legend now sits on a solid panel (near-white on
-  light plots, a raised dark-gray on dark plots) that hides the grid and curves
-  behind it, like STAR-CCM+'s legend. Its opacity is adjustable from solid to
+- **Legend panel** — the plot legend now sits on a panel filled with the plot's
+  own background colour (white on light plots, near-black on dark plots) that
+  hides the grid and curves behind it, like STAR-CCM+'s legend. Its opacity is
+  adjustable from solid to
   fully see-through under Settings ▸ Plots ▸ *Legend opacity* (default 80%) and
   per-export via the *Legend opacity* slider in the Export and Run batch
   dialogs. A light-gray border — thicker than the grid lines — outlines the

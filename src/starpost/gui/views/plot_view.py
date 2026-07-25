@@ -79,12 +79,10 @@ _HOVER_PX = 25.0
 _LEGEND_BORDER = "#999999"
 _LEGEND_BORDER_WIDTH = 2
 
-# Fill colour of the legend box, per theme. Deliberately distinct from the plot
-# background (near-white on a light plot, a raised dark-gray on a dark plot) so
-# the box reads as a solid panel and the opacity slider visibly fades it — a
-# background-matched fill is invisible over empty plot areas.
-_LEGEND_PANEL_LIGHT = "#f0f0f0"
-_LEGEND_PANEL_DARK = "#3a3a3a"
+# The legend box is filled with the plot background itself (white on a light
+# plot, near-black on a dark one), so it disappears into empty plot area and only
+# reads as a box where it covers the grid or a curve. Its perimeter comes from
+# _LEGEND_BORDER above, which stays visible either way.
 
 
 @dataclass(frozen=True)
@@ -631,24 +629,22 @@ class PlotView(QWidget):
 
     def set_legend_opacity(self, frac: float) -> None:
         """Set the opacity of the legend's background box (0 = transparent,
-        1 = solid). The box is a theme panel tone that stands out from the plot,
-        so the slider visibly fades it and it clearly covers the grid and curves
-        behind it; the value carries through to the exported image."""
+        1 = solid). The box is filled with the plot background, so a solid box
+        hides the grid and curves behind it while a transparent one lets them
+        through; the value carries through to the exported image."""
         self._legend_opacity = min(1.0, max(0.0, float(frac)))
         self._apply_legend_brush()
 
     def _apply_legend_brush(self) -> None:
-        """Fill the legend's background box with a theme panel tone at the chosen
-        opacity, and outline it with a light-gray border. The panel tone is
-        distinct from the plot background (near-white on a light plot, a raised
-        dark-gray on a dark plot) so the box reads as a solid panel and the
-        opacity slider visibly fades it in and out. Re-applied on theme change so
-        the panel follows the mode. The border is a fixed light-gray (readable on
-        both light and dark plots) and stays fully opaque regardless of the fill
+        """Fill the legend's background box with the plot background colour at the
+        chosen opacity, and outline it with a light-gray border. Matching the
+        background means the box blends into empty plot area and reads as a box
+        only where it hides the grid or a curve. Re-applied on theme change so the
+        fill follows the mode. The border is a fixed light-gray (readable on both
+        light and dark plots) and stays fully opaque regardless of the fill
         opacity, so the legend's perimeter is always easy to see — even when the
         box itself is transparent."""
-        panel = _LEGEND_PANEL_LIGHT if self._bg == "#ffffff" else _LEGEND_PANEL_DARK
-        color = pg.mkColor(panel)
+        color = pg.mkColor(self._bg)
         color.setAlpha(round(self._legend_opacity * 255))
         self._legend.setBrush(pg.mkBrush(color))
         self._legend.setPen(pg.mkPen(_LEGEND_BORDER, width=_LEGEND_BORDER_WIDTH))

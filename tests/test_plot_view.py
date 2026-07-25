@@ -342,18 +342,18 @@ def test_set_legend_opacity_clamps(app):
 
 
 def test_apply_theme_preserves_opacity_and_repaints_panel(app):
-    # The fill is a theme panel tone (distinct from the plot background) so the
-    # box reads as a solid panel; opacity is preserved across a theme change.
+    # The fill matches the plot background in each mode, so the box blends into
+    # empty plot area; opacity is preserved across a theme change.
     pv = PlotView()
     pv.set_legend_opacity(0.4)
     pv.apply_theme("light")
     c = pv._legend.brush().color()
     assert c.alpha() == round(0.4 * 255)
-    assert (c.red(), c.green(), c.blue()) == (240, 240, 240)  # near-white panel
+    assert (c.red(), c.green(), c.blue()) == (255, 255, 255)  # light plot background
     pv.apply_theme("dark")
     c = pv._legend.brush().color()
     assert c.alpha() == round(0.4 * 255)
-    assert (c.red(), c.green(), c.blue()) == (58, 58, 58)  # raised dark-gray panel
+    assert (c.red(), c.green(), c.blue()) == (30, 30, 30)  # dark plot background
 
 
 def test_legend_has_visible_light_gray_border(app):
