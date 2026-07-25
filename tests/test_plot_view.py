@@ -339,6 +339,56 @@ def test_rendering_keeps_the_default_legend_scale(app):
     assert pv._legend.scale() == 0.75
 
 
+def test_dragged_legend_keeps_its_position_across_re_renders(app):
+    # Dragging goes through _DragFollowLegend.mouseDragEvent -> autoAnchor, which
+    # re-anchors the item; a plain setPos would not, and the next re-layout would
+    # snap the legend back to its construction offset.
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    pv = PlotView()
+    pv.resize(660, 500)
+    pv.show()
+    plot = MonitorPlot(
+        name="Forces",
+        series=[
+            PlotSeries(name="Drag ALL", x=[0.0, 1.0, 2.0], y=[2.0, 3.0, 4.0]),
+            PlotSeries(name="Downforce ALL", x=[0.0, 1.0, 2.0], y=[5.0, 6.0, 7.0]),
+        ],
+    )
+    pv.show_plots([plot])
+    pv._selectors["Forces"].select_all()
+    pv._render()
+    QApplication.processEvents()
+
+    rect = pv._legend.mapRectToScene(pv._legend.boundingRect())
+    centre = pv._plot.mapFromScene(rect.center())
+    start = QPoint(int(centre.x()), int(centre.y()))
+    viewport = pv._plot.viewport()
+    QTest.mousePress(
+        viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start
+    )
+    for step in range(1, 11):
+        QTest.mouseMove(viewport, start + QPoint(15 * step, 10 * step))
+        QApplication.processEvents()
+    QTest.mouseRelease(
+        viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+        start + QPoint(150, 100),
+    )
+    QApplication.processEvents()
+
+    dragged = pv._legend.pos()
+    assert (dragged.x(), dragged.y()) != (30.0, 30.0), "the drag did not move it"
+
+    pv._render()  # same selection redrawn
+    QApplication.processEvents()
+    assert pv._legend.pos() == dragged
+
+    pv.apply_theme("light")  # re-renders to recolour the legend labels
+    QApplication.processEvents()
+    assert pv._legend.pos() == dragged
+
+
 def test_legend_is_hidden_while_nothing_is_plotted(app):
     # An empty legend would otherwise sit on the plot as a small empty box.
     pv = PlotView()
