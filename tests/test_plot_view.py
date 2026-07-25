@@ -339,6 +339,26 @@ def test_rendering_keeps_the_default_legend_scale(app):
     assert pv._legend.scale() == 0.75
 
 
+def test_legend_is_hidden_while_nothing_is_plotted(app):
+    # An empty legend would otherwise sit on the plot as a small empty box.
+    pv = PlotView()
+    assert not pv._legend.isVisible()  # fresh view, nothing plotted yet
+
+    plot = MonitorPlot(
+        name="Forces", series=[PlotSeries(name="Drag", x=[1.0, 2.0], y=[3.0, 4.0])]
+    )
+    pv.show_plots([plot])  # opens with nothing selected
+    assert pv._legend.items == []
+    assert not pv._legend.isVisible()
+
+    pv._selectors["Forces"].select_all()
+    pv._render()
+    assert pv._legend.isVisible()
+
+    pv.clear()
+    assert not pv._legend.isVisible()
+
+
 # --- legend opacity (background brush alpha) --------------------------------
 def test_default_legend_opacity_is_mostly_opaque(app):
     # Default models STAR-CCM+'s legend: a mostly-opaque box that hides the

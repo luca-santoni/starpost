@@ -617,6 +617,7 @@ class PlotView(QWidget):
         self._plot.setBackground(self._bg)
         self._style_stats_label()
         self._apply_legend_brush()
+        self._update_legend_visibility()  # nothing plotted yet, so start hidden
 
     # --- public entry points --------------------------------------------
     def apply_theme(self, mode: str) -> None:
@@ -1006,6 +1007,14 @@ class PlotView(QWidget):
         self._hide_hover()
         self._clear_region()
         self._update_empty_label()
+        self._update_legend_visibility()
+
+    def _update_legend_visibility(self) -> None:
+        """Hide the legend while it holds no entries — an empty one would sit on
+        the plot as a small empty box, since its border and fill are drawn
+        whatever it contains. Hiding rather than tearing it down keeps the item
+        (and its scale, brush and pen) intact for the next render."""
+        self._legend.setVisible(bool(self._legend.items))
 
     # --- "select a monitor" hint ----------------------------------------
     def _update_empty_label(self) -> None:
@@ -1115,6 +1124,7 @@ class PlotView(QWidget):
         self._plot.getViewBox().autoRange()
         # Reveal the hint when the selection ended up drawing nothing.
         self._update_empty_label()
+        self._update_legend_visibility()
 
     def _render_single(self, plots: list[MonitorPlot]) -> None:
         drawn: list[str] = []

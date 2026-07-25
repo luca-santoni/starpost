@@ -47,6 +47,9 @@ All notable changes to StarPost are recorded here. Versions follow the
   reach the old sizes, and already-saved batch plots keep the size they stored.
 
 ### Fixes
+- **No stray legend box on an empty plot** — the legend is hidden while nothing
+  is plotted, instead of leaving a small empty box on the plot beside the
+  "Select a monitor to begin" hint. It reappears as soon as a monitor is shown.
 - **Selected folder icon now inverts** — in the Files and Data tabs, a selected
   folder's icon recolours to the accent's contrast colour (like its name)
   instead of keeping its same-hue silhouette, so it stays legible on the accent
