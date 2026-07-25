@@ -72,6 +72,20 @@ class _StayOpenMenu(QMenu):
 # readout to appear — keeps the tooltip from showing when nowhere near a line.
 _HOVER_PX = 25.0
 
+# Border drawn around the legend box: a fixed light-gray (rather than the theme
+# foreground) so the edge reads on both light and dark plots without going stark
+# white in dark mode, and a width of 2 px so the perimeter sits clearly above the
+# 1 px grid lines behind it.
+_LEGEND_BORDER = "#999999"
+_LEGEND_BORDER_WIDTH = 2
+
+# Fill colour of the legend box, per theme. Deliberately distinct from the plot
+# background (near-white on a light plot, a raised dark-gray on a dark plot) so
+# the box reads as a solid panel and the opacity slider visibly fades it — a
+# background-matched fill is invisible over empty plot areas.
+_LEGEND_PANEL_LIGHT = "#f0f0f0"
+_LEGEND_PANEL_DARK = "#3a3a3a"
+
 
 @dataclass(frozen=True)
 class RegionStat:
@@ -442,7 +456,7 @@ class PlotView(QWidget):
         self._legend.setParentItem(plot_item.vb)
         plot_item.legend = self._legend
         self._legend_scale = 1.0  # legend size multiplier (export menu slider)
-        self._legend_opacity = 0.2  # alpha of the legend's background box (0–1)
+        self._legend_opacity = 0.8  # alpha of the legend's background box (0–1)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
 
         # Hint shown centred over the plot when nothing is drawn. Kept subtle
@@ -617,18 +631,27 @@ class PlotView(QWidget):
 
     def set_legend_opacity(self, frac: float) -> None:
         """Set the opacity of the legend's background box (0 = transparent,
-        1 = solid). The box is tinted to the plot background so curves show
-        through it; the value carries through to the exported image."""
+        1 = solid). The box is a theme panel tone that stands out from the plot,
+        so the slider visibly fades it and it clearly covers the grid and curves
+        behind it; the value carries through to the exported image."""
         self._legend_opacity = min(1.0, max(0.0, float(frac)))
         self._apply_legend_brush()
 
     def _apply_legend_brush(self) -> None:
-        """Paint the legend's background box in the current plot-background
-        colour at the chosen opacity. Re-applied on theme change so the box
-        matches the (possibly new) background while keeping its opacity."""
-        color = pg.mkColor(self._bg)
+        """Fill the legend's background box with a theme panel tone at the chosen
+        opacity, and outline it with a light-gray border. The panel tone is
+        distinct from the plot background (near-white on a light plot, a raised
+        dark-gray on a dark plot) so the box reads as a solid panel and the
+        opacity slider visibly fades it in and out. Re-applied on theme change so
+        the panel follows the mode. The border is a fixed light-gray (readable on
+        both light and dark plots) and stays fully opaque regardless of the fill
+        opacity, so the legend's perimeter is always easy to see — even when the
+        box itself is transparent."""
+        panel = _LEGEND_PANEL_LIGHT if self._bg == "#ffffff" else _LEGEND_PANEL_DARK
+        color = pg.mkColor(panel)
         color.setAlpha(round(self._legend_opacity * 255))
         self._legend.setBrush(pg.mkBrush(color))
+        self._legend.setPen(pg.mkPen(_LEGEND_BORDER, width=_LEGEND_BORDER_WIDTH))
 
     def legend_offset(self) -> tuple[float, float] | None:
         """The legend's position as a fraction (fx, fy) of the plot area, so a

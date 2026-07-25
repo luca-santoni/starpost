@@ -681,7 +681,7 @@ class ExportDialog(QDialog):
         # the saved Plots setting so it matches the main window's legend.
         self._legend_opacity = QSlider(Qt.Orientation.Horizontal)
         self._legend_opacity.setRange(0, 100)
-        _lo = self._settings.legend_opacity if self._settings else 0.2
+        _lo = self._settings.legend_opacity if self._settings else 0.8
         self._legend_opacity.setValue(round(_lo * 100))
         self._legend_opacity.setToolTip("Opacity of the box behind the plot legend")
         self._legend_opacity.valueChanged.connect(self._on_legend_opacity_changed)

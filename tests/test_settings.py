@@ -236,7 +236,7 @@ def test_unit_system_bad_value_coerces_to_default():
 
 def test_legend_opacity_default():
     s = Settings.from_dict({})
-    assert s.legend_opacity == 0.2
+    assert s.legend_opacity == 0.8
 
 
 def test_legend_opacity_round_trip():
