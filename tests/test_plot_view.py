@@ -396,8 +396,7 @@ def test_legend_has_visible_light_gray_border(app):
     pv = PlotView()
     # A faint box must still show a clear perimeter, so the border stays fully
     # opaque regardless of the fill opacity. It is a fixed light-gray in both
-    # themes (not the theme foreground), and 2 px wide so it reads clearly above
-    # the 1 px grid lines behind it.
+    # themes (not the theme foreground), and a hairline 1 px wide.
     pv.set_legend_opacity(0.0)
     for mode in ("light", "dark"):
         pv.apply_theme(mode)
@@ -405,4 +404,4 @@ def test_legend_has_visible_light_gray_border(app):
         assert pen.style() != Qt.PenStyle.NoPen  # a border is drawn
         assert pen.color().alpha() == 255  # edge stays visible even at 0 fill
         assert (pen.color().red(), pen.color().green(), pen.color().blue()) == (153, 153, 153)
-        assert pen.width() == 2  # thicker than the 1 px grid lines
+        assert pen.width() == 1  # hairline

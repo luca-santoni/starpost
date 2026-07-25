@@ -12,8 +12,8 @@ All notable changes to StarPost are recorded here. Versions follow the
   adjustable under Settings ▸ Plots ▸ *Legend opacity* (default 80%) and
   per-export via the *Legend opacity* slider in the Export and Run batch
   dialogs — at 100% the panel is fully opaque (nothing shows through), at 0%
-  completely see-through. A light-gray border — thicker than the grid lines —
-  outlines the panel so its edge stays clear even when the fill is transparent.
+  completely see-through. A thin light-gray border outlines the panel so its
+  edge stays clear even when the fill is transparent.
 - **Reports & Monitors trees in the Properties window** — the General tab now
   lists a data set's reports and monitors as browsable, expandable trees
   instead of bare counts. Reports show by name; monitors are grouped as

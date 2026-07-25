@@ -74,10 +74,9 @@ _HOVER_PX = 25.0
 
 # Border drawn around the legend box: a fixed light-gray (rather than the theme
 # foreground) so the edge reads on both light and dark plots without going stark
-# white in dark mode, and a width of 2 px so the perimeter sits clearly above the
-# 1 px grid lines behind it.
+# white in dark mode, and a hairline 1 px wide.
 _LEGEND_BORDER = "#999999"
-_LEGEND_BORDER_WIDTH = 2
+_LEGEND_BORDER_WIDTH = 1
 
 # The legend box is filled with the plot background itself (white on a light
 # plot, near-black on a dark one), so it disappears into empty plot area and only
