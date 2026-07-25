@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from starpost.core.settings import Settings
-from starpost.data.models import PlotSeries
+from starpost.data.models import MonitorPlot, PlotSeries
 from starpost.gui.views.export_dialog import ExportDialog
 from starpost.gui.views.plot_view import PlotView, _series_is_empty, _y_label_for
 
@@ -354,6 +354,40 @@ def test_apply_theme_preserves_opacity_and_repaints_panel(app):
     c = pv._legend.brush().color()
     assert c.alpha() == round(0.4 * 255)
     assert (c.red(), c.green(), c.blue()) == (30, 30, 30)  # dark plot background
+
+
+def test_fully_opaque_legend_hides_the_grid_behind_it(app):
+    # pyqtgraph draws the grid from the AxisItems (z=0.5), which sit above the
+    # ViewBox (z=-100) that owns the legend — so without raising the ViewBox the
+    # grid paints over the legend and no fill opacity can hide it.
+    pv = PlotView()
+    pi = pv._plot.getPlotItem()
+    assert pv._legend.parentItem() is pi.vb
+    for name in ("left", "bottom"):
+        assert pi.vb.zValue() > pi.getAxis(name).zValue()
+
+
+def test_fully_opaque_legend_hides_the_curves_behind_it(app):
+    # ViewBox.addItem raises anything added to one above the ViewBox's own z, so
+    # curves sit above it; the legend has to be raised past them or an opaque box
+    # still shows the lines running behind it. It must stay under the hover
+    # readout and the region overlay, though.
+    pv = PlotView()
+    plot = MonitorPlot(
+        name="Forces", series=[PlotSeries(name="Drag", x=[1.0, 2.0], y=[3.0, 4.0])]
+    )
+    pv.show_plots([plot])
+    pv._selectors["Forces"].select_all()
+    pv._render()
+    curves = [
+        it for it in pv._plot.getPlotItem().vb.allChildren()
+        if type(it).__name__ == "PlotDataItem"
+    ]
+    assert curves, "expected at least one plotted curve"
+    for curve in curves:
+        assert pv._legend.zValue() > curve.zValue()
+    assert pv._legend.zValue() < pv._region_item.zValue()
+    assert pv._legend.zValue() < pv._hover_text.zValue()
 
 
 def test_legend_has_visible_light_gray_border(app):

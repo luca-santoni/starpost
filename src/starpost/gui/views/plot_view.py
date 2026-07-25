@@ -452,10 +452,22 @@ class PlotView(QWidget):
         plot_item = self._plot.getPlotItem()
         self._legend = _DragFollowLegend(offset=(30, 30))
         self._legend.setParentItem(plot_item.vb)
+        # Above the curves (ViewBox.addItem lands them one above the ViewBox's own
+        # z) so a fully opaque legend hides the lines that run behind it, but below
+        # the hover readout and region overlay, which must stay on top.
+        self._legend.setZValue(10)
         plot_item.legend = self._legend
         self._legend_scale = 1.0  # legend size multiplier (export menu slider)
         self._legend_opacity = 0.8  # alpha of the legend's background box (0–1)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
+        # Raise the ViewBox above the axes. pyqtgraph draws the grid from the
+        # AxisItems (z=0.5), not inside the ViewBox (z=-100), so by default the
+        # grid paints over everything the ViewBox holds — including the legend,
+        # whose background box could then never hide it however opaque its fill.
+        # z=1 is pyqtgraph's documented "draw over the axes" level; the ViewBox
+        # clips to the plot area, so the axis strips themselves stay untouched
+        # and the grid still shows everywhere the legend and curves don't cover.
+        plot_item.vb.setZValue(1)
 
         # Hint shown centred over the plot when nothing is drawn. Kept subtle
         # (gray) and click-through so it never gets in the way. Parented to the

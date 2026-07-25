@@ -9,11 +9,11 @@ All notable changes to StarPost are recorded here. Versions follow the
 - **Legend panel** — the plot legend now sits on a panel filled with the plot's
   own background colour (white on light plots, near-black on dark plots) that
   hides the grid and curves behind it, like STAR-CCM+'s legend. Its opacity is
-  adjustable from solid to
-  fully see-through under Settings ▸ Plots ▸ *Legend opacity* (default 80%) and
+  adjustable under Settings ▸ Plots ▸ *Legend opacity* (default 80%) and
   per-export via the *Legend opacity* slider in the Export and Run batch
-  dialogs. A light-gray border — thicker than the grid lines — outlines the
-  panel so its edge stays clear even when the fill is fully transparent.
+  dialogs — at 100% the panel is fully opaque (nothing shows through), at 0%
+  completely see-through. A light-gray border — thicker than the grid lines —
+  outlines the panel so its edge stays clear even when the fill is transparent.
 - **Reports & Monitors trees in the Properties window** — the General tab now
   lists a data set's reports and monitors as browsable, expandable trees
   instead of bare counts. Reports show by name; monitors are grouped as
