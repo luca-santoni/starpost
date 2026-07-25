@@ -5,6 +5,8 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-07-25
+
 ### New Features
 - **Legend panel** — the plot legend now sits on a panel filled with the plot's
   own background colour (white on light plots, near-black on dark plots) that

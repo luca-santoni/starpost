@@ -1,4 +1,4 @@
 """starpost — automated STAR-CCM+ report and monitor-plot post-processing."""
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
 APP_NAME = "starpost"
