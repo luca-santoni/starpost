@@ -2510,16 +2510,26 @@ def test_the_margin_is_at_least_one_exactly_when_every_gate_passes():
     assert not bad.passed and bad.margin < 1.0
 
 
-def test_the_binding_gate_names_the_worst_offender():
-    """A wide, non-drifting oscillation: the band is unambiguously the worst
-    gate. (A pure linear drift is deliberately not used here — for a straight
-    ramp the drift and two-halves margins are algebraically identical, so which
-    one binds is a coin toss rather than a fact worth asserting.)"""
+def test_the_binding_gate_names_the_gate_with_the_smallest_margin():
+    """The convergence index is the worst gate's margin, and binding_gate must
+    name that gate.
+
+    Asserting a *specific* gate name here would be brittle: a wide-band signal
+    fails the band and iterative gates together and their margins are not
+    reliably ordered, and for a pure linear ramp the drift and two-halves
+    margins are algebraically identical, so which binds is a tie. The period is
+    kept short because OLS on a sinusoid has a commensurability artifact that
+    scales with period — at T=20 over a 600-sample window it produces a
+    spurious projected drift of 0.126 against a 0.1 tolerance."""
     n = 3000
-    y = 100.0 + 2.0 * np.sin(2.0 * np.pi * np.arange(n, dtype=float) / 20.0)
+    y = 100.0 + 2.0 * np.sin(2.0 * np.pi * np.arange(n, dtype=float) / 6.0)
     a = assess_monitor("Drag", y, ConvergenceConfig(), is_primary=True)
-    assert a.binding_gate == GATE_BAND
+    worst = min(a.gates, key=lambda g: g.margin)
+    assert a.binding_gate == worst.name
+    assert a.margin == worst.margin
+    assert a.margin < 1.0
     assert gate(a, GATE_DRIFT).passed is True
+    assert gate(a, GATE_BAND).passed is False
 
 
 def test_both_slopes_and_the_mann_kendall_statistic_are_reported():
@@ -3065,8 +3075,12 @@ def test_oscillatory_suspected_when_the_mean_is_steady_but_the_band_is_wide():
     but the user must not be told this is simply 'not converged'."""
     n = 3000
     # A whole number of periods per half-window, so the two-halves gate is not
-    # tripped by a partial cycle rather than by real drift.
-    qoi = 100.0 + 2.0 * np.sin(2.0 * np.pi * np.arange(n, dtype=float) / 20.0)
+    # tripped by a partial cycle rather than by real drift. The period is kept
+    # short for a second reason: OLS on a sinusoid has a commensurability
+    # artifact that scales with period, and at T=20 over a 600-sample window it
+    # spuriously fails the drift gate (0.126 against a 0.1 tolerance), which
+    # would stop OSCILLATORY_SUSPECTED firing at all.
+    qoi = 100.0 + 2.0 * np.sin(2.0 * np.pi * np.arange(n, dtype=float) / 6.0)
     result = make_result(qoi, healthy_residual(),
                          convergence_rows=[("precision", "double"),
                                            ("residual_normalization", "auto")])
