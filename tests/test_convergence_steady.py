@@ -152,6 +152,25 @@ def test_a_stagnant_monitor_fails_the_iterative_gate_despite_tiny_changes():
     assert gate(a, GATE_ITERATIVE).passed is False
 
 
+@pytest.mark.parametrize("rho, noise", [(0.999, 1e-3), (0.9999, 1e-3), (0.9999, 1e-2)])
+def test_noisy_stagnation_is_still_refused_by_the_drift_gate(rho, noise):
+    """A genuinely stagnant monitor buried in noise has no geometric structure
+    left in its change series, so the iterative gate stops firing (that is the
+    min_fit_r2 guard doing its job, not a bug). It must still be refused, and
+    the gate that refuses it is drift: a stagnant monitor is still moving, and
+    drift measures that movement directly instead of inferring it from a fit.
+
+    This is the safety property that keeps the min_fit_r2 guard from trading a
+    false NOT_CONVERGED for a false CONVERGED."""
+    n = 3000
+    rng = np.random.default_rng(1)
+    y = 100.0 - 5.0 * rho ** np.arange(n, dtype=float) + rng.normal(scale=noise, size=n)
+    a = assess_monitor("Drag", y, ConvergenceConfig(), is_primary=True)
+    assert a.iterative.fit_r2 < ConvergenceConfig().min_fit_r2
+    assert gate(a, GATE_DRIFT).passed is False
+    assert a.passed is False
+
+
 def test_a_short_record_fails_the_window_gate():
     """Gate 5. Any rule satisfiable by a handful of accidentally-similar
     consecutive samples fires spuriously, so the window must be long enough."""

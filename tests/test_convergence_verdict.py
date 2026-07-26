@@ -136,6 +136,21 @@ def test_machine_precision_residuals_with_passing_gates_give_converged_machine()
     assert a.state is ConvergenceState.CONVERGED_MACHINE
 
 
+def test_a_converged_machine_run_explains_its_residual():
+    """CONVERGED_MACHINE is a good terminal state, but before this test nothing
+    asserted that the reasons list actually says so — MACHINE_PRECISION had no
+    branch in build_reasons, so the primary explanation surface stayed silent
+    about the residual that got the run there."""
+    floored = np.concatenate([np.full(50, 1.0), np.full(2950, 1e-14)])
+    result = make_result(converged_qoi(), floored,
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.CONVERGED_MACHINE
+    assert any("Continuity" in r.message and "precision" in r.message.lower()
+               for r in a.reasons)
+
+
 # --- V10: restarts ---------------------------------------------------------
 
 def test_v10_only_the_final_segment_is_analysed():

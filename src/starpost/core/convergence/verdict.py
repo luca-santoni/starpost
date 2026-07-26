@@ -55,7 +55,7 @@ def _gate(monitor: MonitorAssessment, name: str):
 
 
 def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
-                  restart_seen: bool, has_primary: bool) -> list[AdvisoryFlag]:
+                  restart_seen: bool) -> list[AdvisoryFlag]:
     """Advisory flags. Any of these may attach to any state, including
     CONVERGED — that pairing is often the most important thing to surface."""
     flags: list[AdvisoryFlag] = []
@@ -80,8 +80,6 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
                 and _gate(monitor, GATE_TWO_HALVES).passed
                 and not _gate(monitor, GATE_BAND).passed):
             flags.append(AdvisoryFlag.OSCILLATORY_SUSPECTED)
-    if not has_primary:
-        flags.append(AdvisoryFlag.INCOMPLETE_EVIDENCE)
     # Preserve first-seen order while removing duplicates.
     return list(dict.fromkeys(flags))
 
@@ -93,7 +91,7 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
     constraint. The state ladder is evaluated in order, first match wins, so a
     residual DIVERGED outranks a QoI CONVERGED."""
     primary_monitors = [m for m in monitors if m.is_primary]
-    flags = collect_flags(metadata, monitors, restart_seen, bool(primary_monitors))
+    flags = collect_flags(metadata, monitors, restart_seen)
 
     index: Optional[float] = None
     binding = "no primary QoI declared"
@@ -215,6 +213,20 @@ def build_reasons(state: ConvergenceState, residuals,
                     "a handful of bad cells can hold it up. Plot the per-cell "
                     "residual field function to localise them."
                 ),
+            ))
+        elif residual.state is ResidualState.MACHINE_PRECISION:
+            reasons.append(Reason(
+                severity=Severity.INFO, target=residual.name,
+                message=(f"{residual.name} has reached the arithmetic floor of "
+                         f"the solver's precision after {residual.decades_dropped:.1f} "
+                         "decades dropped, the best available terminal state."),
+            ))
+        elif residual.state is ResidualState.PLATEAU_LOW:
+            reasons.append(Reason(
+                severity=Severity.INFO, target=residual.name,
+                message=(f"{residual.name} has plateaued after "
+                         f"{residual.decades_dropped:.1f} decades dropped, a "
+                         "sufficient drop and the normal healthy ending."),
             ))
         elif residual.state is ResidualState.CONVERGING:
             reasons.append(Reason(
