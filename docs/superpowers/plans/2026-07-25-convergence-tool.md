@@ -3138,26 +3138,20 @@ def test_the_thresholds_used_are_recorded_with_their_provenance():
 
 def test_the_package_is_qt_free_and_never_reruns_star_ccm():
     """Two invariants at once: STAR-CCM+ runs once per file and everything
-    after is cached, and the analysis core stays importable without a GUI."""
-    import pkgutil
-    import sys
+    after is cached, and the analysis core stays importable without a GUI.
+    Checked against the sources, not the import graph, because other tests in
+    the same process legitimately import PySide6."""
+    from pathlib import Path
 
     import starpost.core.convergence as pkg
 
-    for module in pkgutil.iter_modules(pkg.__path__):
-        __import__(f"{pkg.__name__}.{module.name}")
-    loaded = {
-        name for name in sys.modules
-        if name.startswith(f"{pkg.__name__}.")
-    }
-    assert loaded
-    for name in loaded:
-        source = sys.modules[name].__dict__
-        assert "StarRunner" not in source, name
-    assert not any(
-        getattr(sys.modules[name], "__dict__", {}).get("QDialog")
-        for name in loaded
-    )
+    sources = sorted(Path(pkg.__file__).parent.glob("*.py"))
+    assert len(sources) >= 9        # every module in the package is covered
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        assert "PySide6" not in text, f"{path.name} imports Qt"
+        assert "pyqtgraph" not in text, f"{path.name} imports pyqtgraph"
+        assert "starccm_runner" not in text, f"{path.name} reaches for the runner"
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -4552,14 +4546,14 @@ class ConvergenceDialog(QDialog):
         try:
             self._monitor_table.setRowCount(len(assessment.monitors))
             for row, monitor in enumerate(assessment.monitors):
-                primary = QTableWidgetItem(monitor.name)
+                # Column 0 is the checkbox alone; column 1 carries the name,
+                # which _on_monitor_edited reads back to identify the row.
+                primary = QTableWidgetItem("")
                 primary.setFlags(primary.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 primary.setCheckState(
                     Qt.CheckState.Checked if monitor.is_primary
                     else Qt.CheckState.Unchecked
                 )
-                primary.setText("")
-                primary.setData(Qt.ItemDataRole.UserRole, monitor.name)
                 self._monitor_table.setItem(row, 0, primary)
                 self._monitor_table.setItem(row, 1, self._readonly(monitor.name))
                 self._monitor_table.setItem(
@@ -4793,7 +4787,7 @@ Insert immediately before `def _open_part_search(self) -> None:`:
         self._convergence_dialog.show()
 ```
 
-If `MainWindow` stores its settings under a different attribute than `self.settings`, use whatever `_open_settings` uses — check before editing.
+`MainWindow` stores its settings as `self.settings` (assigned at `main_window.py:89`), so `ConvergenceDialog(self.store, self.settings, self)` is correct as written.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
