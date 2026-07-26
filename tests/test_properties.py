@@ -233,6 +233,57 @@ def _fake_render_macro(output_dir, dest_dir):
     return macro
 
 
+def test_extract_macro_exports_convergence_metadata(tmp_path):
+    """The convergence assessment needs metadata it cannot derive: build
+    precision, residual normalization mode, and the unsteady parameters phase 2
+    will want. Anything unresolvable is written empty, never guessed."""
+    text = render_macro(Path("/out"), tmp_path).read_text()
+    assert "propsConvergence" in text
+    assert '"convergence"' in text
+    for key in ("solver_regime", "solver_type", "precision",
+                "residual_normalization", "auto_norm_sample_count",
+                "time_step", "inner_iterations_per_timestep", "courant_number"):
+        assert f'"{key}"' in text, key
+    # Reached reflectively: these accessors move between releases.
+    assert '"isDoublePrecision"' in text
+    assert '"getMonitorManager"' in text
+    assert '"getNormalizeOption"' in text
+
+
+def test_convergence_section_is_dispatched(tmp_path):
+    text = render_macro(Path("/out"), tmp_path).read_text()
+    assert "propsConvergence(sim, w);" in text
+
+
+def test_convergence_metadata_round_trips_into_run_metadata(tmp_path):
+    """The macro's CSV contract and the reader must agree. This is the seam
+    where a renamed key would silently degrade every verdict to Low."""
+    from starpost.core.convergence.metadata import read_metadata
+    from starpost.core.convergence.models import Provenance
+    from starpost.core.result_parser import _parse_properties
+
+    csv = tmp_path / "case__properties.csv"
+    csv.write_text(
+        "section,name,key,value\n"
+        "convergence,,solver_regime,steady\n"
+        "convergence,,solver_type,segregated\n"
+        "convergence,,precision,double\n"
+        "convergence,,residual_normalization,auto\n"
+        "convergence,,auto_norm_sample_count,5\n"
+        "convergence,,time_step,\n"
+        "convergence,,inner_iterations_per_timestep,\n"
+        "convergence,,courant_number,\n",
+        encoding="utf-8",
+    )
+    meta = read_metadata(_parse_properties(csv))
+    assert meta.precision.value == "double"
+    assert meta.precision.provenance is Provenance.EXTRACTED
+    assert meta.residual_normalization.value == "auto"
+    assert meta.solver_regime.value == "steady"
+    assert meta.auto_norm_sample_count == 5
+    assert meta.is_unsteady is False
+
+
 def test_extract_captures_starccm_version_banner(tmp_path, monkeypatch):
     import starpost.core.starccm_runner as sr
 

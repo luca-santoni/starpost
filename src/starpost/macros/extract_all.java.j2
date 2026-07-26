@@ -11,7 +11,8 @@
 //   <simname>__views_index.csv       view            (one saved-view name per row)
 //   <simname>__screenplays_index.csv screenplay,scene,displayer,kind
 //   <simname>__properties.csv       section,name,key,value (sim metadata:
-//                                   solution state, mesh, regions, physics...)
+//                                   solution state, mesh, regions, physics,
+//                                   convergence metadata...)
 //
 // extract-all-then-filter: dump everything here; the GUI filters by the user's
 // selection/profile. Per-item try/catch keeps one failure from aborting the run.
@@ -291,6 +292,7 @@ public class extract_all extends StarMacro {
             propsContinua(sim, w);
             propsSolvers(sim, w);
             propsCriteria(sim, w);
+            propsConvergence(sim, w);
             propsMeshOps(sim, w);
             propsPartTree(sim, w);
             propsParts(sim, w);
@@ -508,6 +510,226 @@ public class extract_all extends StarMacro {
             sim.println("starpost: properties: criteria section failed: "
                 + e.getMessage());
         }
+    }
+
+    // Convergence metadata: what the convergence assessment needs and cannot
+    // derive from anything else already extracted. Every accessor here is
+    // reached reflectively — the names differ between the segregated and
+    // coupled solvers and have changed between releases, and a compile-time
+    // reference to a moved class would kill the whole extraction.
+    //
+    // An unresolvable value is written as an empty string. The reader treats
+    // empty as "unknown" and suppresses the verdict that depends on it, which
+    // is the point: a guessed precision permanently misclassifies every
+    // single-precision run as stalled.
+    private void propsConvergence(Simulation sim, PrintWriter w) {
+        try {
+            String models = allModelNames(sim).toLowerCase();
+            prow(w, "convergence", "", "solver_regime", regimeOf(models));
+            prow(w, "convergence", "", "solver_type", solverTypeOf(models));
+            prow(w, "convergence", "", "precision", precisionOf(sim));
+            prow(w, "convergence", "", "residual_normalization",
+                residualNormalizationOf(sim));
+            prow(w, "convergence", "", "auto_norm_sample_count",
+                autoNormSampleCountOf(sim));
+            prow(w, "convergence", "", "time_step", timeStepOf(sim));
+            prow(w, "convergence", "", "inner_iterations_per_timestep",
+                innerIterationsOf(sim));
+            prow(w, "convergence", "", "courant_number", courantOf(sim));
+        } catch (Exception e) {
+            sim.println("starpost: properties: convergence section failed: "
+                + e.getMessage());
+        }
+    }
+
+    // The class simple name of an object, or "" — used to recognise solver and
+    // criterion types without naming their packages at compile time.
+    private String simpleName(Object o) {
+        return o == null ? "" : o.getClass().getSimpleName();
+    }
+
+    // Every enabled model's presentation name and class name, concatenated.
+    private String allModelNames(Simulation sim) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (Object o : sim.getContinuumManager().getObjects()) {
+                Object models = invokeQuiet(o, "getModelManager");
+                Object objects = invokeQuiet(models, "getObjects");
+                if (!(objects instanceof java.util.Collection)) {
+                    continue;
+                }
+                for (Object m : (java.util.Collection<?>) objects) {
+                    String n = presentationName(m);
+                    sb.append(n == null ? "" : n).append(" ");
+                    sb.append(simpleName(m)).append(" ");
+                }
+            }
+        } catch (Exception e) {
+            return sb.toString();
+        }
+        return sb.toString();
+    }
+
+    // Longest first: "implicit unsteady" must win over a bare "unsteady".
+    private String regimeOf(String models) {
+        if (models.contains("harmonic balance")
+            || models.contains("harmonicbalance")) {
+            return "harmonic_balance";
+        }
+        if (models.contains("implicit unsteady")
+            || models.contains("implicitunsteady")) {
+            return "implicit_unsteady";
+        }
+        if (models.contains("explicit unsteady")
+            || models.contains("explicitunsteady")) {
+            return "explicit_unsteady";
+        }
+        if (models.contains("steady")) {
+            return "steady";
+        }
+        return "";
+    }
+
+    private String solverTypeOf(String models) {
+        if (models.contains("coupled")) {
+            return "coupled";
+        }
+        if (models.contains("segregated")) {
+            return "segregated";
+        }
+        return "";
+    }
+
+    // [V] Verify against the local 2506 help. If the accessor is absent this
+    // returns "", and the tool reports PRECISION_UNKNOWN rather than guessing.
+    private String precisionOf(Simulation sim) {
+        Object dp = invokeQuiet(sim, "isDoublePrecision");
+        if (dp instanceof Boolean) {
+            return ((Boolean) dp).booleanValue() ? "double" : "single";
+        }
+        return "";
+    }
+
+    // Residual monitors carry the normalization mode. Reported sim-wide only
+    // when every residual monitor agrees; a mixed set is written empty, since
+    // a single mode is what the reader's contract promises.
+    private String residualNormalizationOf(Simulation sim) {
+        String found = null;
+        try {
+            Object mgr = invokeQuiet(sim, "getMonitorManager");
+            Object objects = invokeQuiet(mgr, "getObjects");
+            if (!(objects instanceof java.util.Collection)) {
+                return "";
+            }
+            for (Object m : (java.util.Collection<?>) objects) {
+                if (!simpleName(m).contains("Residual")) {
+                    continue;
+                }
+                Object opt = invokeQuiet(m, "getNormalizeOption");
+                if (opt == null) {
+                    opt = invokeQuiet(m, "getNormalizationOption");
+                }
+                String v = presentationName(invokeQuiet(opt, "getSelectedElement"));
+                if (v == null) {
+                    Object sel = invokeQuiet(opt, "getSelected");
+                    v = (sel == null) ? null : String.valueOf(sel);
+                }
+                if (v == null || v.length() == 0) {
+                    continue;
+                }
+                v = v.toLowerCase();
+                if (found == null) {
+                    found = v;
+                } else if (!found.equals(v)) {
+                    return "";
+                }
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return found == null ? "" : found;
+    }
+
+    // [V] The auto-normalization reference window (STAR-CCM+ default 5).
+    private String autoNormSampleCountOf(Simulation sim) {
+        try {
+            Object mgr = invokeQuiet(sim, "getMonitorManager");
+            Object objects = invokeQuiet(mgr, "getObjects");
+            if (!(objects instanceof java.util.Collection)) {
+                return "";
+            }
+            for (Object m : (java.util.Collection<?>) objects) {
+                if (!simpleName(m).contains("Residual")) {
+                    continue;
+                }
+                Object n = invokeQuiet(m, "getNormalizationIterations");
+                if (n == null) {
+                    n = invokeQuiet(m, "getNumberOfSamples");
+                }
+                if (n != null) {
+                    return String.valueOf(n);
+                }
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return "";
+    }
+
+    // [V] Phase 2 metadata: captured now so data sets extracted from here on
+    // are already usable when the unsteady layer lands.
+    private String timeStepOf(Simulation sim) {
+        return solverScalar(sim, "Unsteady", "getTimeStep");
+    }
+
+    private String courantOf(Simulation sim) {
+        return solverScalar(sim, "Coupled", "getCourantNumber");
+    }
+
+    // The value of a scalar property on the first solver whose class name
+    // contains `marker`. Scalar properties wrap their number, so unwrap via
+    // getRawValue/getValue where those exist.
+    private String solverScalar(Simulation sim, String marker, String getter) {
+        try {
+            for (Object s : sim.getSolverManager().getObjects()) {
+                if (!simpleName(s).contains(marker)) {
+                    continue;
+                }
+                Object prop = invokeQuiet(s, getter);
+                if (prop == null) {
+                    continue;
+                }
+                Object raw = invokeQuiet(prop, "getRawValue");
+                if (raw == null) {
+                    raw = invokeQuiet(prop, "getValue");
+                }
+                return String.valueOf(raw == null ? prop : raw);
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return "";
+    }
+
+    private String innerIterationsOf(Simulation sim) {
+        try {
+            for (Object c
+                    : sim.getSolverStoppingCriterionManager().getObjects()) {
+                if (!simpleName(c).contains("InnerIteration")) {
+                    continue;
+                }
+                Object n = invokeQuiet(c, "getMaximumNumberInnerIterations");
+                if (n == null) {
+                    n = invokeQuiet(c, "getMaximumNumberSteps");
+                }
+                if (n != null) {
+                    return String.valueOf(n);
+                }
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return "";
     }
 
     private void propsMeshOps(Simulation sim, PrintWriter w) {
