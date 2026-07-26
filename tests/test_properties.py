@@ -248,6 +248,10 @@ def test_extract_macro_exports_convergence_metadata(tmp_path):
     assert '"isDoublePrecision"' in text
     assert '"getMonitorManager"' in text
     assert '"getNormalizeOption"' in text
+    assert '"getRawValue"' in text
+    assert '"getTimeStep"' in text
+    assert '"getCourantNumber"' in text
+    assert '"getMaximumNumberInnerIterations"' in text
 
 
 def test_convergence_section_is_dispatched(tmp_path):

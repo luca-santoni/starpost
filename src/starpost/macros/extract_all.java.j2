@@ -703,7 +703,7 @@ public class extract_all extends StarMacro {
                 if (raw == null) {
                     raw = invokeQuiet(prop, "getValue");
                 }
-                return String.valueOf(raw == null ? prop : raw);
+                return raw == null ? "" : String.valueOf(raw);
             }
         } catch (Exception e) {
             return "";
