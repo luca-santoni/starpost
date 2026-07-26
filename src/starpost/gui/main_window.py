@@ -546,10 +546,15 @@ class MainWindow(QMainWindow):
         # Not built yet: tagged "(coming soon)" and disabled, so they read as
         # grayed-out placeholders rather than entries that do nothing when
         # clicked. Drop the suffix and the setDisabled call when wiring them up.
-        for name in ("Correlation", "Convergence"):
+        for name in ("Correlation",):
             act = tools_menu.addAction(f"{name} (coming soon)")
             act.setDisabled(True)
             act.setToolTip(f"{name} is not available yet")
+        convergence_act = tools_menu.addAction("Convergence")
+        convergence_act.setToolTip(
+            "Assess whether the loaded data sets have converged"
+        )
+        convergence_act.triggered.connect(self._open_convergence)
         part_search_act = tools_menu.addAction("Part Search")
         part_search_act.triggered.connect(self._open_part_search)
         self._tools_button.setMenu(tools_menu)
@@ -1557,6 +1562,30 @@ class MainWindow(QMainWindow):
         ]
         total = sum(sim_csv_size(r) for r in results)
         DataFolderPropertiesDialog(name, total, len(data_names), self).exec()
+
+    def _open_convergence(self) -> None:
+        """Tools → Convergence: open the non-modal window that assesses whether
+        the loaded data sets have converged. Reads cached monitor histories
+        only — it never re-runs STAR-CCM+.
+
+        The import is local: the convergence package pulls in numpy-heavy
+        analysis modules that have no business on the startup path."""
+        from starpost.gui.views.convergence_dialog import ConvergenceDialog
+
+        dlg = getattr(self, "_convergence_dialog", None)
+        if dlg is not None:
+            try:
+                visible = dlg.isVisible()
+            except RuntimeError:
+                visible = False  # underlying C++ dialog already deleted
+            if visible:
+                dlg.reload()
+                dlg.raise_()
+                dlg.activateWindow()
+                return
+            dlg.deleteLater()  # drop the stale hidden instance before replacing
+        self._convergence_dialog = ConvergenceDialog(self.store, self.settings, self)
+        self._convergence_dialog.show()
 
     def _open_part_search(self) -> None:
         """Tools → Part Search: open the non-modal window for finding which

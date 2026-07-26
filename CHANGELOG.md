@@ -5,6 +5,20 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### New Features
+- **Convergence tool.** Tools → Convergence assesses whether each loaded data
+  set has converged, for steady runs. It reports a state (converged, still
+  converging, stalled, diverged, drifting), a High/Medium/Low confidence with
+  the rule that produced it, a convergence index, the binding constraint, and a
+  list of reasons with suggested actions and an estimate of the iterations
+  remaining. Residual health, remaining iterative error and the engineering
+  quantities are assessed separately and then combined. Unsteady runs are
+  reported as not yet supported rather than assessed with steady tests.
+  Reads cached data only — no STAR-CCM+ re-run.
+- Extraction now records solver precision, residual normalization mode, and the
+  unsteady solver parameters. Data sets extracted before this update are still
+  assessed, at reduced confidence; re-extract for the full verdict.
+
 ## [2.7.0] — 2026-07-25
 
 ### New Features
