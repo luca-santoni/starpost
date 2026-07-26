@@ -140,6 +140,40 @@ def test_changing_the_tolerance_preset_re_runs_the_assessment(app):
     dlg.close()
 
 
+def test_changing_the_tolerance_preset_keeps_the_selected_data_set(app):
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
+                                 make_result("/tmp/b.sim", drifting=True)))
+    dlg._summary.selectRow(1)
+    assert "SLOW_DRIFT" in dlg._verdict_state.text()
+
+    dlg._preset.setCurrentText("Production (0.05%)")
+
+    assert dlg._summary.currentRow() == 1
+    assert dlg._summary.item(dlg._summary.currentRow(), 0).text() == "b"
+    assert "SLOW_DRIFT" in dlg._verdict_state.text()
+    dlg.close()
+
+
+def test_editing_a_monitor_checkbox_keeps_the_selected_data_set(app):
+    from PySide6.QtCore import Qt
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
+                                 make_result("/tmp/b.sim", drifting=True)))
+    dlg._summary.selectRow(1)
+    assert "SLOW_DRIFT" in dlg._verdict_state.text()
+
+    dlg._monitor_table.item(0, 0).setCheckState(Qt.CheckState.Unchecked)
+
+    # Unticking the only primary monitor changes the verdict (see
+    # test_unticking_the_only_primary_monitor_drops_confidence_to_low), so
+    # what this test cares about is that the *selection* survived the edit,
+    # not that the verdict text is unchanged.
+    assert dlg._summary.currentRow() == 1
+    assert dlg._summary.item(dlg._summary.currentRow(), 0).text() == "b"
+    assert dlg._current() is dlg._assessments["/tmp/b.sim"]
+    dlg.close()
+
+
 def test_selecting_a_summary_row_switches_the_detail_panes(app):
     dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
                                  make_result("/tmp/b.sim", drifting=True)))

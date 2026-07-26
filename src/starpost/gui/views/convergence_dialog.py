@@ -195,6 +195,9 @@ class ConvergenceDialog(QDialog):
         )
 
     def _reassess(self) -> None:
+        # Capture the selection by sim_path (not row index) so it survives a
+        # re-population even though the row count/order can change.
+        previous_path = self._selected_path()
         classification = self._settings.plot_classification
         self._assessments = {
             r.sim_path: assess(r, self._config_for(r), classification)
@@ -211,8 +214,39 @@ class ConvergenceDialog(QDialog):
                     reference_scale=None,
                 ))
         self._populate_summary()
+        self._restore_selection(previous_path)
 
     # --- population -----------------------------------------------------
+
+    def _selected_path(self) -> Optional[str]:
+        """The sim_path of the currently selected summary row, if any."""
+        row = self._summary.currentRow()
+        if row < 0:
+            return None
+        item = self._summary.item(row, 0)
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)
+
+    def _restore_selection(self, previous_path: Optional[str]) -> None:
+        """Re-select the row for `previous_path` after a re-population,
+        falling back to row 0 when there was no previous selection or that
+        data set is no longer present."""
+        if not self._results:
+            self._show_placeholder()
+            return
+        target_row = 0
+        if previous_path is not None:
+            for row, result in enumerate(self._results):
+                if result.sim_path == previous_path:
+                    target_row = row
+                    break
+        # selectRow does not re-emit itemSelectionChanged when the target row
+        # is already the current one (e.g. re-assessing while the same row
+        # stays selected), so the detail panes are refreshed explicitly
+        # rather than relying solely on the signal.
+        self._summary.selectRow(target_row)
+        self._on_selection_changed()
 
     def _populate_summary(self) -> None:
         self._updating = True
@@ -229,18 +263,14 @@ class ConvergenceDialog(QDialog):
                     assessment.binding_constraint,
                 )
                 for column, text in enumerate(cells):
-                    self._summary.setItem(row, column, QTableWidgetItem(text))
+                    item = QTableWidgetItem(text)
+                    if column == 0:
+                        # Stashed so _selected_path can identify the row by
+                        # sim_path rather than by index, which can shift.
+                        item.setData(Qt.ItemDataRole.UserRole, result.sim_path)
+                    self._summary.setItem(row, column, item)
         finally:
             self._updating = False
-        if self._results:
-            # selectRow does not re-emit itemSelectionChanged when the newly
-            # selected row is already the current one (e.g. re-assessing while
-            # row 0 stays selected), so the detail panes are refreshed
-            # explicitly rather than relying solely on the signal.
-            self._summary.selectRow(0)
-            self._on_selection_changed()
-        else:
-            self._show_placeholder()
 
     def _show_placeholder(self) -> None:
         self._verdict_state.setText("No data sets loaded")
@@ -307,7 +337,10 @@ class ConvergenceDialog(QDialog):
                 # Column 0 is the checkbox alone; column 1 carries the name,
                 # which _on_monitor_edited reads back to identify the row.
                 primary = QTableWidgetItem("")
-                primary.setFlags(primary.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                primary.setFlags(
+                    (primary.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    & ~Qt.ItemFlag.ItemIsEditable
+                )
                 primary.setCheckState(
                     Qt.CheckState.Checked if monitor.is_primary
                     else Qt.CheckState.Unchecked
@@ -391,17 +424,6 @@ class ConvergenceDialog(QDialog):
             existing.reference_scale = _parse_float(item.text())
         configs[name] = existing
         self._reassess()
-        self._select_path(path)
-
-    def _select_path(self, path: str) -> None:
-        for row, result in enumerate(self._results):
-            if result.sim_path == path:
-                # See the comment in _populate_summary: selectRow is a no-op
-                # signal-wise when the row is already selected, so refresh
-                # explicitly to pick up the just-recomputed assessment.
-                self._summary.selectRow(row)
-                self._on_selection_changed()
-                return
 
 
 def _parse_percent(text: str) -> Optional[float]:
