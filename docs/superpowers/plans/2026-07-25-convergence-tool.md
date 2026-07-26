@@ -4030,7 +4030,11 @@ Insert immediately after the closing brace of `propsCriteria`:
                 if (raw == null) {
                     raw = invokeQuiet(prop, "getValue");
                 }
-                return String.valueOf(raw == null ? prop : raw);
+                // Empty, not the wrapper's toString(): falling back to `prop`
+                // here would write a Java object identity such as
+                // star.common.SomeParam@1a2b3c into the CSV, which is exactly
+                // the guessed-garbage value this section's rule forbids.
+                return raw == null ? "" : String.valueOf(raw);
             }
         } catch (Exception e) {
             return "";
