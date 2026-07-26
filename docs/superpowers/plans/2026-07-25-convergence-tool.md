@@ -1823,11 +1823,16 @@ def test_no_projection_offered_for_a_flat_residual():
 
 
 def test_non_positive_residual_samples_do_not_raise():
-    """Log-space fitting must survive a zero sample without a warning storm."""
+    """Log-space fitting must survive a zero sample without a warning storm,
+    and must not let it derail the classification.
+
+    The zero has to sit *inside* the trailing analysis window (y[800:1000] for
+    a 1000-sample record) or the fit never sees it and the test is vacuous."""
     y = np.concatenate([np.full(50, 1.0), np.full(950, 1e-4)])
-    y[500] = 0.0
+    y[900] = 0.0
     a = assess_residual("Continuity", y, ConvergenceConfig(), precision="double")
     assert np.isfinite(a.log_slope)
+    assert a.state is ResidualState.PLATEAU_LOW
 
 
 def test_reference_level_uses_the_auto_normalization_sample_count():
