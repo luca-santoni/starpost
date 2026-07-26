@@ -31,6 +31,18 @@ iteration field data a post-processing tool reading monitor CSVs does not have.
 The distinction is recorded in the output. Residual-derived values are never
 converted to physical units: a STAR-CCM+ residual is an RMS over cells, i.e.
 exactly the L2-type norm the source says to avoid for this purpose.
+
+The fit is trusted only when it explains the change series. A monitor that has
+settled to noise has a change series with no geometric structure at all: the
+"slope" the regression finds is a fluctuation around a true value of zero, not
+a decay rate, and rho = 10^slope lands near 1 purely by chance whenever that
+fluctuation happens to be slightly negative — on measured white-noise data
+this tripped the stagnation branch on 17 of 30 seeds. Declaring stagnation
+from a fit that explains none of the variance would refuse the single most
+common case, a monitor that has actually converged, so r^2 is checked before
+rho is trusted, and a low r^2 declines to NO_ESTIMATE instead. Genuine
+stagnation is unaffected: a real, slow geometric approach fits cleanly, with
+r^2 near 1.
 """
 from __future__ import annotations
 
@@ -71,6 +83,13 @@ def estimate_iterative_error(y_window: np.ndarray, config) -> IterativeError:
     fit = ols_fit(index[positive], np.log10(changes[positive]))
     rho = 10.0 ** fit.slope
 
+    if fit.r2 < config.min_fit_r2:
+        return _no_estimate(
+            f"NO_ESTIMATE: the change series shows no geometric structure "
+            f"(fit r^2 = {fit.r2:.3g}, below {config.min_fit_r2}), so there is "
+            "no progression to extrapolate",
+            rho=rho, sigma=fit.sigma, r2=fit.r2, safety_factor=config.safety_factor,
+        )
     if fit.slope >= 0:
         return _no_estimate(
             "NO_ESTIMATE: the change series is not contracting (slope >= 0), so "

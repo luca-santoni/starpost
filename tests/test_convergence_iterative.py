@@ -101,3 +101,27 @@ def test_noise_widens_the_estimate_through_the_fit_scatter():
     noisy = clean + rng.normal(scale=1e-3, size=clean.size)
     assert (estimate_iterative_error(noisy, config).fit_sigma
             > estimate_iterative_error(clean, config).fit_sigma)
+
+
+def test_settled_noise_is_not_mistaken_for_stagnation():
+    """A monitor that has settled to noise has no geometric structure in its
+    change series. The fitted slope is an artifact and rho lands near 1 by
+    chance, which previously read as ASYMPTOTICALLY_STAGNANT on most seeds and
+    made a converged monitor permanently un-passable."""
+    config = ConvergenceConfig()
+    for seed in range(10):
+        rng = np.random.default_rng(seed)
+        y = 100.0 + rng.normal(scale=1e-5, size=600)
+        e = estimate_iterative_error(y, config)
+        assert "ASYMPTOTICALLY_STAGNANT" not in e.reason, f"seed {seed}"
+        assert e.valid is False
+        assert "no geometric structure" in e.reason
+
+
+def test_genuine_stagnation_is_still_flagged():
+    """The contrast case: a real, clean geometric approach at rho > 0.999 has
+    r^2 near 1 and must still be flagged."""
+    y = 100.0 - 5.0 * 0.9999 ** np.arange(600, dtype=float)
+    e = estimate_iterative_error(y, ConvergenceConfig())
+    assert e.fit_r2 > 0.9
+    assert "ASYMPTOTICALLY_STAGNANT" in e.reason

@@ -36,6 +36,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "tau0_over_n_warn": "[D]",
     "min_fit_points": "[D]",
     "rho_stagnant": "[D]",
+    "min_fit_r2": "[D]",
     "marginal_low": "[D]",
     "marginal_high": "[D]",
 }
@@ -67,6 +68,8 @@ class ConvergenceConfig:
     safety_factor: float = 1.25
     min_fit_points: int = 20
     rho_stagnant: float = 0.999
+    min_fit_r2: float = 0.10       # below this the change series has no
+                                   # geometric structure to extrapolate
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]

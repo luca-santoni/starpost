@@ -881,6 +881,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "tau0_over_n_warn": "[D]",
     "min_fit_points": "[D]",
     "rho_stagnant": "[D]",
+    "min_fit_r2": "[D]",
     "marginal_low": "[D]",
     "marginal_high": "[D]",
 }
@@ -912,6 +913,8 @@ class ConvergenceConfig:
     safety_factor: float = 1.25
     min_fit_points: int = 20
     rho_stagnant: float = 0.999
+    min_fit_r2: float = 0.10       # below this the change series has no
+                                   # geometric structure to extrapolate
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]
@@ -2224,6 +2227,20 @@ def estimate_iterative_error(y_window: np.ndarray, config) -> IterativeError:
 
     fit = ols_fit(index[positive], np.log10(changes[positive]))
     rho = 10.0 ** fit.slope
+
+    # A fit that explains none of the change series is not evidence of slow
+    # contraction. For a monitor that has settled to noise the slope is an
+    # artifact and rho lands near 1 by chance — measured at 17 of 30 seeds
+    # before this guard — and since ASYMPTOTICALLY_STAGNANT is excluded from
+    # steady.py's static-monitor escape hatch, that would refuse exactly the
+    # monitors that have converged. No structure means nothing to extrapolate.
+    if fit.r2 < config.min_fit_r2:
+        return _no_estimate(
+            f"NO_ESTIMATE: the change series shows no geometric structure "
+            f"(fit r^2 = {fit.r2:.3g}, below {config.min_fit_r2}), so there is "
+            "no progression to extrapolate",
+            rho=rho, sigma=fit.sigma, r2=fit.r2, safety_factor=config.safety_factor,
+        )
 
     if fit.slope >= 0:
         return _no_estimate(
