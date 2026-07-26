@@ -1,0 +1,416 @@
+"""'Convergence' window: does this simulation look converged, and if not, why?
+
+Reads cached monitor histories only — it never re-runs STAR-CCM+. Every loaded
+data set is assessed independently and summarised in one table; selecting a row
+drives the verdict card, the reasons list, and the detail tables.
+
+The window deliberately never shows a bare percentage. The headline is a state
+plus an auditable High/Medium/Low confidence, a convergence index, and the
+binding constraint — the one string that tells the engineer what to do next.
+"""
+from __future__ import annotations
+
+from typing import Optional
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from starpost.core.convergence import assess
+from starpost.core.convergence.config import (
+    TOLERANCE_PRESETS,
+    ConvergenceConfig,
+    MonitorConfig,
+)
+
+_PRESET_LABELS = {
+    "Screening (0.1%)": TOLERANCE_PRESETS["screening"],
+    "Production (0.05%)": TOLERANCE_PRESETS["production"],
+}
+
+_MONITOR_COLUMNS = ("Primary", "Monitor", "Tolerance", "Reference scale")
+_SUMMARY_COLUMNS = ("Data set", "State", "Confidence", "Index", "Binding constraint")
+_RESIDUAL_COLUMNS = ("Equation", "Decades", "Slope", "rho", "r^2", "State",
+                     "Iterations to target")
+_GATE_COLUMNS = ("Monitor", "Primary", "Mean", "Band (95%)", "Drift", "U_iter",
+                 "N_eff", "Margin", "Binding gate")
+
+
+class ConvergenceDialog(QDialog):
+    """Non-modal convergence assessment over every loaded data set."""
+
+    def __init__(self, store, settings, parent=None) -> None:
+        super().__init__(parent)
+        self._store = store
+        self._settings = settings
+        self._assessments: dict = {}
+        self._results: list = []
+        # Per-sim monitor configuration, kept across re-assessments so editing
+        # a tolerance does not reset the primary ticks.
+        self._monitor_configs: dict[str, dict[str, MonitorConfig]] = {}
+        self._updating = False
+
+        self.setWindowTitle("Convergence")
+        self.resize(1100, 700)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self._build_left())
+        splitter.addWidget(self._build_right())
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 4)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(splitter)
+
+        self.reload()
+
+    # --- construction ---------------------------------------------------
+
+    def _build_left(self) -> QWidget:
+        self._preset = QComboBox()
+        self._preset.addItems([*_PRESET_LABELS, "Custom"])
+        self._preset.currentTextChanged.connect(self._on_preset_changed)
+
+        self._custom = QDoubleSpinBox()
+        self._custom.setDecimals(4)
+        self._custom.setRange(0.0001, 100.0)
+        self._custom.setSuffix(" %")
+        self._custom.setValue(TOLERANCE_PRESETS["screening"] * 100.0)
+        self._custom.setEnabled(False)
+        self._custom.valueChanged.connect(lambda _v: self._reassess())
+
+        form = QFormLayout()
+        form.addRow("Tolerance", self._preset)
+        form.addRow("Custom", self._custom)
+
+        self._summary = QTableWidget(0, len(_SUMMARY_COLUMNS))
+        self._summary.setHorizontalHeaderLabels(_SUMMARY_COLUMNS)
+        self._summary.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._summary.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._summary.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._summary.verticalHeader().setVisible(False)
+        self._summary.itemSelectionChanged.connect(self._on_selection_changed)
+
+        self._monitor_table = QTableWidget(0, len(_MONITOR_COLUMNS))
+        self._monitor_table.setHorizontalHeaderLabels(_MONITOR_COLUMNS)
+        self._monitor_table.verticalHeader().setVisible(False)
+        self._monitor_table.itemChanged.connect(self._on_monitor_edited)
+
+        panel = QWidget()
+        box = QVBoxLayout(panel)
+        box.addLayout(form)
+        box.addWidget(QLabel("Data sets"))
+        box.addWidget(self._summary)
+        box.addWidget(QLabel("Monitors"))
+        box.addWidget(self._monitor_table)
+        return panel
+
+    def _build_right(self) -> QWidget:
+        self._verdict_state = QLabel("No data sets loaded")
+        self._verdict_state.setObjectName("convergenceState")
+        self._verdict_confidence = QLabel()
+        self._verdict_index = QLabel()
+        self._verdict_binding = QLabel()
+        self._verdict_binding.setWordWrap(True)
+        self._verdict_flags = QLabel()
+        self._verdict_flags.setWordWrap(True)
+
+        card = QFrame()
+        card.setObjectName("convergenceVerdict")
+        card.setFrameShape(QFrame.Shape.StyledPanel)
+        card_box = QVBoxLayout(card)
+        card_box.addWidget(self._verdict_state)
+        row = QHBoxLayout()
+        row.addWidget(self._verdict_confidence)
+        row.addWidget(self._verdict_index)
+        row.addStretch(1)
+        card_box.addLayout(row)
+        card_box.addWidget(self._verdict_binding)
+        card_box.addWidget(self._verdict_flags)
+
+        self._reasons = QTreeWidget()
+        self._reasons.setHeaderLabels(("Severity", "Target", "Reason"))
+        self._reasons.setRootIsDecorated(True)
+
+        self._residual_table = QTableWidget(0, len(_RESIDUAL_COLUMNS))
+        self._residual_table.setHorizontalHeaderLabels(_RESIDUAL_COLUMNS)
+        self._residual_table.verticalHeader().setVisible(False)
+
+        self._gate_table = QTableWidget(0, len(_GATE_COLUMNS))
+        self._gate_table.setHorizontalHeaderLabels(_GATE_COLUMNS)
+        self._gate_table.verticalHeader().setVisible(False)
+
+        tabs = QTabWidget()
+        tabs.addTab(self._reasons, "Reasons")
+        tabs.addTab(self._residual_table, "Residuals")
+        tabs.addTab(self._gate_table, "QoI gates")
+
+        panel = QWidget()
+        box = QVBoxLayout(panel)
+        box.addWidget(card)
+        box.addWidget(tabs)
+        for table in (self._summary, self._monitor_table,
+                      self._residual_table, self._gate_table):
+            table.horizontalHeader().setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+        return panel
+
+    # --- data -----------------------------------------------------------
+
+    def reload(self) -> None:
+        """Re-snapshot the store and re-assess. Called on reopen so a re-raised
+        window reflects the current workspace."""
+        self._results = [r for r in self._store.all()
+                         if r.error is None and r.plots]
+        self._reassess()
+
+    def _tolerance_fraction(self) -> float:
+        label = self._preset.currentText()
+        if label in _PRESET_LABELS:
+            return _PRESET_LABELS[label]
+        return self._custom.value() / 100.0
+
+    def _config_for(self, result) -> ConvergenceConfig:
+        return ConvergenceConfig(
+            tolerance_fraction=self._tolerance_fraction(),
+            monitors=dict(self._monitor_configs.get(result.sim_path, {})),
+        )
+
+    def _reassess(self) -> None:
+        classification = self._settings.plot_classification
+        self._assessments = {
+            r.sim_path: assess(r, self._config_for(r), classification)
+            for r in self._results
+        }
+        # Seed the per-monitor configuration from the first assessment, so the
+        # auto-primary choice is visible and editable rather than implicit.
+        for path, assessment in self._assessments.items():
+            known = self._monitor_configs.setdefault(path, {})
+            for monitor in assessment.monitors:
+                known.setdefault(monitor.name, MonitorConfig(
+                    is_primary=monitor.is_primary,
+                    tolerance_fraction=None,
+                    reference_scale=None,
+                ))
+        self._populate_summary()
+
+    # --- population -----------------------------------------------------
+
+    def _populate_summary(self) -> None:
+        self._updating = True
+        try:
+            self._summary.setRowCount(len(self._results))
+            for row, result in enumerate(self._results):
+                assessment = self._assessments[result.sim_path]
+                index = assessment.convergence_index
+                cells = (
+                    result.sim_name,
+                    assessment.state.value,
+                    assessment.confidence.value,
+                    "—" if index is None else f"{index:.2f}",
+                    assessment.binding_constraint,
+                )
+                for column, text in enumerate(cells):
+                    self._summary.setItem(row, column, QTableWidgetItem(text))
+        finally:
+            self._updating = False
+        if self._results:
+            # selectRow does not re-emit itemSelectionChanged when the newly
+            # selected row is already the current one (e.g. re-assessing while
+            # row 0 stays selected), so the detail panes are refreshed
+            # explicitly rather than relying solely on the signal.
+            self._summary.selectRow(0)
+            self._on_selection_changed()
+        else:
+            self._show_placeholder()
+
+    def _show_placeholder(self) -> None:
+        self._verdict_state.setText("No data sets loaded")
+        for label in (self._verdict_confidence, self._verdict_index,
+                      self._verdict_binding, self._verdict_flags):
+            label.setText("")
+        self._reasons.clear()
+        self._monitor_table.setRowCount(0)
+        self._residual_table.setRowCount(0)
+        self._gate_table.setRowCount(0)
+
+    def _current(self):
+        row = self._summary.currentRow()
+        if row < 0 or row >= len(self._results):
+            return None
+        return self._assessments[self._results[row].sim_path]
+
+    def _on_selection_changed(self) -> None:
+        if self._updating:
+            return
+        assessment = self._current()
+        if assessment is None:
+            return
+        self._populate_verdict(assessment)
+        self._populate_reasons(assessment)
+        self._populate_monitors(assessment)
+        self._populate_residuals(assessment)
+        self._populate_gates(assessment)
+
+    def _populate_verdict(self, assessment) -> None:
+        self._verdict_state.setText(assessment.state.value)
+        self._verdict_confidence.setText(f"Confidence: {assessment.confidence.value}")
+        index = assessment.convergence_index
+        self._verdict_index.setText(
+            "Convergence index: —" if index is None
+            else f"Convergence index: {index:.2f}"
+        )
+        self._verdict_binding.setText(f"Binding: {assessment.binding_constraint}")
+        self._verdict_flags.setText(
+            "  ".join(flag.value for flag in assessment.flags)
+        )
+
+    def _populate_reasons(self, assessment) -> None:
+        self._reasons.clear()
+        for reason in assessment.reasons:
+            item = QTreeWidgetItem(
+                (reason.severity.value, reason.target, reason.message)
+            )
+            if reason.suggested_action:
+                item.addChild(QTreeWidgetItem(("", "", reason.suggested_action)))
+            if reason.estimated_extra_iterations:
+                item.addChild(QTreeWidgetItem((
+                    "", "",
+                    f"Estimated ~{reason.estimated_extra_iterations:,} more "
+                    "iterations (assumes the current rate persists)",
+                )))
+            self._reasons.addTopLevelItem(item)
+
+    def _populate_monitors(self, assessment) -> None:
+        self._updating = True
+        try:
+            self._monitor_table.setRowCount(len(assessment.monitors))
+            for row, monitor in enumerate(assessment.monitors):
+                # Column 0 is the checkbox alone; column 1 carries the name,
+                # which _on_monitor_edited reads back to identify the row.
+                primary = QTableWidgetItem("")
+                primary.setFlags(primary.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                primary.setCheckState(
+                    Qt.CheckState.Checked if monitor.is_primary
+                    else Qt.CheckState.Unchecked
+                )
+                self._monitor_table.setItem(row, 0, primary)
+                self._monitor_table.setItem(row, 1, self._readonly(monitor.name))
+                self._monitor_table.setItem(
+                    row, 2, QTableWidgetItem(f"{monitor.tolerance_fraction * 100:.4g}")
+                )
+                self._monitor_table.setItem(
+                    row, 3,
+                    QTableWidgetItem(f"{monitor.reference_scale:.6g} "
+                                     f"({monitor.scale_source.value})")
+                )
+        finally:
+            self._updating = False
+
+    def _readonly(self, text: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(text)
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        return item
+
+    def _populate_residuals(self, assessment) -> None:
+        self._residual_table.setRowCount(len(assessment.residuals))
+        for row, residual in enumerate(assessment.residuals):
+            projection = residual.iterations_to_target
+            cells = (
+                residual.name,
+                f"{residual.decades_dropped:.2f}",
+                f"{residual.log_slope:.3g}",
+                f"{residual.decay_factor:.5f}",
+                f"{residual.fit_r2:.3f}",
+                residual.state.value,
+                "—" if projection is None else f"{projection:,.0f}",
+            )
+            for column, text in enumerate(cells):
+                self._residual_table.setItem(row, column, self._readonly(text))
+
+    def _populate_gates(self, assessment) -> None:
+        self._gate_table.setRowCount(len(assessment.monitors))
+        for row, monitor in enumerate(assessment.monitors):
+            u_iter = monitor.iterative.u_iter
+            cells = (
+                monitor.name,
+                "yes" if monitor.is_primary else "no",
+                f"{monitor.mean:.6g}",
+                f"{monitor.band_p95:.4g}",
+                f"{monitor.projected_drift:.4g}",
+                "—" if u_iter is None else f"{u_iter:.4g}",
+                f"{monitor.n_eff:.0f}",
+                f"{monitor.margin:.2f}",
+                monitor.binding_gate,
+            )
+            for column, text in enumerate(cells):
+                self._gate_table.setItem(row, column, self._readonly(text))
+
+    # --- editing --------------------------------------------------------
+
+    def _on_preset_changed(self, label: str) -> None:
+        self._custom.setEnabled(label == "Custom")
+        self._reassess()
+
+    def _on_monitor_edited(self, item: QTableWidgetItem) -> None:
+        if self._updating:
+            return
+        row = self._summary.currentRow()
+        if row < 0 or row >= len(self._results):
+            return
+        path = self._results[row].sim_path
+        configs = self._monitor_configs.setdefault(path, {})
+        name_item = self._monitor_table.item(item.row(), 1)
+        if name_item is None:
+            return
+        name = name_item.text()
+        existing = configs.get(name, MonitorConfig())
+        if item.column() == 0:
+            existing.is_primary = item.checkState() == Qt.CheckState.Checked
+        elif item.column() == 2:
+            existing.tolerance_fraction = _parse_percent(item.text())
+        elif item.column() == 3:
+            existing.reference_scale = _parse_float(item.text())
+        configs[name] = existing
+        self._reassess()
+        self._select_path(path)
+
+    def _select_path(self, path: str) -> None:
+        for row, result in enumerate(self._results):
+            if result.sim_path == path:
+                # See the comment in _populate_summary: selectRow is a no-op
+                # signal-wise when the row is already selected, so refresh
+                # explicitly to pick up the just-recomputed assessment.
+                self._summary.selectRow(row)
+                self._on_selection_changed()
+                return
+
+
+def _parse_percent(text: str) -> Optional[float]:
+    value = _parse_float(text)
+    return None if value is None else value / 100.0
+
+
+def _parse_float(text: str) -> Optional[float]:
+    try:
+        return float(text.split()[0])
+    except (ValueError, IndexError):
+        return None
