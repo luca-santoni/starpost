@@ -1802,9 +1802,13 @@ def test_double_precision_floor_is_far_lower_than_the_single_one():
 
 
 def test_iterations_to_target_projects_from_the_current_decay_rate():
-    """A clean decay one decade short of the target projects a positive,
-    finite iteration count."""
-    a = assess_residual("Continuity", geometric(0.99, 1000), ConvergenceConfig(),
+    """A clean decay that has dropped only ~2.2 of the required 3 decades
+    projects a positive, finite iteration count from its current rate.
+
+    (The record length matters: over 1000 iterations at rho = 0.99 the trailing
+    window's median already sits ~3.9 decades down, past the target, and the
+    correct behaviour there is to decline to project.)"""
+    a = assess_residual("Continuity", geometric(0.99, 600), ConvergenceConfig(),
                         precision="double")
     assert a.state is ResidualState.CONVERGING
     assert a.iterations_to_target is not None
