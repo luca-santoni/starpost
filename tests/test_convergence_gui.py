@@ -131,6 +131,18 @@ def test_unticking_the_only_primary_monitor_drops_confidence_to_low(app):
     dlg.close()
 
 
+def test_parse_percent_tolerates_a_percent_sign_with_no_space():
+    """F4: the rendered cell is '0.1 %', but a user typing '0.2%' with no
+    space hit float(text.split()[0]) failing on the glued '%' and silently
+    reverting to the global preset — no error, just an edit that didn't take."""
+    from starpost.gui.views.convergence_dialog import _parse_percent
+
+    assert _parse_percent("0.2%") == pytest.approx(0.002)
+    assert _parse_percent("0.2 %") == pytest.approx(0.002)
+    assert _parse_percent("0.2") == pytest.approx(0.002)
+    assert _parse_percent("not a number") is None
+
+
 def test_g1_the_tolerance_column_shows_a_percent_suffix_and_edits_round_trip(app):
     """G1: the Tolerance column showed a bare number ('0.1') though the value
     is a percentage, which reads as an absolute tolerance. A '%' suffix must
@@ -147,6 +159,18 @@ def test_g1_the_tolerance_column_shows_a_percent_suffix_and_edits_round_trip(app
     assert dlg._assessments[path].monitors[0].tolerance_fraction == pytest.approx(0.002)
     # the re-populated cell still carries the suffix after the edit round-trip
     assert dlg._monitor_table.item(0, 2).text().strip().endswith("%")
+    dlg.close()
+
+
+def test_f4_editing_the_tolerance_cell_with_no_space_before_the_percent_sign(app):
+    """F4: '0.2 %' (with a space) always worked; a user typing '0.2%' with no
+    space hit float(text.split()[0]) failing on the glued '%' and silently
+    reverted to the global preset, with no error shown."""
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    path = dlg._results[0].sim_path
+    dlg._monitor_table.item(0, 2).setText("0.2%")
+    assert dlg._monitor_configs[path]["Drag"].tolerance_fraction == pytest.approx(0.002)
+    assert dlg._assessments[path].monitors[0].tolerance_fraction == pytest.approx(0.002)
     dlg.close()
 
 
@@ -194,8 +218,12 @@ def test_g2_the_gate_table_shows_a_real_number_when_u_iter_is_unavailable(app):
               for c in range(dlg._gate_table.columnCount())]
     column = headers.index("Iterative error")
     cell_text = dlg._gate_table.item(0, column).text()
-    assert cell_text != "—"
-    assert cell_text
+    # The escape hatch is denied here (C3/F2: no geometric structure, but a
+    # statistically and physically significant trend), so the gate's own
+    # value is +inf and _iterative_cell must show "unbounded" specifically —
+    # not merely "some non-dash string", which a stray blank or a wrong
+    # fallback label would also satisfy.
+    assert cell_text == "unbounded"
     dlg.close()
 
 

@@ -63,7 +63,11 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
                segments) -> ConvergenceAssessment:
         if state is ConvergenceState.UNSTEADY_UNSUPPORTED:
             flags, index = [], None
-            binding = (f"{metadata.solver_regime.value} run: not assessed"
+            # Match verdict.build_reasons' human-readable label (underscores
+            # replaced with spaces) rather than the raw token, so the summary
+            # table and the reason text agree on how the regime is spelled.
+            binding = (f"{metadata.solver_regime.value.replace('_', ' ')} run: "
+                      "not assessed"
                       if metadata.solver_regime.known
                       else "solver regime unknown: not assessed")
             confidence, rule = Confidence.LOW, "Low — non-steady or unknown-regime runs are not assessed"
@@ -71,7 +75,9 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             state, flags, index, binding = roll_up(
                 metadata, residuals, monitors, restart_seen, config
             )
-            confidence, rule = confidence_of(metadata, monitors, config)
+            confidence, rule = confidence_of(
+                metadata, residuals, monitors, integrity_errors, config
+            )
         return ConvergenceAssessment(
             sim_path=result.sim_path,
             sim_name=result.sim_name,

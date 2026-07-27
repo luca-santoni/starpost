@@ -220,6 +220,56 @@ def test_c2_integrity_fail_is_reserved_for_when_nothing_usable_remains():
     assert any(r.severity is Severity.ERROR and r.target == "Drag" for r in a.reasons)
 
 
+# --- F1: dropping every residual must not leave a silent CONVERGED --------
+
+def test_f1_a_dropped_diverging_residual_no_longer_certifies_a_false_converged():
+    """Reproduction from the re-review: a hard-diverging continuity residual
+    whose iteration column has one duplicated row near the end (C1's own
+    'ordinary in an exported CSV' scenario) fails its final-segment integrity
+    check and is dropped entirely — every residual equation in a STAR-CCM+
+    export shares one iteration column, so this is the likely shape of the
+    failure, not a narrow corner case. Before this fix that left zero
+    residuals and the QoI gates alone decided the verdict: CONVERGED, High
+    confidence, with no trace beyond a WARNING buried in the Reasons tab.
+    Residuals are necessary, never sufficient (this module's own stated
+    rule), so with no residual evidence surviving at all the strongest
+    available verdict is CONVERGING, and confidence must not read High."""
+    n = 3000
+    diverging = 10.0 ** (np.arange(n, dtype=float) / 200.0)
+    result = make_result(converged_qoi(n), diverging,
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    result.plots[1].series[0].x[-1] = result.plots[1].series[0].x[-2]
+    a = assess(result, primary(), CLASSIFICATION)
+
+    assert a.residuals == []
+    assert any("Continuity" in msg and "final segment" in msg
+              for msg in a.integrity_errors)
+    assert a.state not in (ConvergenceState.CONVERGED, ConvergenceState.CONVERGED_MACHINE)
+    assert a.state is ConvergenceState.CONVERGING
+    assert a.confidence is not Confidence.HIGH
+    assert AdvisoryFlag.NO_RESIDUAL_EVIDENCE in a.flags
+    assert any("no residual" in r.message.lower() for r in a.reasons)
+
+
+def test_f1_any_integrity_error_caps_confidence_at_medium():
+    """A single dropped series among otherwise-clean evidence must not still
+    read High: evidence was thrown away, so the record is not complete
+    enough to call High regardless of how clean what remains looks."""
+    n = 3000
+    result = make_result(converged_qoi(n), healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    result.plots.append(MonitorPlot(
+        name="Probe Monitor", kind=PlotKind.OTHER,
+        series=[PlotSeries(name="Probe", x=[0.0], y=[5.0])],
+    ))
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.CONVERGED
+    assert a.confidence is Confidence.MEDIUM
+    assert "dropped" in a.confidence_rule.lower()
+
+
 def test_a_healthy_but_unsettled_run_is_converging():
     n = 800
     qoi = 100.0 * (1.0 - np.exp(-np.arange(n) / 300.0))

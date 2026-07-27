@@ -1,7 +1,6 @@
 """Numeric primitives behind the convergence assessment. Pure numpy/math —
 no Qt, no STAR-CCM+, no per-user state, so no isolated_paths fixture needed."""
 import math
-import time
 
 import numpy as np
 import pytest
@@ -73,15 +72,24 @@ def test_i4_mann_kendall_is_capped_and_stays_fast_on_a_long_record():
     ~1.5GB peak RSS at n=10,000, and assess_monitor calls it for every monitor
     of every data set on every checkbox toggle and tolerance edit in the
     Convergence dialog. It must be capped exactly the way theil_sen_slope
-    already is, and a long, clearly trending record must still return
-    promptly with a strong z."""
-    y = np.arange(100_000, dtype=float) + np.sin(np.arange(100_000) / 7.0)
-    start = time.perf_counter()
-    mk = mann_kendall(y)
-    elapsed = time.perf_counter() - start
-    assert elapsed < 2.0, f"took {elapsed:.2f}s uncapped"
-    assert mk.z > 4.0
-    assert mk.p < 1e-4
+    already is.
+
+    Asserting the mechanism rather than wall-clock time: a long record's
+    statistic must equal the statistic computed directly on the same bounded
+    subsample ``_MAX_PAIRWISE_POINTS`` takes, which is only true if the O(n^2)
+    pairwise comparison actually ran on the subsample and not the full
+    record. A wall-clock budget is flaky under a parallel test runner sharing
+    CPU with other jobs; this is not."""
+    n = 100_000
+    y = np.arange(n, dtype=float) + np.sin(np.arange(n) / 7.0)
+    idx = np.linspace(0, n - 1, 2000).astype(int)
+    mk_full = mann_kendall(y)
+    mk_subsample = mann_kendall(y[idx])
+    assert mk_full.s == mk_subsample.s
+    assert mk_full.z == mk_subsample.z
+    assert mk_full.p == mk_subsample.p
+    assert mk_full.z > 4.0
+    assert mk_full.p < 1e-4
 
 
 def test_mann_kendall_on_a_flat_series_is_neutral():

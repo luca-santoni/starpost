@@ -10,6 +10,7 @@ binding constraint — the one string that tells the engineer what to do next.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from PySide6.QtCore import Qt
@@ -32,8 +33,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-import math
 
 from starpost.core.convergence import assess
 from starpost.core.convergence.config import (
@@ -448,7 +447,11 @@ def _iterative_cell(monitor) -> str:
 
 
 def _parse_percent(text: str) -> Optional[float]:
-    value = _parse_float(text)
+    # The rendered cell is "0.1 %", but a user editing it may type "0.2%"
+    # with no space; _parse_float's split() then leaves the "%" glued to the
+    # number and float() rejects it. Strip the sign before splitting so both
+    # spellings recover the same value.
+    value = _parse_float(text.replace("%", ""))
     return None if value is None else value / 100.0
 
 

@@ -12,12 +12,27 @@ All notable changes to StarPost are recorded here. Versions follow the
   the rule that produced it, a convergence index, the binding constraint, and a
   list of reasons with suggested actions and an estimate of the iterations
   remaining. Residual health, remaining iterative error and the engineering
-  quantities are assessed separately and then combined. Unsteady runs are
-  reported as not yet supported rather than assessed with steady tests.
-  Reads cached data only — no STAR-CCM+ re-run.
+  quantities are assessed separately and then combined; residuals can veto a
+  verdict but never certify one on their own, so a run left with no usable
+  residual history is held at "still converging" rather than reading as
+  converged. The Monitors table's Tolerance column shows its '%' suffix, and
+  the QoI-gates table's Iterative error column shows the value the gate was
+  actually decided on (including "unbounded", or the largest single-iteration
+  change) instead of a blank dash whenever the geometric-tail estimator
+  declined but the gate still bound the verdict. A new advisory flag,
+  AUTOCORRELATION_UNRELIABLE, fires when a monitor's decorrelation estimate
+  does not meet its own validity assumption. Unsteady runs are reported as not
+  yet supported rather than assessed with steady tests; a run whose solver
+  regime cannot be determined at all is refused the same way, since assessing
+  an unknown regime as steady would risk a confident wrong answer on a case
+  that may actually be transient. Reads cached data only — no STAR-CCM+
+  re-run.
 - Extraction now records solver precision, residual normalization mode, and the
-  unsteady solver parameters. Data sets extracted before this update are still
-  assessed, at reduced confidence; re-extract for the full verdict.
+  unsteady solver parameters. Convergence assessment refuses a data set
+  outright — rather than assessing it at reduced confidence — when its solver
+  regime cannot be determined at all; a cached result or portable CSV old
+  enough to carry no properties whatsoever falls into that case and needs
+  re-extraction before it can be assessed.
 
 ## [2.7.0] — 2026-07-25
 

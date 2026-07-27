@@ -33,6 +33,7 @@ def test_defaults_match_the_published_threshold_table():
     assert c.min_fit_points == 20
     assert c.rho_stagnant == 0.999
     assert c.mk_trend_z == 5.0
+    assert c.mk_trend_drift_fraction == 0.25
 
 
 def test_tolerance_presets():
@@ -53,6 +54,7 @@ def test_every_threshold_carries_its_provenance():
     assert THRESHOLD_PROVENANCE["safety_factor"] == "[S]"
     assert THRESHOLD_PROVENANCE["s_flat"] == "[D]"
     assert THRESHOLD_PROVENANCE["mk_trend_z"] == "[D]"
+    assert THRESHOLD_PROVENANCE["mk_trend_drift_fraction"] == "[D]"
 
 
 def test_monitor_config_defaults_to_non_primary_auto_scale():

@@ -102,8 +102,17 @@ def theil_sen_slope(x: np.ndarray, y: np.ndarray) -> float:
 
 def mann_kendall(y: np.ndarray) -> MannKendall:
     """Mann-Kendall trend test with the standard tie-corrected variance and
-    continuity correction. Reported as supporting evidence only: the design
-    never gates a verdict on a p-value alone.
+    continuity correction.
+
+    Reported to the caller as supporting evidence, and also used as one of
+    two conditions denying the static-monitor escape hatch in
+    ``steady.assess_monitor`` (see ``ConvergenceConfig.mk_trend_z``) — but
+    never alone: z is pure statistical significance, with no effect size and
+    a variance formula that assumes independent samples, so on a long or
+    autocorrelated record it can be large with no physically meaningful trend
+    behind it. The escape-hatch denial always pairs it with an absolute
+    effect-size test (``mk_trend_drift_fraction``) before acting on it; no
+    verdict in this package gates on a p-value by itself.
 
     Computed on a bounded subsample, the same cap and technique
     ``theil_sen_slope`` already uses, since the pairwise comparison is

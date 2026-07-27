@@ -226,6 +226,85 @@ def test_c3_settled_monitors_still_pass_across_seeds(scale):
         assert a.passed is True, f"scale={scale} seed={seed}"
 
 
+# --- F2: the mk_trend_z denial needs an effect-size term, not z alone ------
+#
+# White noise (the population above) structurally cannot trip Mann-Kendall,
+# so it never probes the false-refusal side of the mk_trend_z threshold. The
+# cases below reproduce the two false-refusal populations the re-review
+# measured: a trivially small *real* drift (z becomes significant with
+# enough points even though the drift is a tiny fraction of tolerance), and a
+# stationary but autocorrelated AR(1) record with no trend in the generating
+# process at all (Mann-Kendall's variance assumes independent samples, which
+# this is not). Both must still pass once the escape-hatch denial also
+# requires the projected drift to be a meaningful fraction of tolerance.
+
+def test_f2_a_trivially_small_real_drift_is_not_refused():
+    """Drifting at 1% of the tolerance the user set. z alone is significant
+    (a pure significance test has no notion of 'too small to matter'), but
+    the projected drift is a small fraction of tolerance, so the denial's
+    effect-size term must let the escape hatch through."""
+    n = 3000
+    config = ConvergenceConfig()
+    eps = config.tolerance_fraction * 100.0
+    rng = np.random.default_rng(0)
+    drift_per_iter = 0.01 * eps / 600.0     # projected drift ~= 1% of eps
+    y = (100.0 + drift_per_iter * np.arange(n, dtype=float)
+        + rng.normal(scale=0.01 * eps, size=n))
+    a = assess_monitor("Drag", y, config, is_primary=True)
+    assert a.iterative.valid is False
+    assert abs(a.mann_kendall_z) > config.mk_trend_z            # "significant"...
+    assert a.projected_drift < config.mk_trend_drift_fraction * a.tolerance_abs  # ...but tiny
+    assert gate(a, GATE_ITERATIVE).passed is True
+    assert a.passed is True
+
+
+@pytest.mark.parametrize("phi, seed", [(0.99, 2), (0.99, 3)])
+def test_f2_a_stationary_ar1_record_is_not_refused_on_correlated_noise(phi, seed):
+    """These two (phi, seed) pairs are exactly the ones the re-review
+    measured flipping to |z| > mk_trend_z on autocorrelation alone, with
+    drift, band and the window gate all passing — there is no trend in the
+    generating process, only correlated noise Mann-Kendall's variance formula
+    does not expect. The effect-size term (near-zero projected drift) must
+    still let the escape hatch through."""
+    n = 30000
+    config = ConvergenceConfig()
+    rng = np.random.default_rng(seed)
+    noise = rng.normal(size=n)
+    raw = np.empty(n)
+    raw[0] = noise[0]
+    for i in range(1, n):
+        raw[i] = phi * raw[i - 1] + noise[i]
+    eps = config.tolerance_fraction * 100.0
+    band_target = 0.02 * eps               # band held to 2% of tolerance
+    y = 100.0 + raw * (band_target / (raw.std() * 4.0))
+    a = assess_monitor("Drag", y, config, is_primary=True)
+    assert abs(a.mann_kendall_z) > config.mk_trend_z
+    assert a.projected_drift < config.mk_trend_drift_fraction * a.tolerance_abs
+    assert gate(a, GATE_ITERATIVE).passed is True
+    assert a.passed is True
+
+
+@pytest.mark.parametrize("rho, noise", [(0.999, 1e-3), (0.999, 1e-2),
+                                        (0.9999, 1e-3), (0.9999, 1e-2)])
+def test_f2_the_creeping_population_still_denied_with_the_effect_size_term(rho, noise):
+    """The counterpart sweep: adding the effect-size term must not reopen the
+    hole C3 closed. Every creeping seed's projected drift sits at 0.42-0.53 of
+    tolerance, comfortably above mk_trend_drift_fraction (0.25 by default), so
+    the denial must still fire for all of them."""
+    n = 3000
+    config = ConvergenceConfig()
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        y = (100.0 - 1.09 * rho ** np.arange(n, dtype=float)
+             + rng.normal(scale=noise, size=n))
+        a = assess_monitor("Drag", y, config, is_primary=True)
+        assert a.projected_drift >= config.mk_trend_drift_fraction * a.tolerance_abs, (
+            f"rho={rho} noise={noise} seed={seed}"
+        )
+        assert gate(a, GATE_ITERATIVE).passed is False, f"rho={rho} noise={noise} seed={seed}"
+        assert a.passed is False, f"rho={rho} noise={noise} seed={seed}"
+
+
 def test_a_short_record_fails_the_window_gate():
     """Gate 5. Any rule satisfiable by a handful of accidentally-similar
     consecutive samples fires spuriously, so the window must be long enough."""

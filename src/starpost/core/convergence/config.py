@@ -40,6 +40,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "marginal_low": "[D]",
     "marginal_high": "[D]",
     "mk_trend_z": "[D]",
+    "mk_trend_drift_fraction": "[D]",
 }
 
 
@@ -75,6 +76,13 @@ class ConvergenceConfig:
                                    # iterative fit, denies the static-monitor
                                    # escape hatch: the window still shows a
                                    # statistically resolvable monotonic trend
+    mk_trend_drift_fraction: float = 0.25
+                                   # the mk_trend_z denial above also requires
+                                   # the projected drift to be at least this
+                                   # fraction of tolerance — z alone is a pure
+                                   # significance test with no effect size, and
+                                   # a long enough record makes a physically
+                                   # irrelevant difference significant
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]

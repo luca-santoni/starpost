@@ -97,7 +97,16 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
     the whole run — the caller has already excluded it from ``residuals``/
     ``monitors`` and turned it into a warning reason. INTEGRITY_FAIL is
     reserved for the case where *nothing* usable survived: no residuals and
-    no monitors at all."""
+    no monitors at all.
+
+    Residuals are necessary, never sufficient (see the module docstring), so
+    CONVERGED and CONVERGED_MACHINE both require at least one surviving
+    residual. Dropping a bad series is meant to let the run continue on what
+    is left, not to quietly remove the one thing that can veto it — if every
+    residual failed its integrity check (the likely shape of the failure,
+    since every equation in a STAR-CCM+ export shares one iteration column),
+    the QoI gates alone cannot certify convergence and the strongest
+    available verdict is CONVERGING."""
     primary_monitors = [m for m in monitors if m.is_primary]
     flags = collect_flags(metadata, monitors, restart_seen, config)
 
@@ -126,22 +135,38 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
         return ConvergenceState.SLOW_DRIFT, flags, index, binding
     if not all(m.passed for m in primary_monitors):
         return ConvergenceState.CONVERGING, flags, index, binding
+    if not residuals:
+        flags = list(dict.fromkeys([*flags, AdvisoryFlag.NO_RESIDUAL_EVIDENCE]))
+        return ConvergenceState.CONVERGING, flags, index, binding
     if primary_residuals and all(
             r.state is ResidualState.MACHINE_PRECISION for r in primary_residuals):
         return ConvergenceState.CONVERGED_MACHINE, flags, index, binding
     return ConvergenceState.CONVERGED, flags, index, binding
 
 
-def confidence_of(metadata: RunMetadata, monitors: list[MonitorAssessment],
-                  config) -> tuple[Confidence, str]:
+def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
+                  integrity_errors: Optional[list[str]], config) -> tuple[Confidence, str]:
     """High/Medium/Low with the rule that produced it, so the level is
-    auditable rather than an opinion."""
+    auditable rather than an opinion.
+
+    Dropped series must show up here, not just in the reasons list: losing an
+    entire class of evidence (every residual, or every monitor, failed its
+    integrity check) caps confidence at Low — the same class of loss that, for
+    residuals, also holds the state at CONVERGING (see ``roll_up``). Any
+    integrity error at all, even one series among many, caps confidence at
+    Medium — evidence was thrown away, so the remaining record is not
+    complete enough to call High regardless of how clean it looks."""
     primary = [m for m in monitors if m.is_primary]
+    integrity_errors = integrity_errors or []
     low: list[str] = []
     medium: list[str] = []
 
     if not primary:
         low.append("no primary QoI declared")
+    if not residuals:
+        low.append("no residual evidence survived preconditioning")
+    if not monitors:
+        low.append("no monitor evidence survived preconditioning")
     if not metadata.residual_normalization.known:
         low.append("residual normalization unknown")
     for field, label in (
@@ -150,6 +175,9 @@ def confidence_of(metadata: RunMetadata, monitors: list[MonitorAssessment],
     ):
         if not field.known:
             medium.append(f"{label} unknown")
+    if integrity_errors:
+        dropped = ", ".join(msg.split(":", 1)[0] for msg in integrity_errors)
+        medium.append(f"series dropped during preconditioning ({dropped})")
 
     for monitor in primary:
         if monitor.n_eff < config.n_eff_floor:
@@ -185,8 +213,9 @@ def build_reasons(state: ConvergenceState, residuals,
         regime = metadata.solver_regime if metadata is not None else None
         if regime is not None and regime.known:
             label = regime.value.replace("_", " ")
-            message = (f"This is a {label} run, not steady. Its residuals and QoIs "
-                      "do not behave like a steady run's — a per-time-step "
+            article = "an" if label[:1].lower() in "aeiou" else "a"
+            message = (f"This is {article} {label} run, not steady. Its residuals "
+                      "and QoIs do not behave like a steady run's — a per-time-step "
                       "sawtooth and a statistical record rather than a fixed "
                       "point — so the steady tests would give a confident wrong "
                       "answer.")
@@ -407,4 +436,13 @@ _FLAG_TEXT: tuple[tuple[AdvisoryFlag, str, str], ...] = (
      "rather than exact.",
      "Continue iterating so the record is long relative to the correlation "
      "length, and treat a marginal window-adequacy pass with extra caution."),
+    (AdvisoryFlag.NO_RESIDUAL_EVIDENCE,
+     "No residual history survived preconditioning, so this run could not be "
+     "certified as converged: residuals are necessary evidence and here there "
+     "is none to check. The verdict is held at CONVERGING even though every "
+     "QoI gate passed, because the engineering quantities alone are not "
+     "sufficient — that is what a residual veto would normally be for.",
+     "Check why every residual series failed its integrity check (see the "
+     "per-series warnings above) and re-extract this data set if the "
+     "residual monitors should be present."),
 )
