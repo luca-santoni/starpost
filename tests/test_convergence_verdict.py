@@ -1,5 +1,7 @@
 """Roll-up: state, confidence, convergence index, binding constraint, reasons.
 Includes validation case V10 and the end-to-end integration tests."""
+import math
+
 import numpy as np
 import pytest
 
@@ -9,8 +11,13 @@ from starpost.core.convergence.models import (
     AdvisoryFlag,
     Confidence,
     ConvergenceState,
+    MetadataField,
+    Provenance,
+    RunMetadata,
     Severity,
 )
+from starpost.core.convergence.steady import assess_monitor
+from starpost.core.convergence.verdict import roll_up
 from starpost.data.models import (
     MonitorPlot,
     PlotKind,
@@ -148,13 +155,24 @@ def test_the_unbounded_confidence_cap_scales_with_the_fallback_evidence():
 
 
 def test_a_drifting_run_is_slow_drift_and_names_its_binding_constraint():
+    """R2: this linear drift fails the drift gate with a real, finite margin,
+    but a pure linear ramp has no geometric structure for the iterative
+    estimator to fit, and Mann-Kendall resolves the trend overwhelmingly
+    strongly (see steady.py) — so the static-monitor escape hatch is denied
+    and the iterative gate's tested quantity is +inf, the exact R2 mechanism.
+    With only one primary monitor and it unbounded, the index is honestly
+    None (never the 0.0 a bare limit/inf division would give) and the
+    binding constraint says so by name rather than a false-precision number."""
     n, window = 3000, 600
     eps = ConvergenceConfig().tolerance_fraction * 100.0
     qoi = 100.0 + (4.0 * eps / window) * np.arange(n, dtype=float)
     a = assess(make_result(qoi, healthy_residual()), primary(), CLASSIFICATION)
     assert a.state is ConvergenceState.SLOW_DRIFT
-    assert a.convergence_index < 1.0
-    assert a.binding_constraint.startswith("Drag: ")
+    assert a.convergence_index is None
+    assert a.unbounded_primary_count == 1
+    assert a.binding_constraint == (
+        "the remaining error could not be bounded for any primary monitor"
+    )
     assert any("drift" in r.message.lower() for r in a.reasons)
 
 
@@ -511,6 +529,134 @@ def test_a_residual_jump_without_an_index_reset_is_advisory_only():
               CLASSIFICATION)
     assert AdvisoryFlag.RESTART_SUSPECTED in a.flags
     assert a.n_segments == 1        # advisory: we did not segment
+
+
+def test_restart_suspected_ignores_a_sustained_shift_on_a_turbulence_equation():
+    """R3: only primary-class equations feed RESTART_SUSPECTED. This uses a
+    *sustained* level shift (not a single spike -- that is covered by the
+    persistence fix in signals.py and would not distinguish this filter) on a
+    turbulence-only equation (Sdr), which the class filter must exclude even
+    though ``restart_suspected`` on its own would flag it. Turbulence
+    residuals are held to weaker standards everywhere else in this codebase;
+    this is the same principle applied to the restart check."""
+    n = 1500
+    continuity = 10.0 ** (-np.arange(n, dtype=float) / 400.0)
+    sdr = np.concatenate([np.full(750, 1e-2), np.full(750, 1e-2 * 31.0)])
+    plots = [
+        MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                   series=[PlotSeries(name="Drag", x=list(map(float, range(3000))),
+                                      y=converged_qoi(3000).tolist())]),
+        MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL, series=[
+            PlotSeries(name="Continuity", x=list(map(float, range(n))),
+                      y=continuity.tolist()),
+            PlotSeries(name="Sdr", x=list(map(float, range(n))), y=sdr.tolist()),
+        ]),
+    ]
+    groups = [PropertyGroup(section="continuum", name="Physics 1",
+                            entries=[("models", "Steady; Segregated Flow")])]
+    result = SimResult(sim_path="/tmp/case.sim", plots=plots,
+                       properties=SimProperties(groups=groups))
+    a = assess(result, primary(), CLASSIFICATION)
+    assert AdvisoryFlag.RESTART_SUSPECTED not in a.flags
+
+
+# --- R2: an unbounded primary monitor must not collapse the index to 0 ----
+
+def _bare_metadata() -> RunMetadata:
+    absent = MetadataField(None, Provenance.ABSENT)
+    return RunMetadata(solver_regime=MetadataField("steady", Provenance.EXTRACTED),
+                       solver_type=absent, precision=absent,
+                       residual_normalization=absent)
+
+
+def _mk_denied_monitor(name: str = "Drag", seed: int = 0):
+    """A creeping monitor whose iterative escape hatch is denied (C3/F2): the
+    change series has no geometric structure to fit, but Mann-Kendall still
+    resolves a physically meaningful trend, so the iterative gate's tested
+    value is set to +inf. This is the exact mechanism R2 is about: ``_margin``
+    turns that +inf into a margin of exactly 0.0."""
+    n = 3000
+    rng = np.random.default_rng(seed)
+    y = 100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
+    return assess_monitor(name, y, ConvergenceConfig(), is_primary=True)
+
+
+def _settled_monitor(name: str = "Lift", seed: int = 1):
+    """An ordinary settled monitor with a finite (large) binding margin, for
+    contrast with the unbounded one above."""
+    n = 3000
+    rng = np.random.default_rng(seed)
+    y = 50.0 + rng.normal(scale=1e-2, size=n)
+    return assess_monitor(name, y, ConvergenceConfig(), is_primary=True)
+
+
+def test_r2_an_unbounded_monitor_alone_gives_index_none_not_zero():
+    """When the only primary monitor is unbounded, the index must be None (a
+    stated absence of measurement), never the 0.0 that a bare limit/inf
+    division would silently produce."""
+    unbounded = _mk_denied_monitor()
+    gate = next(g for g in unbounded.gates if g.name == unbounded.binding_gate)
+    assert not math.isfinite(gate.value)          # sanity: this is the R2 case
+
+    _, _, index, binding, unbounded_count = roll_up(
+        _bare_metadata(), [], [unbounded], False, ConvergenceConfig(),
+    )
+    assert index is None
+    assert index != 0.0
+    assert unbounded_count == 1
+    assert "could not be bounded" in binding.lower()
+    assert "any primary monitor" in binding.lower()
+
+
+def test_r2_index_is_the_worst_finite_margin_when_some_monitors_are_bounded():
+    """One unbounded primary monitor and one ordinary bounded one: the index
+    must be a real measurement (the bounded monitor's margin), and the
+    binding constraint must still say a monitor could not be bounded rather
+    than silently dropping that information."""
+    unbounded = _mk_denied_monitor("Drag")
+    bounded = _settled_monitor("Lift")
+
+    _, _, index, binding, unbounded_count = roll_up(
+        _bare_metadata(), [], [unbounded, bounded], False, ConvergenceConfig(),
+    )
+    assert index is not None
+    assert index == pytest.approx(bounded.margin)
+    assert unbounded_count == 1
+    assert "Lift" in binding
+    assert "Drag" in binding
+    assert "unbounded" in binding.lower() or "could not be bounded" in binding.lower()
+
+
+def test_r2_no_unbounded_monitors_behaves_exactly_as_before():
+    """The ordinary case (no unbounded primary monitor at all) must be
+    unaffected: index is the worst margin, binding names only that monitor,
+    and the count is 0."""
+    bounded_a = _settled_monitor("Lift", seed=1)
+    bounded_b = _settled_monitor("Drag", seed=2)
+    _, _, index, binding, unbounded_count = roll_up(
+        _bare_metadata(), [], [bounded_a, bounded_b], False, ConvergenceConfig(),
+    )
+    worst = min([bounded_a, bounded_b], key=lambda m: m.margin)
+    assert index == pytest.approx(worst.margin)
+    assert binding == f"{worst.name}: {worst.binding_gate}"
+    assert unbounded_count == 0
+
+
+def test_r2_end_to_end_assess_reports_the_unbounded_count_and_a_sane_index():
+    """Through the full assess() pipeline: a single primary monitor whose
+    escape hatch is denied must give convergence_index=None (not 0.0) and
+    unbounded_primary_count=1, and the ConvergenceAssessment must carry the
+    new field."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    qoi = 100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
+    result = make_result(qoi, healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.convergence_index is None
+    assert a.unbounded_primary_count == 1
+    assert "could not be bounded" in a.binding_constraint.lower()
 
 
 # --- F5: record_departure + the honest iterative-error backstop, verdict --

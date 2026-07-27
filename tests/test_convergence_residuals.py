@@ -83,6 +83,24 @@ def test_v7_divergence_is_caught_within_fifty_iterations_of_onset():
     assert a.state is ResidualState.DIVERGING
 
 
+def test_an_oscillating_residual_is_not_diverging_regardless_of_truncation_point():
+    """R1: a residual that oscillates about a flat plateau must not read as
+    DIVERGING, and the verdict must not depend on which phase of the
+    oscillation the record happens to end on. This is the failure mode a real
+    STAR-CCM+ run exposed: the last-50-iteration tail fit lands on whatever
+    phase the record stops in, so its slope is oscillation phase, not trend
+    (r^2 near 0), yet the un-gated slope alone was enough to declare the
+    strongest verdict the tool makes."""
+    transient = np.linspace(0.0, -2.0, 200)
+    i = np.arange(900, dtype=float)
+    plateau = -2.0 + 0.25 * np.sin(2.0 * np.pi * i / 40.0)
+    y = 10.0 ** np.concatenate([transient, plateau])
+    config = ConvergenceConfig()
+    for end in range(700, 1100, 37):
+        a = assess_residual("Continuity", y[:end], config, precision="double")
+        assert a.state is not ResidualState.DIVERGING, end
+
+
 def test_a_non_finite_value_is_immediate_divergence():
     y = geometric(0.97, 500)
     y[-3] = np.nan

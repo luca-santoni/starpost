@@ -20,6 +20,7 @@ def test_defaults_match_the_published_threshold_table():
     assert c.s_flat == 1e-4
     assert c.s_div == 1e-3
     assert c.s_div_window == 50
+    assert c.s_div_min_r2 == 0.5
     assert c.kappa_div == 10.0
     assert c.eps_prec_double == 1e-13
     assert c.eps_prec_single == 1e-6

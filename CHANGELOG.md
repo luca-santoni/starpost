@@ -51,6 +51,39 @@ All notable changes to StarPost are recorded here. Versions follow the
   enough to carry no properties whatsoever falls into that case and needs
   re-extraction before it can be assessed.
 
+### Fixes
+- **Convergence tool: an oscillating residual no longer reads as DIVERGING.**
+  The sustained-growth rung fit only the last 50 iterations and trusted its
+  slope regardless of fit quality; on a residual that oscillates around a
+  plateau, that window lands on whatever phase the record happens to end on,
+  so the slope was oscillation phase, not trend (r^2 as low as 0.03), and
+  whether DIVERGED fired depended on where the run happened to stop. The
+  slope is now trusted only when the tail fit actually explains the data
+  (new `s_div_min_r2` threshold, default 0.5); genuine divergence, which
+  fits cleanly, is still caught within 50 iterations as before.
+- **Convergence tool: the convergence index no longer collapses to a false
+  0.00.** Whenever a primary monitor's remaining iterative error could not
+  be bounded at all, the index arithmetic divided by infinity and always
+  landed on exactly 0.0 — indistinguishable from a monitor that was
+  genuinely measured and found hopeless, and the first thing a real run
+  exposed as "the tool looks broken". The index is now the worst *finite*
+  margin among primary monitors; a new `unbounded_primary_count` field on
+  the assessment records how many monitors could not be bounded, the
+  binding-constraint string names the true worst offender and says so when
+  it is one of them, and the index is `None` (not 0.0) only when every
+  primary monitor is unbounded. The Convergence window's verdict card,
+  summary table and per-monitor gate table all render this honestly instead
+  of printing a misleading "0.00".
+- **Convergence tool: RESTART_SUSPECTED no longer fires on a single
+  turbulence spike.** The restart heuristic flagged any single-iteration
+  ratio above 10x on any residual, including turbulence equations (Tke,
+  Sdr, ...), which spike by nature; a real run tripped it on one 31x Sdr
+  spike with a strictly increasing iteration index and no restart at all.
+  The check now only considers primary-class equations, and requires the
+  jump to persist (the median of several following samples must still sit
+  above the pre-jump level by the same factor) rather than firing on a
+  single sample that returns to baseline right after.
+
 ## [2.7.0] — 2026-07-25
 
 ### New Features

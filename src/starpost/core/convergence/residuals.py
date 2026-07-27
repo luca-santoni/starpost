@@ -95,9 +95,18 @@ def assess_residual(name: str, y: np.ndarray, config,
     # Rung 3 looks only at the most recent s_div_window iterations, so a
     # divergence that begins after a long healthy decay is caught within that
     # many iterations rather than being averaged away by the full window.
+    #
+    # The slope alone is not enough: on an oscillating residual the window
+    # lands on whatever phase the record happens to end on, so the fitted
+    # slope is oscillation phase, not trend, and its r^2 is near 0. Divergence
+    # is the strongest claim this module makes, so the slope is trusted only
+    # when the fit actually explains the tail — the same class of check as
+    # iterative.py's min_fit_r2 guarding its own slope-derived rho.
     tail = y[-config.s_div_window:]
     tail_fit = _log_fit(tail) if tail.size >= config.s_div_window else None
-    sustained_growth = bool(tail_fit and tail_fit.slope > config.s_div)
+    sustained_growth = bool(
+        tail_fit and tail_fit.slope > config.s_div and tail_fit.r2 >= config.s_div_min_r2
+    )
 
     floor = _precision_floor(precision, config)
     at_floor = (

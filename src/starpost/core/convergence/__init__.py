@@ -20,12 +20,14 @@ from starpost.core.convergence.models import (
     Confidence,
     ConvergenceAssessment,
     ConvergenceState,
+    EquationClass,
     MonitorAssessment,
     ResidualAssessment,
 )
 from starpost.core.convergence.residuals import assess_residual
 from starpost.core.convergence.signals import (
     collect_signals,
+    equation_class,
     final_segment,
     integrity_error,
     restart_suspected,
@@ -62,7 +64,7 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
     def finish(state, residuals, monitors, integrity_errors, restart_seen,
                segments) -> ConvergenceAssessment:
         if state is ConvergenceState.UNSTEADY_UNSUPPORTED:
-            flags, index = [], None
+            flags, index, unbounded_count = [], None, 0
             # Match verdict.build_reasons' human-readable label (underscores
             # replaced with spaces) rather than the raw token, so the summary
             # table and the reason text agree on how the regime is spelled.
@@ -81,7 +83,7 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             # must not read the same as one where evidence was thrown away.
             residual_evidence_destroyed = bool(residual_signals) and not residuals
             monitor_evidence_destroyed = bool(qoi_signals) and not monitors
-            state, flags, index, binding = roll_up(
+            state, flags, index, binding, unbounded_count = roll_up(
                 metadata, residuals, monitors, restart_seen, config,
                 residual_evidence_destroyed,
             )
@@ -98,6 +100,7 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             confidence_rule=rule,
             convergence_index=index,
             binding_constraint=binding,
+            unbounded_primary_count=unbounded_count,
             flags=flags,
             residuals=residuals,
             monitors=monitors,
@@ -145,7 +148,12 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
                 "(a restart split may have left a malformed tail)"
             )
             continue
-        if count == 1 and restart_suspected(segment.y, config.kappa_div):
+        # Turbulence residuals spike by nature and are held to weaker
+        # standards everywhere else in this module, so only primary-class
+        # equations can raise a restart suspicion (see restart_suspected's
+        # own persistence check in signals.py for the other half of this fix).
+        if (count == 1 and equation_class(signal.name) is EquationClass.PRIMARY
+                and restart_suspected(segment.y, config.kappa_div)):
             restart_seen = True
         residuals.append(assess_residual(
             signal.name, segment.y, config,

@@ -256,12 +256,11 @@ class ConvergenceDialog(QDialog):
             self._summary.setRowCount(len(self._results))
             for row, result in enumerate(self._results):
                 assessment = self._assessments[result.sim_path]
-                index = assessment.convergence_index
                 cells = (
                     result.sim_name,
                     assessment.state.value,
                     assessment.confidence.value,
-                    "—" if index is None else f"{index:.2f}",
+                    _index_text(assessment),
                     assessment.binding_constraint,
                 )
                 for column, text in enumerate(cells):
@@ -305,11 +304,7 @@ class ConvergenceDialog(QDialog):
     def _populate_verdict(self, assessment) -> None:
         self._verdict_state.setText(assessment.state.value)
         self._verdict_confidence.setText(f"Confidence: {assessment.confidence.value}")
-        index = assessment.convergence_index
-        self._verdict_index.setText(
-            "Convergence index: —" if index is None
-            else f"Convergence index: {index:.2f}"
-        )
+        self._verdict_index.setText(f"Convergence index: {_index_text(assessment)}")
         self._verdict_binding.setText(f"Binding: {assessment.binding_constraint}")
         self._verdict_flags.setText(
             "  ".join(flag.value for flag in assessment.flags)
@@ -393,7 +388,7 @@ class ConvergenceDialog(QDialog):
                 f"{monitor.projected_drift:.4g}",
                 _iterative_cell(monitor),
                 f"{monitor.n_eff:.0f}",
-                f"{monitor.margin:.2f}",
+                _margin_cell(monitor),
                 monitor.binding_gate,
             )
             for column, text in enumerate(cells):
@@ -444,6 +439,37 @@ def _iterative_cell(monitor) -> str:
     if not math.isfinite(gate.value):
         return "unbounded"
     return f"{gate.value:.4g} (largest change)"
+
+
+def _margin_cell(monitor) -> str:
+    """The QoI-gates table's 'Margin' cell.
+
+    ``monitor.margin`` is the min over the monitor's own gate margins, and
+    ``_margin`` (steady.py) turns an infinite gate value — the iterative
+    gate's value whenever the static-monitor escape hatch is denied — into
+    exactly 0.0. That is the same false-precision problem R2 fixes for the
+    run-level convergence index, one row at a time: "0.00" reads as a real,
+    if bad, measurement, not as "this could not be measured at all"."""
+    binding = next(g for g in monitor.gates if g.name == monitor.binding_gate)
+    if not math.isfinite(binding.value):
+        return "unbounded"
+    return f"{monitor.margin:.2f}"
+
+
+def _index_text(assessment) -> str:
+    """The verdict card's and summary table's 'Convergence index' text.
+
+    ``assessment.convergence_index`` is already honestly None when it could
+    not be measured (R2) — this only adds the count of unbounded primary
+    monitors so that information is not lost, whether or not a finite index
+    could still be reported from the rest."""
+    index = assessment.convergence_index
+    text = "—" if index is None else f"{index:.2f}"
+    count = assessment.unbounded_primary_count
+    if count:
+        plural = "s" if count != 1 else ""
+        text += f" ({count} primary monitor{plural} unbounded)"
+    return text
 
 
 def _parse_percent(text: str) -> Optional[float]:

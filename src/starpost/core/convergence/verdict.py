@@ -14,6 +14,7 @@ Three rules govern this module.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from starpost.core.convergence.models import (
@@ -53,6 +54,19 @@ def _slopes_disagree(monitor: MonitorAssessment) -> bool:
 
 def _gate(monitor: MonitorAssessment, name: str):
     return next(g for g in monitor.gates if g.name == name)
+
+
+def _binding_unbounded(monitor: MonitorAssessment) -> bool:
+    """Whether the monitor's binding gate tested a non-finite quantity.
+
+    The iterative gate's value is ``math.inf`` whenever the static-monitor
+    escape hatch is denied (see steady.py), and ``_margin`` there turns an
+    infinite value into a margin of exactly 0.0 — indistinguishable from a
+    genuine near-zero margin unless the underlying gate value is inspected
+    directly. This is what lets ``roll_up`` tell "unbounded" apart from
+    "measured and merely bad", so the convergence index never masquerades an
+    unmeasured quantity as a confident 0.0."""
+    return not math.isfinite(_gate(monitor, monitor.binding_gate).value)
 
 
 def _series_label(msg: str) -> str:
@@ -107,10 +121,22 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
 
 def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
             restart_seen: bool, config, residual_evidence_destroyed: bool = False
-            ) -> tuple[ConvergenceState, list[AdvisoryFlag], Optional[float], str]:
-    """Resolve the terminal state, flags, convergence index and binding
-    constraint. The state ladder is evaluated in order, first match wins, so a
-    residual DIVERGED outranks a QoI CONVERGED.
+            ) -> tuple[ConvergenceState, list[AdvisoryFlag], Optional[float], str, int]:
+    """Resolve the terminal state, flags, convergence index, binding
+    constraint and unbounded-primary-monitor count. The state ladder is
+    evaluated in order, first match wins, so a residual DIVERGED outranks a
+    QoI CONVERGED.
+
+    The convergence index is the worst *finite* margin among primary
+    monitors. A primary monitor whose binding gate could not be bounded at
+    all (see ``_binding_unbounded``) is worse than any finite margin, but its
+    true badness has no number — reporting it as 0.0 both hides that a
+    monitor is unbounded (it looks like an ordinary, if extreme, measurement)
+    and destroys the ability to tell "barely short of tolerance" apart from
+    "the tool could not measure this at all". So it is excluded from the
+    index and counted separately instead; the binding-constraint string
+    always says so when at least one primary monitor is unbounded, and when
+    *every* primary monitor is unbounded the index itself is None.
 
     A series that failed an integrity check is dropped rather than poisoning
     the whole run — the caller has already excluded it from ``residuals``/
@@ -139,36 +165,64 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
 
     index: Optional[float] = None
     binding = "no primary QoI declared"
+    unbounded_count = 0
     if primary_monitors:
+        # Not list membership (`m not in unbounded`): MonitorAssessment is an
+        # unfrozen dataclass with structural equality, so identity is what we
+        # actually want here, not "some other monitor with equal fields".
+        bounded = [m for m in primary_monitors if not _binding_unbounded(m)]
+        unbounded_count = len(primary_monitors) - len(bounded)
+        # The true worst offender by raw margin: an unbounded monitor's
+        # margin is 0.0 (see _margin), so it naturally outranks any finite
+        # one and is named here regardless of whether the index below can
+        # use it.
         worst = min(primary_monitors, key=lambda m: m.margin)
-        index = worst.margin
-        binding = f"{worst.name}: {worst.binding_gate}"
+        if not bounded:
+            index = None
+            binding = "the remaining error could not be bounded for any primary monitor"
+        elif _binding_unbounded(worst):
+            # The named worst offender cannot supply a number, so the index
+            # falls back to the worst monitor that could actually be
+            # measured — never silently to 0.0 — and the binding string
+            # keeps both: who is truly worst, and where the number came from.
+            best_bounded = min(bounded, key=lambda m: m.margin)
+            index = best_bounded.margin
+            plural = "s" if unbounded_count != 1 else ""
+            binding = (
+                f"{worst.name}: {worst.binding_gate} could not be bounded "
+                f"({unbounded_count} primary monitor{plural} unbounded); the "
+                f"index instead reflects the worst monitor that could be "
+                f"measured, {best_bounded.name}: {best_bounded.binding_gate}"
+            )
+        else:
+            index = worst.margin
+            binding = f"{worst.name}: {worst.binding_gate}"
 
     primary_residuals = [r for r in residuals
                          if r.equation_class is EquationClass.PRIMARY]
 
     if not residuals and not monitors:
-        return ConvergenceState.INTEGRITY_FAIL, flags, index, binding
+        return ConvergenceState.INTEGRITY_FAIL, flags, index, binding, unbounded_count
     if any(r.state is ResidualState.DIVERGING for r in residuals):
-        return ConvergenceState.DIVERGED, flags, index, binding
+        return ConvergenceState.DIVERGED, flags, index, binding, unbounded_count
     # Turbulence residuals routinely stall one to two orders above the momentum
     # residuals without harming the QoIs, so only primary-class equations can
     # force a stall verdict.
     if any(r.state is ResidualState.STALLED for r in primary_residuals):
-        return ConvergenceState.STALLED, flags, index, binding
+        return ConvergenceState.STALLED, flags, index, binding, unbounded_count
     if not primary_monitors:
-        return ConvergenceState.CONVERGING, flags, index, binding
+        return ConvergenceState.CONVERGING, flags, index, binding, unbounded_count
     if any(not _gate(m, GATE_DRIFT).passed for m in primary_monitors):
-        return ConvergenceState.SLOW_DRIFT, flags, index, binding
+        return ConvergenceState.SLOW_DRIFT, flags, index, binding, unbounded_count
     if not all(m.passed for m in primary_monitors):
-        return ConvergenceState.CONVERGING, flags, index, binding
+        return ConvergenceState.CONVERGING, flags, index, binding, unbounded_count
     if residual_evidence_destroyed:
         flags = list(dict.fromkeys([*flags, AdvisoryFlag.NO_RESIDUAL_EVIDENCE]))
-        return ConvergenceState.CONVERGING, flags, index, binding
+        return ConvergenceState.CONVERGING, flags, index, binding, unbounded_count
     if primary_residuals and all(
             r.state is ResidualState.MACHINE_PRECISION for r in primary_residuals):
-        return ConvergenceState.CONVERGED_MACHINE, flags, index, binding
-    return ConvergenceState.CONVERGED, flags, index, binding
+        return ConvergenceState.CONVERGED_MACHINE, flags, index, binding, unbounded_count
+    return ConvergenceState.CONVERGED, flags, index, binding, unbounded_count
 
 
 def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],

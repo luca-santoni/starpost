@@ -87,19 +87,43 @@ def final_segment(x: np.ndarray, y: np.ndarray) -> tuple[Segment, int]:
     return segments[-1], len(segments)
 
 
-def restart_suspected(y: np.ndarray, kappa: float) -> bool:
-    """A single-iteration jump larger than ``kappa``, on a monotonic index.
+# How many samples after a candidate jump must confirm the level actually
+# shifted, rather than a single sample spiking and returning. Not a
+# ConvergenceConfig threshold: it is a fixed structural choice (how many
+# samples make a "several"), not a physically meaningful cutoff to tune.
+_RESTART_PERSISTENCE_SAMPLES = 5
 
-    Advisory only. Restricted to strictly positive samples, since the test is a
-    ratio and QoI signals legitimately cross zero."""
+
+def restart_suspected(y: np.ndarray, kappa: float) -> bool:
+    """A single-iteration jump larger than ``kappa`` that persists, on a
+    monotonic index.
+
+    Advisory only. Restricted to strictly positive samples, since the test is
+    a ratio and QoI signals legitimately cross zero.
+
+    A raw single-sample ratio above kappa is not enough: a restart shifts the
+    level permanently, but a spike (routine on a turbulence residual, which
+    this is applied to only for primary-class equations -- see the
+    ``equation_class`` filter in ``core/convergence/__init__.py``) returns
+    within a sample or two. So a candidate jump is confirmed only when the
+    median of the several samples following it still sits above the pre-jump
+    level by the same factor, which resists a second, opposite spike landing
+    right after the first."""
     if y.size < 2:
         return False
-    pairs = np.column_stack([y[:-1], y[1:]])
-    positive = np.all(pairs > 0, axis=1)
+    pre, post = y[:-1], y[1:]
+    positive = (pre > 0) & (post > 0)
     if not positive.any():
         return False
-    ratios = pairs[positive][:, 1] / pairs[positive][:, 0]
-    return bool(np.any(ratios > kappa))
+    ratios = np.full(pre.size, -np.inf)
+    ratios[positive] = post[positive] / pre[positive]
+    for i in np.nonzero(ratios > kappa)[0]:
+        pre_level = pre[i]
+        tail = y[i + 1: i + 1 + _RESTART_PERSISTENCE_SAMPLES]
+        tail = tail[tail > 0]
+        if tail.size and np.median(tail) > kappa * pre_level:
+            return True
+    return False
 
 
 def window_bounds(n: int, config, d_n: Optional[float] = None) -> tuple[int, int, bool]:

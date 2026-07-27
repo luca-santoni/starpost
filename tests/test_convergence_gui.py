@@ -94,9 +94,15 @@ def test_a_settled_run_reads_as_converged(app):
 
 
 def test_a_drifting_run_names_its_binding_constraint(app):
+    """R2: this fixture's linear drift has no geometric structure for the
+    iterative estimator, so with only one primary monitor the escape hatch's
+    denial leaves that monitor fully unbounded — the binding constraint uses
+    the exact "could not be bounded for any primary monitor" wording rather
+    than naming a monitor it has no number for (see test_convergence_verdict
+    .py's version of this test for the full mechanism)."""
     dlg = open_dialog(store_with(make_result("/tmp/b.sim", drifting=True)))
     assert "SLOW_DRIFT" in dlg._verdict_state.text()
-    assert "Drag" in dlg._verdict_binding.text()
+    assert "could not be bounded" in dlg._verdict_binding.text()
     dlg.close()
 
 
@@ -231,6 +237,62 @@ def test_g2_the_gate_table_shows_a_real_number_when_u_iter_is_unavailable(app):
     # not merely "some non-dash string", which a stray blank or a wrong
     # fallback label would also satisfy.
     assert cell_text == "unbounded"
+    dlg.close()
+
+
+def _creeping_single_monitor_result(path: str = "/tmp/creep.sim") -> SimResult:
+    """A single primary monitor whose iterative escape hatch is denied (same
+    fixture as the G2 test above): its binding gate value is +inf, the exact
+    R2 mechanism, and there is no other primary monitor to fall back on, so
+    the index must come out None rather than the false 0.0 a bare limit/inf
+    division would give."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    qoi = (100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float)
+          + rng.normal(scale=1e-2, size=n))
+    residual = 10.0 ** (-np.arange(n, dtype=float) / 400.0) + 1e-12
+    x = list(map(float, range(n)))
+    return SimResult(
+        sim_path=path,
+        plots=[
+            MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                        series=[PlotSeries(name="Drag", x=x, y=qoi.tolist())]),
+            MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                        series=[PlotSeries(name="Continuity", x=x,
+                                           y=residual.tolist())]),
+        ],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                          entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="", entries=[
+                ("precision", "double"), ("residual_normalization", "auto")]),
+        ]),
+    )
+
+
+def test_r2_the_verdict_card_reports_an_unbounded_index_honestly(app):
+    result = _creeping_single_monitor_result()
+    dlg = open_dialog(store_with(result))
+    a = dlg._assessments[result.sim_path]
+    assert a.convergence_index is None
+    assert a.unbounded_primary_count == 1
+
+    text = dlg._verdict_index.text()
+    assert "0.00" not in text
+    assert "—" in text
+    assert "unbounded" in text.lower()
+    dlg.close()
+
+
+def test_r2_the_summary_table_never_prints_an_unbounded_index_as_zero(app):
+    from starpost.gui.views.convergence_dialog import _SUMMARY_COLUMNS
+
+    result = _creeping_single_monitor_result()
+    dlg = open_dialog(store_with(result))
+    index_column = _SUMMARY_COLUMNS.index("Index")
+    cell_text = dlg._summary.item(0, index_column).text()
+    assert "0.00" not in cell_text
+    assert "—" in cell_text
     dlg.close()
 
 

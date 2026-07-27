@@ -23,6 +23,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "s_flat": "[D]",
     "s_div": "[D]",
     "s_div_window": "[D]",
+    "s_div_min_r2": "[D]",
     "kappa_div": "[D]",
     "eps_prec_double": "[D]",
     "eps_prec_single": "[D]",
@@ -63,6 +64,15 @@ class ConvergenceConfig:
     s_flat: float = 1e-4           # |log-slope| below which residuals count as flat
     s_div: float = 1e-3            # log-slope above which divergence is declared
     s_div_window: int = 50         # iterations the divergent slope must be sustained
+    s_div_min_r2: float = 0.5      # the s_div_window tail fit must explain at least
+                                   # this much variance before its slope is trusted
+                                   # to declare divergence — an oscillating residual
+                                   # makes the last-window slope pure phase, not
+                                   # trend (r^2 near 0), and divergence is the
+                                   # strongest claim this module makes. Same class
+                                   # of check as min_fit_r2 below, applied to the
+                                   # divergence rung instead of the iterative-error
+                                   # one.
     kappa_div: float = 10.0        # residual growth vs reference => diverged
     eps_prec_double: float = 1e-13
     eps_prec_single: float = 1e-6

@@ -224,6 +224,12 @@ class ConvergenceAssessment:
     confidence_rule: str
     convergence_index: Optional[float]
     binding_constraint: str
+    # How many primary monitors' binding gate could not be bounded at all
+    # (an infinite gate value, e.g. the iterative gate whenever the
+    # static-monitor escape hatch is denied — see verdict.roll_up). These are
+    # excluded from convergence_index rather than silently reported as an
+    # index of 0, and this count is what lets a caller say so.
+    unbounded_primary_count: int = 0
     flags: list[AdvisoryFlag] = field(default_factory=list)
     residuals: list[ResidualAssessment] = field(default_factory=list)
     monitors: list[MonitorAssessment] = field(default_factory=list)

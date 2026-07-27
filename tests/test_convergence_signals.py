@@ -80,6 +80,22 @@ def test_restart_suspected_is_quiet_on_a_smooth_decay():
     assert restart_suspected(y, kappa=10.0) is False
 
 
+def test_restart_suspected_requires_the_jump_to_persist():
+    """R3: a single-sample spike that returns to baseline right after is not a
+    restart -- a turbulence residual spikes by nature (the real data set that
+    exposed this had one 31x Sdr spike with no restart at all). A restart
+    shifts the level; a spike returns."""
+    y = np.full(100, 1e-3)
+    y[50] = 1e-3 * 31.0
+    assert restart_suspected(y, kappa=10.0) is False
+
+
+def test_restart_suspected_fires_on_a_sustained_level_shift():
+    """The same jump, but the level actually stays up: a genuine restart."""
+    y = np.concatenate([np.full(50, 1e-3), np.full(50, 1e-3 * 31.0)])
+    assert restart_suspected(y, kappa=10.0) is True
+
+
 def test_restart_suspected_ignores_non_positive_values():
     """QoI signals cross zero; the log-ratio test only applies to positive
     residual-like data and must not raise on the rest."""
