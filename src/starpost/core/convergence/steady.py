@@ -28,6 +28,17 @@ Two departures from the design document, both required for correctness:
    evidence. ASYMPTOTICALLY_STAGNANT is excluded: that flag marks precisely the
    signal whose changes look small while its remaining error is enormous.
 
+   The same escape hatch is also denied when the estimator declines for lack
+   of geometric structure (a low fit r^2, not stagnation) but the window's
+   Mann-Kendall statistic still finds a statistically resolvable monotonic
+   trend. That combination is a monitor slowly creeping toward its asymptote
+   with noise riding on top: the drift gate under-reads the remaining tail by
+   a factor of roughly N_W*(1-rho), which is a fraction of a percent at
+   rho -> 1, so a monitor 8x from its asymptote can otherwise pass every gate
+   with margin to spare. Mann-Kendall is not fooled by the same noise that
+   defeats the geometric fit, because it tests rank order rather than
+   magnitude.
+
 A third point, not a departure but easy to get wrong: the decorrelation factor
 is estimated from the *detrended* window. A smooth, well-settled monitor has an
 autocorrelation that stays near 1 for hundreds of lags purely because of its
@@ -163,6 +174,25 @@ def assess_monitor(name: str, y: np.ndarray, config,
         iterative_value = math.inf
         iterative_passed = False
         iterative_detail = iterative.reason
+    elif abs(mk.z) > config.mk_trend_z:
+        # The escape hatch is for a monitor that has genuinely stopped
+        # moving. This one has not: the change series has no geometric
+        # structure to extrapolate (so the tail estimator declined), but the
+        # window still shows a trend Mann-Kendall can resolve statistically.
+        # Judging it on the largest single-iteration change would under-read
+        # the remaining approach by orders of magnitude near rho -> 1 (see the
+        # module docstring), so the gate fails outright rather than
+        # substituting a number that looks reassuring but is not comparable.
+        iterative_value = math.inf
+        iterative_passed = False
+        iterative_detail = (
+            "the remaining error could not be bounded: the change series has "
+            "no geometric structure to extrapolate "
+            f"({iterative.reason}), but the window still shows a "
+            f"statistically resolvable monotonic trend (Mann-Kendall z = "
+            f"{mk.z:.3g}, |z| > {config.mk_trend_z}); the static-monitor "
+            "escape hatch is refused"
+        )
     else:
         largest_change = float(np.max(np.abs(np.diff(window)))) if n_window > 1 else 0.0
         iterative_value = largest_change

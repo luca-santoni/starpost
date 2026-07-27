@@ -49,6 +49,7 @@ class AdvisoryFlag(str, Enum):
     WINDOW_TOO_SHORT = "WINDOW_TOO_SHORT"
     RESTART_SUSPECTED = "RESTART_SUSPECTED"
     OSCILLATORY_SUSPECTED = "OSCILLATORY_SUSPECTED"
+    AUTOCORRELATION_UNRELIABLE = "AUTOCORRELATION_UNRELIABLE"
 
 
 class Provenance(str, Enum):
@@ -104,6 +105,15 @@ class RunMetadata:
     @property
     def is_unsteady(self) -> bool:
         return (self.solver_regime.value or "").endswith("unsteady")
+
+    @property
+    def is_steady(self) -> bool:
+        """Positive recognition, not a default. A regime that is absent, or
+        recognised but not literally 'steady' (harmonic balance included —
+        ``is_unsteady`` does not catch it, since the token does not end with
+        'unsteady'), must be refused rather than silently assessed with
+        steady gates."""
+        return self.solver_regime.known and self.solver_regime.value == "steady"
 
 
 @dataclass
@@ -217,3 +227,8 @@ class ConvergenceAssessment:
     reasons: list[Reason] = field(default_factory=list)
     thresholds_used: dict = field(default_factory=dict)
     n_segments: int = 1
+    # Per-series messages for signals that failed an integrity check and were
+    # dropped (whole series or, after C1, its final segment). Also surfaced as
+    # warning Reasons; kept here too so a caller can inspect them directly
+    # without re-parsing the reasons list.
+    integrity_errors: list[str] = field(default_factory=list)

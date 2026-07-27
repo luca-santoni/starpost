@@ -131,6 +131,74 @@ def test_unticking_the_only_primary_monitor_drops_confidence_to_low(app):
     dlg.close()
 
 
+def test_g1_the_tolerance_column_shows_a_percent_suffix_and_edits_round_trip(app):
+    """G1: the Tolerance column showed a bare number ('0.1') though the value
+    is a percentage, which reads as an absolute tolerance. A '%' suffix must
+    appear, and _parse_percent must still recover the value when the cell is
+    edited (it already tolerates a trailing token)."""
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    cell = dlg._monitor_table.item(0, 2)
+    assert cell.text().strip().endswith("%")
+    assert cell.text().strip().startswith("0.1")   # screening preset, 0.1%
+
+    path = dlg._results[0].sim_path
+    dlg._monitor_table.item(0, 2).setText("0.2 %")
+    assert dlg._monitor_configs[path]["Drag"].tolerance_fraction == pytest.approx(0.002)
+    assert dlg._assessments[path].monitors[0].tolerance_fraction == pytest.approx(0.002)
+    # the re-populated cell still carries the suffix after the edit round-trip
+    assert dlg._monitor_table.item(0, 2).text().strip().endswith("%")
+    dlg.close()
+
+
+def test_g2_the_gate_table_header_names_the_iterative_error_column(app):
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    headers = [dlg._gate_table.horizontalHeaderItem(c).text()
+              for c in range(dlg._gate_table.columnCount())]
+    assert "Iterative error" in headers
+    dlg.close()
+
+
+def test_g2_the_gate_table_shows_a_real_number_when_u_iter_is_unavailable(app):
+    """G2: U_iter is None whenever the geometric-tail estimator declines —
+    now common, including for the creeping-but-noisy monitors the C3 fix
+    denies the escape hatch for. The iterative gate can still be the binding
+    constraint, so the cell must show the value the gate was actually decided
+    on rather than a blank dash."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    qoi = (100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float)
+          + rng.normal(scale=1e-2, size=n))
+    residual = 10.0 ** (-np.arange(n, dtype=float) / 400.0) + 1e-12
+    x = list(map(float, range(n)))
+    result = SimResult(
+        sim_path="/tmp/creep.sim",
+        plots=[
+            MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                        series=[PlotSeries(name="Drag", x=x, y=qoi.tolist())]),
+            MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                        series=[PlotSeries(name="Continuity", x=x,
+                                           y=residual.tolist())]),
+        ],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                          entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="", entries=[
+                ("precision", "double"), ("residual_normalization", "auto")]),
+        ]),
+    )
+    dlg = open_dialog(store_with(result))
+    monitor = dlg._assessments["/tmp/creep.sim"].monitors[0]
+    assert monitor.iterative.u_iter is None             # the estimator declined
+
+    headers = [dlg._gate_table.horizontalHeaderItem(c).text()
+              for c in range(dlg._gate_table.columnCount())]
+    column = headers.index("Iterative error")
+    cell_text = dlg._gate_table.item(0, column).text()
+    assert cell_text != "—"
+    assert cell_text
+    dlg.close()
+
+
 def test_changing_the_tolerance_preset_re_runs_the_assessment(app):
     dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
     before = dlg._assessments["/tmp/a.sim"].monitors[0].tolerance_abs

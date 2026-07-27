@@ -62,11 +62,14 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
     def finish(state, residuals, monitors, integrity_errors, restart_seen,
                segments) -> ConvergenceAssessment:
         if state is ConvergenceState.UNSTEADY_UNSUPPORTED:
-            flags, index, binding = [], None, "unsteady run: not assessed"
-            confidence, rule = Confidence.LOW, "Low — unsteady runs are not assessed"
+            flags, index = [], None
+            binding = (f"{metadata.solver_regime.value} run: not assessed"
+                      if metadata.solver_regime.known
+                      else "solver regime unknown: not assessed")
+            confidence, rule = Confidence.LOW, "Low — non-steady or unknown-regime runs are not assessed"
         else:
             state, flags, index, binding = roll_up(
-                metadata, residuals, monitors, integrity_errors, restart_seen, config
+                metadata, residuals, monitors, restart_seen, config
             )
             confidence, rule = confidence_of(metadata, monitors, config)
         return ConvergenceAssessment(
@@ -81,18 +84,25 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             flags=flags,
             residuals=residuals,
             monitors=monitors,
-            reasons=build_reasons(state, residuals, monitors, flags, config),
+            reasons=build_reasons(state, residuals, monitors, flags, config,
+                                  metadata, integrity_errors),
             thresholds_used=config.as_dict(),
             n_segments=segments,
+            integrity_errors=list(integrity_errors),
         )
 
-    if metadata.is_unsteady:
-        return finish(ConvergenceState.UNSTEADY_UNSUPPORTED, [], [], [], False, 1)
-
+    # INTEGRITY_FAIL outranks everything else in the state ladder (see
+    # ConvergenceState's docstring), so "there is nothing here to assess" is
+    # checked before "the regime is not steady" — a data set with no monitor
+    # histories at all is not usefully described as "unsteady" or "regime
+    # unknown", whatever its metadata says.
     if not residual_signals and not qoi_signals:
         return finish(ConvergenceState.INTEGRITY_FAIL, [], [],
                       ["no monitor histories were found in this data set"],
                       False, 1)
+
+    if not metadata.is_steady:
+        return finish(ConvergenceState.UNSTEADY_UNSUPPORTED, [], [], [], False, 1)
 
     integrity_errors: list[str] = []
     restart_seen = False
@@ -106,6 +116,18 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             continue
         segment, count = final_segment(signal.x, signal.y)
         segments = max(segments, count)
+        # split_segments breaks wherever diff(x) <= 0, so a single duplicated
+        # or out-of-order index near the end of an otherwise clean series
+        # yields a one-point (or otherwise malformed) final segment. The
+        # whole-series check above cannot catch that — re-validate the
+        # segment actually being analysed.
+        segment_error = integrity_error(segment.x, segment.y)
+        if segment_error:
+            integrity_errors.append(
+                f"{signal.name}: final segment {segment_error} "
+                "(a restart split may have left a malformed tail)"
+            )
+            continue
         if count == 1 and restart_suspected(segment.y, config.kappa_div):
             restart_seen = True
         residuals.append(assess_residual(
@@ -125,6 +147,13 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             continue
         segment, count = final_segment(signal.x, signal.y)
         segments = max(segments, count)
+        segment_error = integrity_error(segment.x, segment.y)
+        if segment_error:
+            integrity_errors.append(
+                f"{signal.name}: final segment {segment_error} "
+                "(a restart split may have left a malformed tail)"
+            )
+            continue
         override = config.monitors.get(signal.name)
         is_primary = (
             override.is_primary if override is not None

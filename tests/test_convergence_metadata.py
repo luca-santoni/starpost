@@ -42,6 +42,36 @@ def test_implicit_unsteady_is_recognised_and_flagged_unsteady():
     assert m.solver_regime.value == "implicit_unsteady"
     assert m.solver_type.value == "coupled"
     assert m.is_unsteady is True
+    assert m.is_steady is False
+
+
+# --- I5: is_steady must positively recognise steady, not default to it -----
+
+def test_is_steady_is_true_only_for_the_literal_steady_token():
+    m = read_metadata(props(PropertyGroup(
+        section="continuum", name="Physics 1",
+        entries=[("models", "Steady; Segregated Flow")],
+    )))
+    assert m.is_steady is True
+
+
+def test_is_steady_is_false_for_harmonic_balance_even_though_is_unsteady_misses_it():
+    """The bug this closes: 'harmonic_balance' does not end with 'unsteady',
+    so the old is_unsteady-based gate silently ran the steady tests on it."""
+    m = read_metadata(props(PropertyGroup(
+        section="continuum", name="Physics 1",
+        entries=[("models", "Harmonic Balance; Coupled Flow")],
+    )))
+    assert m.solver_regime.value == "harmonic_balance"
+    assert m.is_unsteady is False       # the trap: does not end with "unsteady"
+    assert m.is_steady is False         # but must still be refused
+
+
+def test_is_steady_is_false_when_the_regime_is_absent():
+    """An absent regime must not default to steady."""
+    m = read_metadata(None)
+    assert m.solver_regime.known is False
+    assert m.is_steady is False
 
 
 def test_extracted_convergence_section_beats_derivation():

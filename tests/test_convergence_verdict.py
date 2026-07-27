@@ -114,10 +114,110 @@ def test_an_unsteady_run_is_refused_not_assessed():
     assert any("unsteady" in r.message.lower() for r in a.reasons)
 
 
+# --- I5: regime handling has to positively recognise steady ----------------
+
+def test_i5_a_harmonic_balance_run_is_refused_not_silently_assessed_steady():
+    """harmonic_balance does not end with 'unsteady', so the old
+    is_unsteady-based gate silently ran the steady tests on it. is_steady must
+    positively recognise 'steady' and refuse everything else."""
+    result = make_result(converged_qoi(), healthy_residual(),
+                         models="Harmonic Balance; Segregated Flow")
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.UNSTEADY_UNSUPPORTED
+    assert a.monitors == []
+    assert any("harmonic balance" in r.message.lower() for r in a.reasons)
+
+
+def test_i5_an_absent_regime_is_refused_with_a_distinct_message():
+    """An absent regime must not default to steady, and the reason text must
+    be distinguishable from a confirmed-unsteady run: 'we don't know' is a
+    different situation from 'we know and it's unsteady'."""
+    result = make_result(converged_qoi(), healthy_residual(), models="")
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.UNSTEADY_UNSUPPORTED
+    message = next(r.message for r in a.reasons if r.target == "run")
+    assert "could not be determined" in message.lower()
+    assert "unsteady run" not in message.lower()
+
+
+def test_i5_a_steady_run_is_still_assessed_normally():
+    result = make_result(converged_qoi(), healthy_residual(),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.CONVERGED
+
+
 def test_an_empty_result_fails_integrity():
     a = assess(SimResult(sim_path="/tmp/empty.sim"), ConvergenceConfig(),
                CLASSIFICATION)
     assert a.state is ConvergenceState.INTEGRITY_FAIL
+
+
+# --- C1: a malformed final segment must not crash assess() -----------------
+
+def test_c1_a_duplicated_final_iteration_index_does_not_crash_assess():
+    """split_segments breaks wherever diff(x) <= 0, so a single duplicated
+    index near the end of an otherwise clean series — ordinary in an exported
+    CSV — yields a one-point final segment. Before the fix, assess() re-fit
+    that segment without re-validating it and ols_fit raised, which propagated
+    out of the Qt menu slot with no try and made the window fail to open."""
+    n = 3000
+    result = make_result(converged_qoi(n), healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    result.plots[0].series[0].x[-1] = result.plots[0].series[0].x[-2]
+    a = assess(result, primary(), CLASSIFICATION)     # must not raise
+    assert a.monitors == []
+    assert any("Drag" in msg and "final segment" in msg for msg in a.integrity_errors)
+
+
+def test_c1_the_residual_loop_is_also_protected():
+    n = 3000
+    result = make_result(converged_qoi(n), healthy_residual(n))
+    result.plots[1].series[0].x[-1] = result.plots[1].series[0].x[-2]
+    a = assess(result, primary(), CLASSIFICATION)     # must not raise
+    assert a.residuals == []
+    assert any("Continuity" in msg for msg in a.integrity_errors)
+
+
+# --- C2: one bad series must not poison the whole run -----------------------
+
+def test_c2_a_bad_series_is_dropped_with_a_named_warning_and_the_run_continues():
+    """A healthy residual and a settled, primary Drag monitor alongside a
+    single-sample Probe monitor must not produce a run-level INTEGRITY_FAIL
+    that contradicts its own body (a passing Drag reason) and names no
+    culprit. The bad series is dropped and named; the run is judged on what
+    is left."""
+    n = 3000
+    result = make_result(converged_qoi(n), healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    result.plots.append(MonitorPlot(
+        name="Probe Monitor", kind=PlotKind.OTHER,
+        series=[PlotSeries(name="Probe", x=[0.0], y=[5.0])],
+    ))
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is not ConvergenceState.INTEGRITY_FAIL
+    assert a.state is ConvergenceState.CONVERGED
+    assert any("Probe" in msg for msg in a.integrity_errors)
+    warnings = [r for r in a.reasons
+               if r.severity is Severity.WARNING and r.target == "Probe"]
+    assert warnings
+    assert "fewer than 2 points" in warnings[0].message
+
+
+def test_c2_integrity_fail_is_reserved_for_when_nothing_usable_remains():
+    """The terminal INTEGRITY_FAIL state must only fire when every series
+    failed its integrity check, not whenever any one of them did."""
+    result = make_result(converged_qoi(3), None,
+                         convergence_rows=[("precision", "double")])
+    result.plots[0].series[0].x = result.plots[0].series[0].x[:1]
+    result.plots[0].series[0].y = result.plots[0].series[0].y[:1]
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.INTEGRITY_FAIL
+    assert a.monitors == [] and a.residuals == []
+    assert any(r.severity is Severity.ERROR and r.target == "Drag" for r in a.reasons)
 
 
 def test_a_healthy_but_unsettled_run_is_converging():
@@ -245,6 +345,37 @@ def test_oscillatory_suspected_when_the_mean_is_steady_but_the_band_is_wide():
 def test_a_short_window_raises_window_too_short():
     a = assess(make_result(converged_qoi(120)), primary(), CLASSIFICATION)
     assert AdvisoryFlag.WINDOW_TOO_SHORT in a.flags
+
+
+# --- I2: tau0_over_n_warn was declared and never read ----------------------
+
+def test_i2_a_high_tau0_over_n_raises_autocorrelation_unreliable():
+    """The design promises: when tau_0/N > 0.05 the decorrelation estimate's
+    own validity assumption fails, so N_eff and the window gate that depends
+    on it should be treated as approximate. Before this fix,
+    config.tau0_over_n_warn was declared, provenance-tagged and stored on
+    every MonitorAssessment, but nothing ever compared them."""
+    n = 3000
+    rng = np.random.default_rng(3)
+    phi = 0.995
+    noise = rng.normal(scale=1e-2, size=n)
+    ar = np.empty(n)
+    ar[0] = noise[0]
+    for i in range(1, n):
+        ar[i] = phi * ar[i - 1] + noise[i]
+    result = make_result(100.0 + ar, healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.monitors[0].tau0_over_n > ConvergenceConfig().tau0_over_n_warn
+    assert AdvisoryFlag.AUTOCORRELATION_UNRELIABLE in a.flags
+    assert any("decorrelation" in r.message.lower() for r in a.reasons)
+
+
+def test_i2_a_well_behaved_monitor_does_not_raise_autocorrelation_unreliable():
+    a = assess(make_result(converged_qoi(), healthy_residual()), primary(),
+              CLASSIFICATION)
+    assert AdvisoryFlag.AUTOCORRELATION_UNRELIABLE not in a.flags
 
 
 def test_a_residual_jump_without_an_index_reset_is_advisory_only():

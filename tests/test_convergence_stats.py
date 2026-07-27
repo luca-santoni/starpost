@@ -1,6 +1,7 @@
 """Numeric primitives behind the convergence assessment. Pure numpy/math —
 no Qt, no STAR-CCM+, no per-user state, so no isolated_paths fixture needed."""
 import math
+import time
 
 import numpy as np
 import pytest
@@ -63,6 +64,22 @@ def test_mann_kendall_detects_a_monotonic_rise():
     y = np.arange(30, dtype=float)
     mk = mann_kendall(y)
     assert mk.s == pytest.approx(30 * 29 / 2)
+    assert mk.z > 4.0
+    assert mk.p < 1e-4
+
+
+def test_i4_mann_kendall_is_capped_and_stays_fast_on_a_long_record():
+    """Uncapped, mann_kendall's np.triu_indices(n, 1) measured 1.23s and
+    ~1.5GB peak RSS at n=10,000, and assess_monitor calls it for every monitor
+    of every data set on every checkbox toggle and tolerance edit in the
+    Convergence dialog. It must be capped exactly the way theil_sen_slope
+    already is, and a long, clearly trending record must still return
+    promptly with a strong z."""
+    y = np.arange(100_000, dtype=float) + np.sin(np.arange(100_000) / 7.0)
+    start = time.perf_counter()
+    mk = mann_kendall(y)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0, f"took {elapsed:.2f}s uncapped"
     assert mk.z > 4.0
     assert mk.p < 1e-4
 

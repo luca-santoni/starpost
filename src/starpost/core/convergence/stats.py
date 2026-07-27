@@ -47,6 +47,15 @@ class MannKendall:
     p: float
 
 
+# Shared cap on the O(n^2) pairwise comparison behind theil_sen_slope and
+# mann_kendall. Uncapped, n=10,000 measured 1.23s and ~1.5GB peak RSS for
+# mann_kendall alone, and assess_monitor calls it for every monitor of every
+# data set on every checkbox toggle and tolerance edit in the Convergence
+# dialog — a 50k-iteration run with a dozen monitors would freeze the GUI for
+# several seconds, and 100k would OOM.
+_MAX_PAIRWISE_POINTS = 2000
+
+
 def ols_fit(x: np.ndarray, y: np.ndarray) -> OlsFit:
     """Least-squares straight-line fit. ``sigma`` is the residual standard
     deviation with the usual n-2 denominator; ``r2`` is defined as 0 (not NaN)
@@ -80,9 +89,8 @@ def theil_sen_slope(x: np.ndarray, y: np.ndarray) -> float:
     n = x.size
     if n < 2:
         return 0.0
-    max_points = 2000
-    if n > max_points:
-        idx = np.linspace(0, n - 1, max_points).astype(int)
+    if n > _MAX_PAIRWISE_POINTS:
+        idx = np.linspace(0, n - 1, _MAX_PAIRWISE_POINTS).astype(int)
         x, y = x[idx], y[idx]
     i, j = np.triu_indices(x.size, k=1)
     dx = x[j] - x[i]
@@ -95,11 +103,23 @@ def theil_sen_slope(x: np.ndarray, y: np.ndarray) -> float:
 def mann_kendall(y: np.ndarray) -> MannKendall:
     """Mann-Kendall trend test with the standard tie-corrected variance and
     continuity correction. Reported as supporting evidence only: the design
-    never gates a verdict on a p-value alone."""
+    never gates a verdict on a p-value alone.
+
+    Computed on a bounded subsample, the same cap and technique
+    ``theil_sen_slope`` already uses, since the pairwise comparison is
+    O(n^2) — see ``_MAX_PAIRWISE_POINTS``. The z-statistic's magnitude
+    depends on the sample count it is computed over, so a long record's z is
+    the statistic for a representative ~2000-point subsample, not the full
+    record; the separation between a trending and a non-trending signal is
+    preserved either way."""
     y = np.asarray(y, dtype=float)
     n = y.size
     if n < 3:
         return MannKendall(s=0.0, z=0.0, p=1.0)
+    if n > _MAX_PAIRWISE_POINTS:
+        idx = np.linspace(0, n - 1, _MAX_PAIRWISE_POINTS).astype(int)
+        y = y[idx]
+        n = y.size
     i, j = np.triu_indices(n, k=1)
     s = float(np.sign(y[j] - y[i]).sum())
     _, counts = np.unique(y, return_counts=True)

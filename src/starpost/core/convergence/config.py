@@ -39,6 +39,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "min_fit_r2": "[D]",
     "marginal_low": "[D]",
     "marginal_high": "[D]",
+    "mk_trend_z": "[D]",
 }
 
 
@@ -70,6 +71,10 @@ class ConvergenceConfig:
     rho_stagnant: float = 0.999
     min_fit_r2: float = 0.10       # below this the change series has no
                                    # geometric structure to extrapolate
+    mk_trend_z: float = 5.0        # |Mann-Kendall z| above this, on a declined
+                                   # iterative fit, denies the static-monitor
+                                   # escape hatch: the window still shows a
+                                   # statistically resolvable monotonic trend
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]

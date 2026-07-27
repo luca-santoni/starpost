@@ -55,7 +55,7 @@ def _gate(monitor: MonitorAssessment, name: str):
 
 
 def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
-                  restart_seen: bool) -> list[AdvisoryFlag]:
+                  restart_seen: bool, config) -> list[AdvisoryFlag]:
     """Advisory flags. Any of these may attach to any state, including
     CONVERGED — that pairing is often the most important thing to surface."""
     flags: list[AdvisoryFlag] = []
@@ -72,6 +72,8 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
     for monitor in monitors:
         if not _gate(monitor, GATE_WINDOW).passed:
             flags.append(AdvisoryFlag.WINDOW_TOO_SHORT)
+        if monitor.tau0_over_n > config.tau0_over_n_warn:
+            flags.append(AdvisoryFlag.AUTOCORRELATION_UNRELIABLE)
         if not monitor.iterative.valid and "ASYMPTOTICALLY_STAGNANT" in monitor.iterative.reason:
             flags.append(AdvisoryFlag.ASYMPTOTICALLY_STAGNANT)
         if _slopes_disagree(monitor):
@@ -85,13 +87,19 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
 
 
 def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
-            integrity_errors: list[str], restart_seen: bool, config
+            restart_seen: bool, config
             ) -> tuple[ConvergenceState, list[AdvisoryFlag], Optional[float], str]:
     """Resolve the terminal state, flags, convergence index and binding
     constraint. The state ladder is evaluated in order, first match wins, so a
-    residual DIVERGED outranks a QoI CONVERGED."""
+    residual DIVERGED outranks a QoI CONVERGED.
+
+    A series that failed an integrity check is dropped rather than poisoning
+    the whole run — the caller has already excluded it from ``residuals``/
+    ``monitors`` and turned it into a warning reason. INTEGRITY_FAIL is
+    reserved for the case where *nothing* usable survived: no residuals and
+    no monitors at all."""
     primary_monitors = [m for m in monitors if m.is_primary]
-    flags = collect_flags(metadata, monitors, restart_seen)
+    flags = collect_flags(metadata, monitors, restart_seen, config)
 
     index: Optional[float] = None
     binding = "no primary QoI declared"
@@ -103,7 +111,7 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
     primary_residuals = [r for r in residuals
                          if r.equation_class is EquationClass.PRIMARY]
 
-    if integrity_errors:
+    if not residuals and not monitors:
         return ConvergenceState.INTEGRITY_FAIL, flags, index, binding
     if any(r.state is ResidualState.DIVERGING for r in residuals):
         return ConvergenceState.DIVERGED, flags, index, binding
@@ -165,24 +173,57 @@ def confidence_of(metadata: RunMetadata, monitors: list[MonitorAssessment],
 
 def build_reasons(state: ConvergenceState, residuals,
                   monitors: list[MonitorAssessment], flags: list[AdvisoryFlag],
-                  config) -> list[Reason]:
+                  config, metadata: Optional[RunMetadata] = None,
+                  integrity_errors: Optional[list[str]] = None) -> list[Reason]:
     """One entry per failed gate, per marginal pass, and per active flag, plus
     an info line for each passing primary monitor so the user can see the
     evidence the verdict rests on."""
     reasons: list[Reason] = []
+    integrity_errors = integrity_errors or []
 
     if state is ConvergenceState.UNSTEADY_UNSUPPORTED:
+        regime = metadata.solver_regime if metadata is not None else None
+        if regime is not None and regime.known:
+            label = regime.value.replace("_", " ")
+            message = (f"This is a {label} run, not steady. Its residuals and QoIs "
+                      "do not behave like a steady run's — a per-time-step "
+                      "sawtooth and a statistical record rather than a fixed "
+                      "point — so the steady tests would give a confident wrong "
+                      "answer.")
+        else:
+            message = ("The solver regime could not be determined, so steady "
+                      "tests were not applied. That is a different situation "
+                      "from a run positively identified as not steady: "
+                      "assessing an unknown regime as steady anyway would risk "
+                      "a confident wrong answer on a case that may actually be "
+                      "transient.")
         reasons.append(Reason(
             severity=Severity.ERROR, target="run",
-            message=("This is an unsteady run. Its residuals are a per-time-step "
-                     "sawtooth and its QoIs are a statistical record, so the "
-                     "steady tests would give a confident wrong answer."),
-            suggested_action=("Assess unsteady runs manually for now: check that "
-                              "the inner iterations drop at least one order per "
-                              "time step, and that the QoI record is long enough "
-                              "for its time-average to be stationary."),
+            message=message,
+            suggested_action=("Assess this run manually for now: check that the "
+                              "inner iterations (or harmonics) drop at least one "
+                              "order per outer step, and that the QoI record is "
+                              "long enough for its time-average to be stationary. "
+                              "If the regime is unknown, re-extract this data set "
+                              "so it is captured, or confirm manually whether the "
+                              "run is steady."),
         ))
         return reasons
+
+    for msg in integrity_errors:
+        name, sep, detail = msg.partition(": ")
+        target = name if sep else "run"
+        severity = (Severity.ERROR if state is ConvergenceState.INTEGRITY_FAIL
+                   else Severity.WARNING)
+        reasons.append(Reason(
+            severity=severity, target=target,
+            message=(f"{msg}, so this series was dropped from the assessment."
+                     if severity is Severity.WARNING else f"{msg}."),
+            suggested_action=("Check why this monitor history is malformed "
+                              "(a duplicated or non-monotonic iteration index "
+                              "after the last restart split, an empty series, or "
+                              "too few points); re-extract if needed."),
+        ))
 
     for residual in residuals:
         turbulence = residual.equation_class is EquationClass.TURBULENCE
@@ -358,4 +399,12 @@ _FLAG_TEXT: tuple[tuple[AdvisoryFlag, str, str], ...] = (
      "The change series is contracting so slowly that the extrapolated "
      "remaining error is enormous and the fit is untrustworthy.",
      "More iterations at this rate will not help. Revisit the solver settings."),
+    (AdvisoryFlag.AUTOCORRELATION_UNRELIABLE,
+     "At least one monitor's decorrelation estimate does not meet its own "
+     "validity assumption — the truncation lag (tau_0) is not small relative to "
+     "the record length. The effective-sample count derived from it, and "
+     "therefore the window-adequacy gate, should be treated as approximate "
+     "rather than exact.",
+     "Continue iterating so the record is long relative to the correlation "
+     "length, and treat a marginal window-adequacy pass with extra caution."),
 )

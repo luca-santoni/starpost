@@ -171,6 +171,61 @@ def test_noisy_stagnation_is_still_refused_by_the_drift_gate(rho, noise):
     assert a.passed is False
 
 
+# --- C3: the static-monitor escape hatch must not certify a creeping trend --
+
+def test_c3_a_monitor_eight_x_from_its_asymptote_no_longer_passes_every_gate():
+    """The reproduction from the review: rho = 0.9999, noise 1e-2. Before the
+    fix this passed drift, band, two-halves and the iterative escape hatch
+    (judged on its largest single-iteration change) with margin ~1.5, while
+    the true remaining approach was ~8x the tolerance. Drift alone does not
+    catch it: at rho -> 1 it under-reads the remaining tail by a factor of
+    roughly N_W*(1-rho)."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    y = 100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
+    config = ConvergenceConfig()
+    a = assess_monitor("Drag", y, config, is_primary=True)
+
+    true_remaining = 1.09 * 0.9999 ** (n - 1) / (1.0 - 0.9999)
+    assert true_remaining > 8.0 * a.tolerance_abs        # the false-pass condition
+
+    assert a.iterative.valid is False                    # r^2 too low to trust rho
+    assert abs(a.mann_kendall_z) > config.mk_trend_z      # but MK resolves the trend
+    assert gate(a, GATE_ITERATIVE).passed is False
+    assert a.passed is False
+
+
+@pytest.mark.parametrize("rho, noise", [(0.999, 1e-3), (0.999, 1e-2),
+                                        (0.9999, 1e-3), (0.9999, 1e-2)])
+def test_c3_creeping_monitors_are_refused_across_seeds(rho, noise):
+    """The sweep the review asked for: every seed in this regime must fail,
+    specifically because the escape hatch is now denied on the iterative
+    gate, not only because of whatever the drift gate happens to catch."""
+    n = 3000
+    config = ConvergenceConfig()
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        y = (100.0 - 1.09 * rho ** np.arange(n, dtype=float)
+             + rng.normal(scale=noise, size=n))
+        a = assess_monitor("Drag", y, config, is_primary=True)
+        assert a.passed is False, f"rho={rho} noise={noise} seed={seed}"
+        assert gate(a, GATE_ITERATIVE).passed is False, f"seed {seed}"
+
+
+@pytest.mark.parametrize("scale", [1e-2, 1e-3, 1e-4, 1e-5])
+def test_c3_settled_monitors_still_pass_across_seeds(scale):
+    """The counterpart to the sweep above: mk_trend_z must not be so sensitive
+    that ordinary settled noise starts tripping the same denial."""
+    n = 3000
+    config = ConvergenceConfig()
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        y = 100.0 + rng.normal(scale=scale, size=n)
+        a = assess_monitor("Drag", y, config, is_primary=True)
+        assert abs(a.mann_kendall_z) <= config.mk_trend_z, f"scale={scale} seed={seed}"
+        assert a.passed is True, f"scale={scale} seed={seed}"
+
+
 def test_a_short_record_fails_the_window_gate():
     """Gate 5. Any rule satisfiable by a handful of accidentally-similar
     consecutive samples fires spuriously, so the window must be long enough."""

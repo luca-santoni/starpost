@@ -33,12 +33,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import math
+
 from starpost.core.convergence import assess
 from starpost.core.convergence.config import (
     TOLERANCE_PRESETS,
     ConvergenceConfig,
     MonitorConfig,
 )
+from starpost.core.convergence.steady import GATE_ITERATIVE
 
 _PRESET_LABELS = {
     "Screening (0.1%)": TOLERANCE_PRESETS["screening"],
@@ -49,8 +52,8 @@ _MONITOR_COLUMNS = ("Primary", "Monitor", "Tolerance", "Reference scale")
 _SUMMARY_COLUMNS = ("Data set", "State", "Confidence", "Index", "Binding constraint")
 _RESIDUAL_COLUMNS = ("Equation", "Decades", "Slope", "rho", "r^2", "State",
                      "Iterations to target")
-_GATE_COLUMNS = ("Monitor", "Primary", "Mean", "Band (95%)", "Drift", "U_iter",
-                 "N_eff", "Margin", "Binding gate")
+_GATE_COLUMNS = ("Monitor", "Primary", "Mean", "Band (95%)", "Drift",
+                 "Iterative error", "N_eff", "Margin", "Binding gate")
 
 
 class ConvergenceDialog(QDialog):
@@ -348,7 +351,8 @@ class ConvergenceDialog(QDialog):
                 self._monitor_table.setItem(row, 0, primary)
                 self._monitor_table.setItem(row, 1, self._readonly(monitor.name))
                 self._monitor_table.setItem(
-                    row, 2, QTableWidgetItem(f"{monitor.tolerance_fraction * 100:.4g}")
+                    row, 2,
+                    QTableWidgetItem(f"{monitor.tolerance_fraction * 100:.4g} %")
                 )
                 self._monitor_table.setItem(
                     row, 3,
@@ -382,14 +386,13 @@ class ConvergenceDialog(QDialog):
     def _populate_gates(self, assessment) -> None:
         self._gate_table.setRowCount(len(assessment.monitors))
         for row, monitor in enumerate(assessment.monitors):
-            u_iter = monitor.iterative.u_iter
             cells = (
                 monitor.name,
                 "yes" if monitor.is_primary else "no",
                 f"{monitor.mean:.6g}",
                 f"{monitor.band_p95:.4g}",
                 f"{monitor.projected_drift:.4g}",
-                "—" if u_iter is None else f"{u_iter:.4g}",
+                _iterative_cell(monitor),
                 f"{monitor.n_eff:.0f}",
                 f"{monitor.margin:.2f}",
                 monitor.binding_gate,
@@ -424,6 +427,24 @@ class ConvergenceDialog(QDialog):
             existing.reference_scale = _parse_float(item.text())
         configs[name] = existing
         self._reassess()
+
+
+def _iterative_cell(monitor) -> str:
+    """The QoI-gates table's 'Iterative error' cell.
+
+    ``monitor.iterative.u_iter`` is None whenever the geometric-tail estimator
+    declined, which is common (a settled monitor, or now, per the
+    Mann-Kendall check in ``steady.assess_monitor``, a creeping one). But the
+    iterative gate can still be the binding constraint, so showing a blank
+    there while the verdict names it as binding is confusing. Show the gate's
+    own value instead — the quantity actually tested against the tolerance —
+    and mark it when it is not the geometric-tail estimate."""
+    gate = next(g for g in monitor.gates if g.name == GATE_ITERATIVE)
+    if monitor.iterative.valid:
+        return f"{gate.value:.4g}"
+    if not math.isfinite(gate.value):
+        return "unbounded"
+    return f"{gate.value:.4g} (largest change)"
 
 
 def _parse_percent(text: str) -> Optional[float]:
