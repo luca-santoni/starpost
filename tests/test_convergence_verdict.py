@@ -92,23 +92,59 @@ def test_a_healthy_settled_run_is_converged():
     assert a.confidence is Confidence.HIGH
 
 
-def test_a_purely_noisy_settled_run_is_converged_but_capped_at_medium():
-    """converged_qoi has no geometric decay to fit — the change series is
-    pure noise around a fixed mean — so the iterative estimator always
-    declines (NO_ESTIMATE) and the remaining error is never bounded. The run
-    still reaches CONVERGED (the static-monitor escape hatch judges it on its
-    largest single-iteration change, which is tiny relative to tolerance),
-    but confidence must not read High: ITERATIVE_ERROR_UNBOUNDED caps it at
-    Medium, and a reason names the monitor."""
+def test_a_static_noisy_run_keeps_its_flag_but_not_the_confidence_cap():
+    """converged_qoi has no geometric decay to fit — the change series is pure
+    noise around a fixed mean — so the iterative estimator always declines and
+    the remaining error is never bounded. The flag and the reason must still
+    be raised, because that is true and worth telling the user.
+
+    Confidence must NOT be capped here, though. The estimator declines for
+    *every* settled monitor with ordinary noise, so capping on decline alone
+    made High unreachable for essentially every well-converged run — the same
+    trap INCOMPLETE_EVIDENCE is deliberately kept out of the confidence rule
+    to avoid. This monitor's largest single-iteration change is ~0.05% of its
+    tolerance; it is as static as a signal gets, and the missing bound on a
+    tail that small is immaterial."""
     result = make_result(converged_qoi(), healthy_residual(),
                          convergence_rows=[("precision", "double"),
                                            ("residual_normalization", "auto")])
     a = assess(result, primary(), CLASSIFICATION)
     assert a.state is ConvergenceState.CONVERGED
-    assert a.confidence is Confidence.MEDIUM
+    assert a.confidence is Confidence.HIGH
     assert AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED in a.flags
     assert any("iterative error could not be bounded" in r.message.lower()
               and r.target == "Drag" for r in a.reasons)
+    assert "unbounded" not in a.confidence_rule.lower()
+
+
+def test_the_unbounded_confidence_cap_scales_with_the_fallback_evidence():
+    """The cap must discriminate, not fire on everything. Sweeping the noise
+    scale moves the only evidence the escape hatch has — the largest
+    single-iteration change — across the threshold, and confidence must
+    follow it. A monitor barely moving keeps High; one still moving at an
+    appreciable fraction of its tolerance drops to Medium.
+
+    Asserted against the gate's own tested quantity rather than against the
+    noise scale, so the test pins the rule and not a particular fixture."""
+    seen = set()
+    for scale in (1e-6, 1e-5, 1e-4, 1e-3, 1e-2):
+        rng = np.random.default_rng(0)
+        qoi = 100.0 + rng.normal(scale=scale, size=3000)
+        result = make_result(qoi, healthy_residual(),
+                             convergence_rows=[("precision", "double"),
+                                               ("residual_normalization", "auto")])
+        a = assess(result, primary(), CLASSIFICATION)
+        monitor = a.monitors[0]
+        gate = next(g for g in monitor.gates if g.name == "iterative error")
+        ratio = gate.value / monitor.tolerance_abs
+        cap = ConvergenceConfig().iterative_unbounded_confidence_fraction
+        assert a.state is ConvergenceState.CONVERGED, scale
+        assert AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED in a.flags, scale
+        expected = Confidence.MEDIUM if ratio > cap else Confidence.HIGH
+        assert a.confidence is expected, f"scale={scale} ratio={ratio:.5f}"
+        seen.add(expected)
+    # Both outcomes must actually occur, or the sweep proves nothing.
+    assert seen == {Confidence.HIGH, Confidence.MEDIUM}
 
 
 def test_a_drifting_run_is_slow_drift_and_names_its_binding_constraint():

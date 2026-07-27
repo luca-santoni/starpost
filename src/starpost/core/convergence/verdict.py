@@ -30,6 +30,7 @@ from starpost.core.convergence.models import (
 from starpost.core.convergence.steady import (
     GATE_BAND,
     GATE_DRIFT,
+    GATE_ITERATIVE,
     GATE_TWO_HALVES,
     GATE_WINDOW,
 )
@@ -221,14 +222,26 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
         if config.marginal_low <= monitor.margin <= config.marginal_high:
             medium.append(f"{monitor.name}: margin {monitor.margin:.2f} is marginal")
         if not monitor.iterative.valid:
-            # The geometric fit declined, so there is no numeric bound on
-            # this monitor's remaining error — the gate may still have
-            # passed on the static-monitor escape hatch, but a High verdict
-            # would claim more certainty than the evidence supports.
-            medium.append(
-                f"{monitor.name}: iterative error could not be bounded "
-                f"({monitor.iterative.reason})"
-            )
+            # The geometric fit declines for any settled monitor with
+            # ordinary noise — there is no geometric structure in white
+            # noise to fit — so capping confidence on decline alone would
+            # make High unreachable for essentially every well-converged
+            # run (the same trap INCOMPLETE_EVIDENCE avoids, see
+            # collect_flags). Instead, scale the cap to how weak the
+            # fallback evidence actually is: the iterative gate's own
+            # tested quantity (the largest single-iteration change, or an
+            # infinite stand-in when the static-monitor escape hatch was
+            # denied) against its own limit. A small fraction means the
+            # monitor is emphatically static and the unbounded tail is
+            # immaterial; a meaningful fraction means it is still moving
+            # at tolerance scale and the missing bound matters.
+            gate = _gate(monitor, GATE_ITERATIVE)
+            if gate.value > config.iterative_unbounded_confidence_fraction * gate.limit:
+                medium.append(
+                    f"{monitor.name}: remaining iterative error is unbounded "
+                    "and the monitor is still moving at an appreciable "
+                    f"fraction of tolerance ({monitor.iterative.reason})"
+                )
 
     if low:
         return Confidence.LOW, "Low — " + "; ".join(low)
@@ -524,8 +537,12 @@ _FLAG_TEXT: tuple[tuple[AdvisoryFlag, str, str], ...] = (
      "extrapolate, so there is no numeric bound on how far it may still be "
      "from its converged value. The verdict rests on the other four gates "
      "and on the monitor having stopped moving at the tolerance scale, not "
-     "on a quantified remaining error, so confidence is capped at Medium.",
+     "on a quantified remaining error. When that monitor is still moving at "
+     "an appreciable fraction of tolerance, confidence is capped at Medium; "
+     "when it is emphatically static, the missing bound is immaterial and "
+     "confidence is unaffected (see the confidence rule for which applies "
+     "here).",
      "Continue iterating in the hope the change series develops a clear "
      "geometric trend, or treat this verdict's confidence as capped rather "
-     "than definitive."),
+     "than definitive when the confidence rule says so."),
 )

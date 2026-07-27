@@ -41,6 +41,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "marginal_high": "[D]",
     "mk_trend_z": "[D]",
     "mk_trend_departure_fraction": "[D]",
+    "iterative_unbounded_confidence_fraction": "[D]",
 }
 
 
@@ -92,6 +93,26 @@ class ConvergenceConfig:
                                    # steady.py's module docstring and
                                    # c3-closure-report.md for the full sweep
                                    # and its acknowledged residual gap.
+    iterative_unbounded_confidence_fraction: float = 0.10
+                                   # When a primary monitor's iterative
+                                   # estimator declines, confidence is capped
+                                   # at Medium only if the iterative gate's
+                                   # tested quantity (largest single-iteration
+                                   # change, or the MK-denial's infinite
+                                   # stand-in) exceeds this fraction of the
+                                   # monitor's tolerance. The estimator
+                                   # declines for any settled monitor with
+                                   # ordinary noise — there is no geometric
+                                   # structure in white noise to fit — so
+                                   # capping unconditionally on decline alone
+                                   # made High unreachable for essentially
+                                   # every well-converged run. A monitor whose
+                                   # largest per-iteration change is a tiny
+                                   # fraction of tolerance is as converged as
+                                   # anything can be; one still moving at an
+                                   # appreciable fraction of tolerance is the
+                                   # case the missing bound actually matters
+                                   # for. See verdict.py's confidence_of.
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]

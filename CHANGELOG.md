@@ -24,9 +24,12 @@ All notable changes to StarPost are recorded here. Versions follow the
   does not meet its own validity assumption. A second new flag,
   ITERATIVE_ERROR_UNBOUNDED, fires whenever a primary monitor's geometric-tail
   estimator declined for any reason (no structure to extrapolate, too little
-  data, or genuine stagnation): the monitor can still pass, but confidence for
-  that run is now capped at Medium and a reason names the monitor, since the
-  remaining iterative error was never actually bounded. The static-monitor
+  data, or genuine stagnation): the monitor can still pass, and a reason names
+  it, since the remaining iterative error was never actually bounded.
+  Confidence is capped at Medium only when that monitor is also still moving
+  at an appreciable fraction of its tolerance — a settled monitor barely
+  moving keeps its High rating, because the estimator declines for every
+  noisy signal and a cap that always fires would carry no information. The static-monitor
   escape hatch's denial (for a monitor creeping toward its asymptote with
   noise on top) now measures how far the monitor has moved across its whole
   record rather than within the trailing window alone, which no longer
