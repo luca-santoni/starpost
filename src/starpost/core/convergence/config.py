@@ -26,6 +26,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "s_div_min_r2": "[D]",
     "s_div_level_ratio": "[D]",
     "s_div_baseline_window": "[D]",
+    "s_conv_min_r2": "[D]",
     "kappa_div": "[D]",
     "eps_prec_double": "[D]",
     "eps_prec_single": "[D]",
@@ -107,6 +108,38 @@ class ConvergenceConfig:
                                    # Size of the block immediately
                                    # preceding the s_div_window tail that
                                    # s_div_level_ratio is measured against.
+    s_conv_min_r2: float = 0.5     # the main-window fit must explain at least
+                                   # this much variance before a negative
+                                   # slope is trusted to declare CONVERGING —
+                                   # same class of check as s_div_min_r2 above,
+                                   # applied to the opposite end of the
+                                   # ladder. A real STAR-CCM+ run had four
+                                   # equations behaving identically (all flat
+                                   # inside their own noise, r^2 <= 0.02) with
+                                   # three landing STALLED and the fourth
+                                   # CONVERGING purely because its noise-driven
+                                   # slope crossed s_flat by 0.000019 — an
+                                   # inconsistency, and a false claim of
+                                   # progress ("converging at 0.01 decades per
+                                   # 100 iterations") extrapolated from a fit
+                                   # explaining 1.9% of the variance. Below
+                                   # this floor the fit is not trusted and the
+                                   # residual falls through to the same
+                                   # STALLED/PLATEAU_LOW split its flat
+                                   # siblings use. Shared with
+                                   # iterations_to_target's projection gate
+                                   # (formerly a private module constant) so
+                                   # the state and the projection cannot
+                                   # disagree about whether a slope is
+                                   # resolved enough to act on. 0.5 was
+                                   # checked against a synthetic decay with
+                                   # realistic multiplicative log-normal
+                                   # noise landing mid-range (r^2 in ~0.58-0.75
+                                   # for noise sigma 0.15-0.20 decades): it
+                                   # still reads CONVERGING, so the floor does
+                                   # not reject a genuinely decaying-but-noisy
+                                   # residual, only ones with no resolvable
+                                   # trend at all.
     kappa_div: float = 10.0        # residual growth vs reference => diverged
     eps_prec_double: float = 1e-13
     eps_prec_single: float = 1e-6

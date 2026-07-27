@@ -123,6 +123,66 @@ def test_d1_the_r2_floor_alone_is_insufficient_a_level_shift_is_also_required():
         assert a.state is not ResidualState.DIVERGING, end
 
 
+def test_a_noisy_flat_residual_does_not_read_as_converging_on_slope_sign_alone():
+    """The defect this guards: on real data, four equations were all flat
+    within their own noise (r^2 <= 0.02) yet one read as CONVERGING purely
+    because its noise-driven main-window slope crossed -s_flat by 0.000019.
+    This reproduces that shape synthetically — a flat plateau with white
+    noise whose fitted slope happens to land just past -s_flat but whose fit
+    explains essentially none of the variance — and asserts the poorly
+    resolved slope is not trusted: the residual falls through to the same
+    STALLED/PLATEAU_LOW split its positive-slope siblings use."""
+    transient = np.linspace(0.0, -2.0, 50)
+    rng = np.random.default_rng(0)
+    plateau = -2.0 + rng.normal(0, 0.05, 950)
+    y = 10.0 ** np.concatenate([transient, plateau])
+    config = ConvergenceConfig()
+    a = assess_residual("Continuity", y, config, precision="double")
+    assert a.fit_r2 < config.s_conv_min_r2
+    assert a.log_slope < -config.s_flat  # the slope alone would have said CONVERGING
+    assert a.state is not ResidualState.CONVERGING
+
+
+def test_equations_flat_within_noise_classify_the_same_regardless_of_slope_sign():
+    """Equations doing the same thing (flat within noise) must get the same
+    classification. Sweeping seeds produces main-window slopes that straddle
+    s_flat in both directions purely from noise, with r^2 never exceeding a
+    couple percent — none of that noise should be trusted enough to split
+    the population into CONVERGING vs STALLED."""
+    transient = np.linspace(0.0, -2.0, 50)
+    config = ConvergenceConfig()
+    states = set()
+    crossings = 0
+    for seed in range(60):
+        rng = np.random.default_rng(seed)
+        plateau = -2.0 + rng.normal(0, 0.05, 950)
+        y = 10.0 ** np.concatenate([transient, plateau])
+        a = assess_residual("Continuity", y, config, precision="double")
+        if abs(a.log_slope) > config.s_flat:
+            crossings += 1
+        states.add(a.state)
+    assert crossings > 0, "fixture did not exercise slopes straddling s_flat"
+    assert states == {ResidualState.STALLED}
+
+
+def test_a_genuinely_decaying_residual_with_realistic_noise_still_converges():
+    """The r^2 floor must not be so strict that it rejects a real decay just
+    because realistic per-iteration noise is riding on top of it. A clean
+    rho=0.99 decay with multiplicative log-normal noise (sigma=0.18 decades)
+    lands the main-window fit's r^2 in the middle of the 0.5-0.8 range —
+    resolved enough to act on, not a clean fit — and must still read
+    CONVERGING with a usable projection."""
+    rng = np.random.default_rng(7)
+    n = 600
+    clean = 0.99 ** np.arange(n, dtype=float)
+    y = clean * 10.0 ** rng.normal(0, 0.18, n)
+    config = ConvergenceConfig()
+    a = assess_residual("Continuity", y, config, precision="double")
+    assert 0.5 <= a.fit_r2 <= 0.8
+    assert a.state is ResidualState.CONVERGING
+    assert a.iterations_to_target is not None
+
+
 def test_a_non_finite_value_is_immediate_divergence():
     y = geometric(0.97, 500)
     y[-3] = np.nan

@@ -137,6 +137,26 @@ All notable changes to StarPost are recorded here. Versions follow the
   jump to persist (the median of several following samples must still sit
   above the pre-jump level by the same factor) rather than firing on a
   single sample that returns to baseline right after.
+- **Convergence tool: a residual no longer reads CONVERGING on a slope with
+  no explanatory power.** The state ladder's last rung trusted the
+  main-window fit's slope outright once it crossed `-s_flat`, with no check
+  on how well that fit explained the data — the third occurrence of a
+  pattern this tool has now hit three times (a rho, then a divergence
+  slope, now a convergence slope, each trusted past a threshold with no
+  fit-quality condition). A real run had four primary residuals all flat
+  within their own noise (r^2 <= 0.02) with three landing STALLED and the
+  fourth reading CONVERGING purely because its noise-driven slope crossed
+  the threshold by 0.000019, producing both an inconsistency between
+  equations doing the same thing and a false claim of progress ("still
+  converging at 0.01 decades per 100 iterations") extrapolated from a fit
+  explaining under 2% of the variance. CONVERGING now also requires the
+  main-window fit to clear a new `s_conv_min_r2` threshold (default 0.5,
+  shared with the `iterations_to_target` projection gate so the state and
+  the projection cannot disagree); below it the residual falls through to
+  the same STALLED/PLATEAU_LOW split its flat siblings use. Checked against
+  a synthetic decay with realistic per-iteration noise (r^2 in the 0.5-0.8
+  range) to confirm the floor does not reject a genuinely converging-but-
+  noisy residual, only ones with no resolvable trend at all.
 
 ## [2.7.0] — 2026-07-25
 

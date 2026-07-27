@@ -19,6 +19,17 @@ One deliberate tightening of the published ladder: rungs 5 and 6 test
 published, a residual that is rising but not *sustained*-divergent matches no
 rung at all; here it is judged on its decades dropped exactly as a flat
 residual would be.
+
+A second tightening, of the same shape as the divergence rung's
+``s_div_min_r2``: rung 6 (CONVERGING) also requires the main-window fit to
+explain at least ``s_conv_min_r2`` of the variance before its negative slope
+is trusted. A residual sitting flat within its own noise has a fitted slope
+that lands on either side of ``s_flat`` at random, with r^2 near 0 either
+way — a real STAR-CCM+ run had four equations behaving identically (all flat,
+r^2 <= 0.02) with three landing STALLED and the fourth CONVERGING purely
+because its noise happened to nudge the slope past the threshold. Below the
+r^2 floor, rung 6 falls through to the same STALLED/PLATEAU_LOW split its
+flat siblings use, so equations doing the same thing get the same verdict.
 """
 from __future__ import annotations
 
@@ -34,8 +45,6 @@ from starpost.core.convergence.models import (
 )
 from starpost.core.convergence.signals import equation_class, has_non_finite, window_bounds
 from starpost.core.convergence.stats import ols_fit
-
-_MIN_R2_FOR_PROJECTION = 0.5
 
 
 def _log_fit(y: np.ndarray):
@@ -153,14 +162,21 @@ def assess_residual(name: str, y: np.ndarray, config,
         state = ResidualState.DIVERGING
     elif at_floor:
         state = ResidualState.MACHINE_PRECISION
-    elif slope > -config.s_flat:
+    elif slope > -config.s_flat or r2 < config.s_conv_min_r2:
+        # A negative slope past s_flat is not enough on its own: on white
+        # noise around a flat plateau, the fitted slope is equally likely to
+        # land on either side of the threshold by a hair, and its r^2 is
+        # near 0 either way — the same class of check as the divergence
+        # rung's s_div_min_r2, applied here so equations that are all
+        # equally flat within their own noise get the same classification
+        # rather than splitting on the sign of a meaningless slope.
         state = ResidualState.STALLED if decades < d_min else ResidualState.PLATEAU_LOW
     else:
         state = ResidualState.CONVERGING
 
     iterations_to_target: Optional[float] = None
     if (state is ResidualState.CONVERGING and slope < 0
-            and r2 >= _MIN_R2_FOR_PROJECTION and r_ref > 0 and r_terminal > 0):
+            and r2 >= config.s_conv_min_r2 and r_ref > 0 and r_terminal > 0):
         target = r_ref * 10.0 ** (-d_min)
         if target < r_terminal:
             iterations_to_target = math.log10(target / r_terminal) / slope
