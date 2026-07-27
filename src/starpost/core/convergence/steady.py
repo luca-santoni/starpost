@@ -285,7 +285,19 @@ def assess_monitor(name: str, y: np.ndarray, config,
         ),
     ]
 
-    binding = min(gates, key=lambda g: g.margin)
+    # A gate whose tested value is infinite (currently only the iterative
+    # gate, when the static-monitor escape hatch above is denied) reduces to
+    # a margin of exactly 0.0 through _margin's limit/value reciprocal — not
+    # a genuine near-zero measurement, but an "unmeasurable" placeholder.
+    # Left in the running min, that placeholder erases four otherwise-good
+    # finite margins and reports the whole monitor as a false 0.0. Binding is
+    # chosen from the finite-valued gates whenever at least one exists; the
+    # unbounded gate's own passed=False still fails the monitor regardless
+    # (MonitorAssessment.passed checks every gate), so this changes only the
+    # magnitude reported, never the verdict.
+    finite_gates = [g for g in gates if math.isfinite(g.value)]
+    binding = min(finite_gates or gates, key=lambda g: g.margin)
+    margin = binding.margin if finite_gates else None
 
     return MonitorAssessment(
         name=name,
@@ -314,6 +326,6 @@ def assess_monitor(name: str, y: np.ndarray, config,
         tau0_over_n=tau0_over_n,
         iterative=iterative,
         gates=gates,
-        margin=binding.margin,
+        margin=margin,
         binding_gate=binding.name,
     )

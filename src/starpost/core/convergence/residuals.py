@@ -104,8 +104,39 @@ def assess_residual(name: str, y: np.ndarray, config,
     # iterative.py's min_fit_r2 guarding its own slope-derived rho.
     tail = y[-config.s_div_window:]
     tail_fit = _log_fit(tail) if tail.size >= config.s_div_window else None
+
+    # The r^2 floor is still not enough on its own: a half-cycle of an
+    # oscillation is itself well fitted by a straight line, so its r^2 lands
+    # wherever the phase happens to put it — a real STAR-CCM+ run measured
+    # tail fits with r^2 above s_div_min_r2 on residuals that were merely
+    # oscillating about a flat plateau. The discriminator an oscillation
+    # cannot fake is that it returns to its prior level; a genuine divergence
+    # does not. s_div_level_ratio is the ratio of the tail window's median to
+    # the median of the block immediately preceding it — see config.py for
+    # the measured separation between real oscillations and synthetic
+    # divergences. When there is no preceding baseline to compare against
+    # (the record is barely longer than the tail window itself), the ratio
+    # cannot be measured and defaults to 1.0, which denies the claim — that
+    # is a data-starved edge case, not evidence of oscillation, but growth
+    # too young to have a baseline is also too young to be told apart from
+    # oscillation by this conjunct; it is left to the kappa_div rung as it
+    # continues (see s_div_level_ratio's provenance comment).
+    baseline_end = y.size - config.s_div_window
+    baseline_start = max(0, baseline_end - config.s_div_baseline_window)
+    baseline = y[baseline_start:baseline_end]
+    tail_positive = tail[tail > 0]
+    baseline_positive = baseline[baseline > 0]
+    if tail_positive.size and baseline_positive.size:
+        baseline_median = float(np.median(baseline_positive))
+        tail_median = float(np.median(tail_positive))
+        level_shift_ratio = (tail_median / baseline_median
+                             if baseline_median > 0 else math.inf)
+    else:
+        level_shift_ratio = 1.0
+
     sustained_growth = bool(
         tail_fit and tail_fit.slope > config.s_div and tail_fit.r2 >= config.s_div_min_r2
+        and level_shift_ratio >= config.s_div_level_ratio
     )
 
     floor = _precision_floor(precision, config)

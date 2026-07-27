@@ -444,14 +444,14 @@ def _iterative_cell(monitor) -> str:
 def _margin_cell(monitor) -> str:
     """The QoI-gates table's 'Margin' cell.
 
-    ``monitor.margin`` is the min over the monitor's own gate margins, and
-    ``_margin`` (steady.py) turns an infinite gate value — the iterative
-    gate's value whenever the static-monitor escape hatch is denied — into
-    exactly 0.0. That is the same false-precision problem R2 fixes for the
-    run-level convergence index, one row at a time: "0.00" reads as a real,
-    if bad, measurement, not as "this could not be measured at all"."""
-    binding = next(g for g in monitor.gates if g.name == monitor.binding_gate)
-    if not math.isfinite(binding.value):
+    ``monitor.margin`` (D2, steady.py) is the min over only the gates whose
+    tested *value* is finite, so an infinite gate value — the iterative
+    gate's value whenever the static-monitor escape hatch is denied — can no
+    longer erase the monitor's other, perfectly good margins down to a false
+    0.00. It is None only in the practically unreachable case where every
+    one of the monitor's gates is unbounded, which is shown here the same
+    way R2 shows an unmeasurable run-level index."""
+    if monitor.margin is None:
         return "unbounded"
     return f"{monitor.margin:.2f}"
 

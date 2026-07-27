@@ -83,6 +83,22 @@ All notable changes to StarPost are recorded here. Versions follow the
   slope is now trusted only when the tail fit actually explains the data
   (new `s_div_min_r2` threshold, default 0.5); genuine divergence, which
   fits cleanly, is still caught within 50 iterations as before.
+- **Convergence tool: an oscillating residual could still misfire as
+  DIVERGING even with the r^2 floor above.** The floor alone was
+  insufficient: a half-cycle of an oscillation is itself well fitted by a
+  straight line, so its r^2 lands wherever the phase happens to put it — a
+  real STAR-CCM+ run measured tail-fit r^2 as high as 0.61 on residuals that
+  were only oscillating about a flat plateau, well above the 0.5 floor, and
+  the run's terminal state read DIVERGED though nothing was diverging.
+  Sustained growth now also requires the tail window's median to have
+  shifted relative to the block immediately preceding it (new
+  `s_div_level_ratio` threshold, default 3.0): an oscillation returns to its
+  prior level, a genuine divergence does not. Measured across 18 real
+  oscillating residual series the worst level-shift ratio was 1.71; a 0.05
+  decades/iteration synthetic divergence measured 10.6, so 3.0 separates the
+  two comfortably. Divergence growing slower than ~0.02 decades/iteration is
+  not separable from oscillation within one 50-iteration window and is left
+  to the growth-vs-reference rung to catch as it continues.
 - **Convergence tool: the convergence index no longer collapses to a false
   0.00.** Whenever a primary monitor's remaining iterative error could not
   be bounded at all, the index arithmetic divided by infinity and always
@@ -96,6 +112,22 @@ All notable changes to StarPost are recorded here. Versions follow the
   primary monitor is unbounded. The Convergence window's verdict card,
   summary table and per-monitor gate table all render this honestly instead
   of printing a misleading "0.00".
+- **Convergence tool: an unbounded gate no longer erases a monitor's four
+  other good margins.** The previous fix excluded an unbounded *monitor*
+  from the run-level index, but `MonitorAssessment.margin` itself was still
+  the minimum over all five of that monitor's gates — and an unbounded
+  gate's margin is exactly 0.0, so it still overwhelmed the other four,
+  perfectly measurable margins whenever every primary monitor had one. Two
+  of three real runs hit exactly this: every primary monitor had a good
+  drift, band, two-halves and window margin, yet the index still reported
+  "None" because the iterative gate alone was unbounded on all of them. A
+  monitor's margin is now the minimum over only its finite-valued gates, so
+  the run-level index is once again simply the worst primary monitor's
+  margin. `unbounded_primary_count` and the ITERATIVE_ERROR_UNBOUNDED flag
+  are unchanged, and the binding-constraint string is tighter: it names the
+  monitor and gate compactly, adding "(iterative error unbounded)" as a
+  short suffix only when the worst monitor is itself one of them, instead of
+  a full sentence.
 - **Convergence tool: RESTART_SUSPECTED no longer fires on a single
   turbulence spike.** The restart heuristic flagged any single-iteration
   ratio above 10x on any residual, including turbulence equations (Tke,

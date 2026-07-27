@@ -101,6 +101,28 @@ def test_an_oscillating_residual_is_not_diverging_regardless_of_truncation_point
         assert a.state is not ResidualState.DIVERGING, end
 
 
+def test_d1_the_r2_floor_alone_is_insufficient_a_level_shift_is_also_required():
+    """D1: the r^2 floor closed most of R1's hole but not all of it. A
+    half-cycle of an oscillation is itself well fitted by a straight line, so
+    its r^2 lands wherever the phase puts it — this period/amplitude
+    combination (60-iteration period, 0.3 decade amplitude) drives the tail
+    fit's r^2 above s_div_min_r2 (measured up to ~0.84) with a positive slope
+    in some phases, which is exactly the false-DIVERGING mechanism a real
+    STAR-CCM+ run exposed (see config.py's s_div_level_ratio comment for the
+    measured separation between real oscillations and synthetic
+    divergences). Every truncation point across a full period is swept so
+    the verdict is proven phase-independent, not just lucky for one offset."""
+    period, amplitude = 60.0, 0.3
+    transient = np.linspace(0.0, -2.0, 200)
+    i = np.arange(900, dtype=float)
+    plateau = -2.0 + amplitude * np.sin(2.0 * np.pi * i / period)
+    y = 10.0 ** np.concatenate([transient, plateau])
+    config = ConvergenceConfig()
+    for end in range(700, 700 + int(period) + 1):
+        a = assess_residual("Continuity", y[:end], config, precision="double")
+        assert a.state is not ResidualState.DIVERGING, end
+
+
 def test_a_non_finite_value_is_immediate_divergence():
     y = geometric(0.97, 500)
     y[-3] = np.nan

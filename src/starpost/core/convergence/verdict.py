@@ -56,17 +56,28 @@ def _gate(monitor: MonitorAssessment, name: str):
     return next(g for g in monitor.gates if g.name == name)
 
 
-def _binding_unbounded(monitor: MonitorAssessment) -> bool:
-    """Whether the monitor's binding gate tested a non-finite quantity.
+def _monitor_is_unbounded(monitor: MonitorAssessment) -> bool:
+    """Whether any of the monitor's gates tested a non-finite quantity.
 
-    The iterative gate's value is ``math.inf`` whenever the static-monitor
-    escape hatch is denied (see steady.py), and ``_margin`` there turns an
-    infinite value into a margin of exactly 0.0 — indistinguishable from a
-    genuine near-zero margin unless the underlying gate value is inspected
-    directly. This is what lets ``roll_up`` tell "unbounded" apart from
-    "measured and merely bad", so the convergence index never masquerades an
-    unmeasured quantity as a confident 0.0."""
-    return not math.isfinite(_gate(monitor, monitor.binding_gate).value)
+    Currently only the iterative gate can be non-finite — its value is
+    ``math.inf`` whenever the static-monitor escape hatch is denied (see
+    steady.py) — but this is written over every gate rather than assuming
+    which one, since steady.py now excludes an infinite-valued gate from the
+    monitor's own margin (see MonitorAssessment.margin) precisely so it can
+    no longer be found by asking "what is monitor.binding_gate". This is the
+    only remaining way roll_up can tell "this monitor has an unmeasured
+    gate" apart from "this monitor measured badly"."""
+    return any(not math.isfinite(g.value) for g in monitor.gates)
+
+
+def _margin_sort_key(monitor: MonitorAssessment):
+    """Sort key that treats a ``None`` margin (no gate on this monitor could
+    be bounded at all — practically unreachable, see MonitorAssessment.margin)
+    as worse than any finite margin, so ``min`` can still find the true worst
+    monitor without Python raising on ``None < float``."""
+    if monitor.margin is None:
+        return (0, 0.0)
+    return (1, monitor.margin)
 
 
 def _series_label(msg: str) -> str:
@@ -127,16 +138,18 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
     evaluated in order, first match wins, so a residual DIVERGED outranks a
     QoI CONVERGED.
 
-    The convergence index is the worst *finite* margin among primary
-    monitors. A primary monitor whose binding gate could not be bounded at
-    all (see ``_binding_unbounded``) is worse than any finite margin, but its
-    true badness has no number — reporting it as 0.0 both hides that a
-    monitor is unbounded (it looks like an ordinary, if extreme, measurement)
-    and destroys the ability to tell "barely short of tolerance" apart from
-    "the tool could not measure this at all". So it is excluded from the
-    index and counted separately instead; the binding-constraint string
-    always says so when at least one primary monitor is unbounded, and when
-    *every* primary monitor is unbounded the index itself is None.
+    The convergence index is the worst primary monitor's margin. Each
+    monitor's own margin already excludes any gate whose tested value is
+    infinite (see steady.py) — such a gate can no longer erase four
+    otherwise-good measurements down to a false 0.0, so the index is a
+    straightforward worst-of-margins again. ``unbounded_primary_count`` and
+    the ITERATIVE_ERROR_UNBOUNDED flag still tell the user which monitors
+    could not have their iterative error bounded (see
+    ``_monitor_is_unbounded``); the binding-constraint string adds a short
+    "(iterative error unbounded)" caveat when the worst monitor itself is one
+    of them. The index is None only in the practically unreachable case
+    where the worst monitor has no finite-valued gate at all (see
+    ``MonitorAssessment.margin``).
 
     A series that failed an integrity check is dropped rather than poisoning
     the whole run — the caller has already excluded it from ``residuals``/
@@ -167,36 +180,19 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
     binding = "no primary QoI declared"
     unbounded_count = 0
     if primary_monitors:
-        # Not list membership (`m not in unbounded`): MonitorAssessment is an
-        # unfrozen dataclass with structural equality, so identity is what we
-        # actually want here, not "some other monitor with equal fields".
-        bounded = [m for m in primary_monitors if not _binding_unbounded(m)]
-        unbounded_count = len(primary_monitors) - len(bounded)
-        # The true worst offender by raw margin: an unbounded monitor's
-        # margin is 0.0 (see _margin), so it naturally outranks any finite
-        # one and is named here regardless of whether the index below can
-        # use it.
-        worst = min(primary_monitors, key=lambda m: m.margin)
-        if not bounded:
+        unbounded_count = sum(1 for m in primary_monitors if _monitor_is_unbounded(m))
+        worst = min(primary_monitors, key=_margin_sort_key)
+        if worst.margin is None:
+            # No gate on the worst monitor could be bounded at all — see
+            # MonitorAssessment.margin, practically unreachable since
+            # drift/band/two-halves/window are always finite from real data.
             index = None
-            binding = "the remaining error could not be bounded for any primary monitor"
-        elif _binding_unbounded(worst):
-            # The named worst offender cannot supply a number, so the index
-            # falls back to the worst monitor that could actually be
-            # measured — never silently to 0.0 — and the binding string
-            # keeps both: who is truly worst, and where the number came from.
-            best_bounded = min(bounded, key=lambda m: m.margin)
-            index = best_bounded.margin
-            plural = "s" if unbounded_count != 1 else ""
-            binding = (
-                f"{worst.name}: {worst.binding_gate} could not be bounded "
-                f"({unbounded_count} primary monitor{plural} unbounded); the "
-                f"index instead reflects the worst monitor that could be "
-                f"measured, {best_bounded.name}: {best_bounded.binding_gate}"
-            )
+            binding = f"{worst.name}: no gate could be bounded"
         else:
             index = worst.margin
             binding = f"{worst.name}: {worst.binding_gate}"
+            if _monitor_is_unbounded(worst):
+                binding += " (iterative error unbounded)"
 
     primary_residuals = [r for r in residuals
                          if r.equation_class is EquationClass.PRIMARY]
@@ -273,7 +269,8 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
             medium.append(f"{monitor.name}: {monitor.n_eff:.0f} effective samples")
         if monitor.n_window < config.window_min:
             low.append(f"{monitor.name}: window shorter than {config.window_min}")
-        if config.marginal_low <= monitor.margin <= config.marginal_high:
+        if (monitor.margin is not None
+                and config.marginal_low <= monitor.margin <= config.marginal_high):
             medium.append(f"{monitor.name}: margin {monitor.margin:.2f} is marginal")
         if not monitor.iterative.valid:
             # The geometric fit declines for any settled monitor with

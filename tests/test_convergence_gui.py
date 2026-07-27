@@ -94,15 +94,17 @@ def test_a_settled_run_reads_as_converged(app):
 
 
 def test_a_drifting_run_names_its_binding_constraint(app):
-    """R2: this fixture's linear drift has no geometric structure for the
-    iterative estimator, so with only one primary monitor the escape hatch's
-    denial leaves that monitor fully unbounded — the binding constraint uses
-    the exact "could not be bounded for any primary monitor" wording rather
-    than naming a monitor it has no number for (see test_convergence_verdict
+    """R2/D2: this fixture's linear drift has no geometric structure for the
+    iterative estimator, so the static-monitor escape hatch is denied and
+    that gate's tested value is +inf. D2 stops that infinite gate from
+    erasing the monitor's other margins, so the binding constraint now names
+    the true binding gate with a compact unbounded caveat rather than a
+    sentence saying nothing could be measured (see test_convergence_verdict
     .py's version of this test for the full mechanism)."""
     dlg = open_dialog(store_with(make_result("/tmp/b.sim", drifting=True)))
     assert "SLOW_DRIFT" in dlg._verdict_state.text()
-    assert "could not be bounded" in dlg._verdict_binding.text()
+    assert "Drag:" in dlg._verdict_binding.text()
+    assert "iterative error unbounded" in dlg._verdict_binding.text()
     dlg.close()
 
 
@@ -298,10 +300,11 @@ def test_g2_the_gate_table_shows_a_real_number_when_u_iter_is_unavailable(app):
 
 def _creeping_single_monitor_result(path: str = "/tmp/creep.sim") -> SimResult:
     """A single primary monitor whose iterative escape hatch is denied (same
-    fixture as the G2 test above): its binding gate value is +inf, the exact
-    R2 mechanism, and there is no other primary monitor to fall back on, so
-    the index must come out None rather than the false 0.0 a bare limit/inf
-    division would give."""
+    fixture as the G2 test above): the iterative gate's value is +inf, the
+    exact R2 mechanism, but D2 stops that infinite gate from erasing the
+    monitor's four other, perfectly good margins, so the index comes out a
+    real number — never the false 0.0 a bare limit/inf division would give,
+    and no longer None either now that the other gates supply a margin."""
     n = 3000
     rng = np.random.default_rng(0)
     qoi = (100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float)
@@ -330,12 +333,11 @@ def test_r2_the_verdict_card_reports_an_unbounded_index_honestly(app):
     result = _creeping_single_monitor_result()
     dlg = open_dialog(store_with(result))
     a = dlg._assessments[result.sim_path]
-    assert a.convergence_index is None
+    assert a.convergence_index is not None
     assert a.unbounded_primary_count == 1
 
     text = dlg._verdict_index.text()
     assert "0.00" not in text
-    assert "—" in text
     assert "unbounded" in text.lower()
     dlg.close()
 
@@ -348,7 +350,7 @@ def test_r2_the_summary_table_never_prints_an_unbounded_index_as_zero(app):
     index_column = _SUMMARY_COLUMNS.index("Index")
     cell_text = dlg._summary.item(0, index_column).text()
     assert "0.00" not in cell_text
-    assert "—" in cell_text
+    assert "unbounded" in cell_text.lower()
     dlg.close()
 
 

@@ -24,6 +24,8 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "s_div": "[D]",
     "s_div_window": "[D]",
     "s_div_min_r2": "[D]",
+    "s_div_level_ratio": "[D]",
+    "s_div_baseline_window": "[D]",
     "kappa_div": "[D]",
     "eps_prec_double": "[D]",
     "eps_prec_single": "[D]",
@@ -73,6 +75,38 @@ class ConvergenceConfig:
                                    # of check as min_fit_r2 below, applied to the
                                    # divergence rung instead of the iterative-error
                                    # one.
+    s_div_level_ratio: float = 3.0
+                                   # The r^2 floor alone is not enough: one
+                                   # half-cycle of an oscillation is itself
+                                   # well fitted by a straight line, so its
+                                   # r^2 lands wherever the phase puts it,
+                                   # and a real STAR-CCM+ run measured tail
+                                   # fits above s_div_min_r2 on oscillating
+                                   # (not diverging) residuals. An
+                                   # oscillation returns to its prior level;
+                                   # a divergence does not. This is the
+                                   # ratio median(tail window) /
+                                   # median(preceding baseline window) must
+                                   # exceed before the slope+r^2 rungs above
+                                   # are trusted to declare divergence.
+                                   # Measured across 18 real oscillating
+                                   # residual series (three production
+                                   # runs, all truncation phases): worst
+                                   # case 1.71. Measured on synthetic
+                                   # divergences: 201 at 0.1 decades/iter,
+                                   # 10.6 at 0.05 decades/iter. 3.0 sits
+                                   # comfortably above the former and well
+                                   # below the latter. Growth slower than
+                                   # ~0.02 decades/iteration is genuinely
+                                   # indistinguishable from oscillation
+                                   # within one s_div_window (it has only
+                                   # grown ~2x in 50 iterations) — that is
+                                   # left to the kappa_div rung as the
+                                   # growth continues, not chased here.
+    s_div_baseline_window: int = 200
+                                   # Size of the block immediately
+                                   # preceding the s_div_window tail that
+                                   # s_div_level_ratio is measured against.
     kappa_div: float = 10.0        # residual growth vs reference => diverged
     eps_prec_double: float = 1e-13
     eps_prec_single: float = 1e-6

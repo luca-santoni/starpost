@@ -197,7 +197,15 @@ class MonitorAssessment:
     tau0_over_n: float
     iterative: IterativeError
     gates: list[GateResult] = field(default_factory=list)
-    margin: float = 0.0
+    # The minimum GateResult.margin among gates whose tested *value* is
+    # finite. A gate with an infinite value (currently only the iterative
+    # gate, when the static-monitor escape hatch is denied — see steady.py)
+    # would otherwise reduce to a margin of exactly 0.0 through _margin's
+    # reciprocal and erase every other gate's genuine measurement. That gate
+    # still has passed=False, so ``passed`` below is unaffected — only the
+    # magnitude reported here changes. None only in the practically
+    # unreachable case where every one of the monitor's gates is unbounded.
+    margin: Optional[float] = None
     binding_gate: str = ""
 
     @property
@@ -224,11 +232,13 @@ class ConvergenceAssessment:
     confidence_rule: str
     convergence_index: Optional[float]
     binding_constraint: str
-    # How many primary monitors' binding gate could not be bounded at all
-    # (an infinite gate value, e.g. the iterative gate whenever the
-    # static-monitor escape hatch is denied — see verdict.roll_up). These are
-    # excluded from convergence_index rather than silently reported as an
-    # index of 0, and this count is what lets a caller say so.
+    # How many primary monitors have at least one gate that could not be
+    # bounded at all (an infinite gate value, e.g. the iterative gate
+    # whenever the static-monitor escape hatch is denied — see
+    # verdict.roll_up). Such a gate no longer collapses the monitor's own
+    # margin to a false 0.0 (see MonitorAssessment.margin), so this count is
+    # what still lets a caller say a monitor's remaining error could not be
+    # measured, even though convergence_index carries a real number.
     unbounded_primary_count: int = 0
     flags: list[AdvisoryFlag] = field(default_factory=list)
     residuals: list[ResidualAssessment] = field(default_factory=list)

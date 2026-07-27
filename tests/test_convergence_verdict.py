@@ -280,24 +280,27 @@ def test_the_unbounded_confidence_cap_scales_with_the_fallback_evidence():
 
 
 def test_a_drifting_run_is_slow_drift_and_names_its_binding_constraint():
-    """R2: this linear drift fails the drift gate with a real, finite margin,
-    but a pure linear ramp has no geometric structure for the iterative
-    estimator to fit, and Mann-Kendall resolves the trend overwhelmingly
-    strongly (see steady.py) — so the static-monitor escape hatch is denied
-    and the iterative gate's tested quantity is +inf, the exact R2 mechanism.
-    With only one primary monitor and it unbounded, the index is honestly
-    None (never the 0.0 a bare limit/inf division would give) and the
-    binding constraint says so by name rather than a false-precision number."""
+    """R2/D2: this linear drift fails the drift gate outright (SLOW_DRIFT),
+    and separately, a pure linear ramp has no geometric structure for the
+    iterative estimator to fit while Mann-Kendall resolves the trend
+    overwhelmingly strongly (see steady.py) — so the static-monitor escape
+    hatch is denied and the iterative gate's tested quantity is +inf, the
+    exact R2 mechanism. Before D2 that infinite gate collapsed the whole
+    monitor's margin to 0.0 and the run-level index to None; now the
+    monitor's margin comes from its other, finite gates, so the index is a
+    real (bad) number and the binding constraint names the true binding gate
+    with a compact unbounded caveat rather than a sentence saying nothing
+    could be measured at all."""
     n, window = 3000, 600
     eps = ConvergenceConfig().tolerance_fraction * 100.0
     qoi = 100.0 + (4.0 * eps / window) * np.arange(n, dtype=float)
     a = assess(make_result(qoi, healthy_residual()), primary(), CLASSIFICATION)
     assert a.state is ConvergenceState.SLOW_DRIFT
-    assert a.convergence_index is None
+    assert a.convergence_index is not None
+    assert a.convergence_index < 1.0
     assert a.unbounded_primary_count == 1
-    assert a.binding_constraint == (
-        "the remaining error could not be bounded for any primary monitor"
-    )
+    assert a.binding_constraint.startswith("Drag: ")
+    assert "iterative error unbounded" in a.binding_constraint
     assert any("drift" in r.message.lower() for r in a.reasons)
 
 
@@ -715,41 +718,51 @@ def _settled_monitor(name: str = "Lift", seed: int = 1):
     return assess_monitor(name, y, ConvergenceConfig(), is_primary=True)
 
 
-def test_r2_an_unbounded_monitor_alone_gives_index_none_not_zero():
-    """When the only primary monitor is unbounded, the index must be None (a
-    stated absence of measurement), never the 0.0 that a bare limit/inf
-    division would silently produce."""
+def test_r2_an_unbounded_gate_no_longer_erases_a_monitors_other_margins():
+    """D2: the iterative gate's value is +inf whenever the static-monitor
+    escape hatch is denied (R2/C3), and turning that into a margin of
+    exactly 0.0 used to overwhelm the monitor's four other, perfectly good
+    gate margins — with only one primary monitor, that used to force the
+    run-level index to None. Now the monitor's margin comes from its
+    finite-valued gates only, so a single unbounded gate cannot erase them:
+    the index is a real number, never the false 0.0 a bare limit/inf
+    division would give, and the binding constraint stays a compact
+    "<monitor>: <gate>" with a short unbounded caveat rather than a sentence
+    saying nothing could be measured at all."""
     unbounded = _mk_denied_monitor()
-    gate = next(g for g in unbounded.gates if g.name == unbounded.binding_gate)
-    assert not math.isfinite(gate.value)          # sanity: this is the R2 case
+    gate = next(g for g in unbounded.gates if g.name == "iterative error")
+    assert not math.isfinite(gate.value)           # sanity: this is the R2/D2 case
+    other_values = [g.value for g in unbounded.gates if g.name != "iterative error"]
+    assert all(math.isfinite(v) for v in other_values)
 
     _, _, index, binding, unbounded_count = roll_up(
         _bare_metadata(), [], [unbounded], False, ConvergenceConfig(),
     )
-    assert index is None
-    assert index != 0.0
+    assert index is not None
+    assert index == pytest.approx(unbounded.margin)
     assert unbounded_count == 1
-    assert "could not be bounded" in binding.lower()
-    assert "any primary monitor" in binding.lower()
+    assert binding.startswith("Drag: ")
+    assert "iterative error unbounded" in binding
 
 
 def test_r2_index_is_the_worst_finite_margin_when_some_monitors_are_bounded():
-    """One unbounded primary monitor and one ordinary bounded one: the index
-    must be a real measurement (the bounded monitor's margin), and the
-    binding constraint must still say a monitor could not be bounded rather
-    than silently dropping that information."""
+    """One primary monitor with an unbounded iterative gate and one ordinary
+    settled one: the index is simply the worst of the two monitors' (now
+    always finite) margins, whichever that turns out to be — the point is
+    that both margins are real numbers, so ``min`` needs no special case for
+    the unbounded one. ``unbounded_primary_count`` still flags that one
+    primary monitor's iterative error could not be bounded, independent of
+    whether it happened to be the worst."""
     unbounded = _mk_denied_monitor("Drag")
     bounded = _settled_monitor("Lift")
 
     _, _, index, binding, unbounded_count = roll_up(
         _bare_metadata(), [], [unbounded, bounded], False, ConvergenceConfig(),
     )
-    assert index is not None
-    assert index == pytest.approx(bounded.margin)
+    worst = min([unbounded, bounded], key=lambda m: m.margin)
+    assert index == pytest.approx(worst.margin)
+    assert binding == f"{worst.name}: {worst.binding_gate}"
     assert unbounded_count == 1
-    assert "Lift" in binding
-    assert "Drag" in binding
-    assert "unbounded" in binding.lower() or "could not be bounded" in binding.lower()
 
 
 def test_r2_no_unbounded_monitors_behaves_exactly_as_before():
@@ -767,11 +780,13 @@ def test_r2_no_unbounded_monitors_behaves_exactly_as_before():
     assert unbounded_count == 0
 
 
-def test_r2_end_to_end_assess_reports_the_unbounded_count_and_a_sane_index():
+def test_r2_end_to_end_assess_reports_the_unbounded_count_and_a_real_index():
     """Through the full assess() pipeline: a single primary monitor whose
-    escape hatch is denied must give convergence_index=None (not 0.0) and
-    unbounded_primary_count=1, and the ConvergenceAssessment must carry the
-    new field."""
+    escape hatch is denied still gives unbounded_primary_count=1 and names
+    the caveat in binding_constraint, but D2 fixed the index itself — it is
+    no longer forced to None (or a false 0.0) just because one gate is
+    unbounded, since the monitor's other four gates are perfectly
+    measurable."""
     n = 3000
     rng = np.random.default_rng(0)
     qoi = 100.0 - 1.09 * 0.9999 ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
@@ -779,9 +794,10 @@ def test_r2_end_to_end_assess_reports_the_unbounded_count_and_a_sane_index():
                          convergence_rows=[("precision", "double"),
                                            ("residual_normalization", "auto")])
     a = assess(result, primary(), CLASSIFICATION)
-    assert a.convergence_index is None
+    assert a.convergence_index is not None
+    assert a.convergence_index != 0.0
     assert a.unbounded_primary_count == 1
-    assert "could not be bounded" in a.binding_constraint.lower()
+    assert "iterative error unbounded" in a.binding_constraint
 
 
 # --- F5: record_departure + the honest iterative-error backstop, verdict --
