@@ -31,14 +31,36 @@ Two departures from the design document, both required for correctness:
    The same escape hatch is also denied when the estimator declines for lack
    of geometric structure (a low fit r^2, not stagnation) but the window's
    Mann-Kendall statistic still finds a statistically resolvable monotonic
-   trend *and* the projected drift is itself a meaningful fraction of
-   tolerance (``mk_trend_drift_fraction``). That combination is a monitor
-   slowly creeping toward its asymptote with noise riding on top: the drift
-   gate under-reads the remaining tail by a factor of roughly N_W*(1-rho),
-   which is a fraction of a percent at rho -> 1, so a monitor 8x from its
-   asymptote can otherwise pass every gate with margin to spare. Mann-Kendall
-   is not fooled by the same noise that defeats the geometric fit, because it
-   tests rank order rather than magnitude.
+   trend *and* the monitor has moved by a meaningful fraction of tolerance
+   over the whole record (``mk_trend_departure_fraction``). That combination
+   is a monitor slowly creeping toward its asymptote with noise riding on top.
+
+   The effect-size term is ``record_departure``
+   (``|mean(trailing window) - mean(first block)|``), not the drift gate's
+   own ``projected_drift``. Both are candidates, but ``projected_drift`` is
+   ``N_W * |slope|`` estimated *within* the trailing window, so as rho -> 1
+   the slope itself vanishes there — it under-reads the remaining tail by a
+   factor of roughly N_W*(1-rho), which is a fraction of a percent at rho ->
+   1, exactly where the under-reading is worst. Conditioning the denial on
+   projected_drift therefore switches the denial off closest to where it is
+   most needed. ``record_departure`` is measured across the whole record
+   instead, so it does not carry that N_W*(1-rho) deflation, and separates the
+   creeping population from a small real drift strictly better (see
+   ``mk_trend_departure_fraction`` in config.py and the sweep in
+   ``.superpowers/sdd/c3-closure-report.md``).
+
+   That sweep is also honest about what it does not fix: at rho close enough
+   to 1 (empirically ~0.999995 and beyond, at these settings), the record has
+   not moved far enough yet, in absolute terms, for record_departure to clear
+   a benign small-real-drift population either — the information is not in
+   the record, not merely mis-measured, so no threshold on this quantity
+   alone can separate the two populations. That residual gap is exactly why
+   the iterative estimator's decline is *also* surfaced independently, as an
+   ``ITERATIVE_ERROR_UNBOUNDED`` advisory flag with confidence capped at
+   Medium (see ``verdict.py``): whenever the geometric fit declines, this
+   module has no bound on the remaining error, whether or not the denial
+   above happens to catch this particular case. Passing every gate is then
+   never silently reported as fully certain.
 
    Mann-Kendall's z is pure statistical significance, not effect size: with
    enough points even a trend a tiny fraction of tolerance becomes
@@ -47,7 +69,7 @@ Two departures from the design document, both required for correctness:
    at all can still return a large |z| on noise alone. The effect-size term
    is what keeps the denial from firing on either of those: a trivially small
    real drift, or a stationary but autocorrelated record. Both z and the
-   drift fraction must hold together.
+   departure fraction must hold together.
 
 A third point, not a departure but easy to get wrong: the decorrelation factor
 is estimated from the *detrended* window. A smooth, well-settled monitor has an
@@ -161,6 +183,18 @@ def assess_monitor(name: str, y: np.ndarray, config,
     # --- gate 1: projected drift over another window-length ----------------
     projected_drift = n_window * abs(fit.slope)
 
+    # Record-scale departure: how far the monitor has moved across the whole
+    # record, trailing-window mean against the mean of a first block at the
+    # start. Used only as the escape-hatch denial's effect-size term (below),
+    # not as a gate of its own — unlike projected_drift it is not deflated by
+    # N_W*(1-rho) as rho -> 1, since it is not confined to the trailing
+    # window (see the module docstring). The first-block length reuses
+    # window_min: the same floor the window ladder already treats as "enough
+    # samples to say something", and it is what the sweep behind
+    # mk_trend_departure_fraction was measured with.
+    first_block = y[:min(config.window_min, n)]
+    record_departure = abs(float(window.mean()) - float(first_block.mean()))
+
     # --- gate 2: oscillation band ------------------------------------------
     band_full = float(window.max() - window.min())
     high, low = np.percentile(window, [97.5, 2.5])
@@ -185,15 +219,14 @@ def assess_monitor(name: str, y: np.ndarray, config,
         iterative_passed = False
         iterative_detail = iterative.reason
     elif (abs(mk.z) > config.mk_trend_z
-          and projected_drift >= config.mk_trend_drift_fraction * eps):
+          and record_departure >= config.mk_trend_departure_fraction * eps):
         # The escape hatch is for a monitor that has genuinely stopped
         # moving. This one has not: the change series has no geometric
         # structure to extrapolate (so the tail estimator declined), the
         # window still shows a trend Mann-Kendall can resolve statistically,
-        # and that trend is not merely significant but large enough to
-        # matter — the projected drift is itself a meaningful fraction of
-        # tolerance. Judging it on the largest single-iteration change would
-        # under-read the remaining approach by orders of magnitude near
+        # and the monitor has moved a meaningful fraction of tolerance across
+        # the whole record. Judging it on the largest single-iteration change
+        # would under-read the remaining approach by orders of magnitude near
         # rho -> 1 (see the module docstring), so the gate fails outright
         # rather than substituting a number that looks reassuring but is not
         # comparable. The effect-size term is what keeps this from firing on
@@ -207,9 +240,9 @@ def assess_monitor(name: str, y: np.ndarray, config,
             f"({iterative.reason}), but the window still shows a "
             f"statistically resolvable monotonic trend (Mann-Kendall z = "
             f"{mk.z:.3g}, |z| > {config.mk_trend_z}) of a physically "
-            f"meaningful size (projected drift {projected_drift:.4g} >= "
-            f"{config.mk_trend_drift_fraction:.2f} x tolerance {eps:.4g}); "
-            "the static-monitor escape hatch is refused"
+            f"meaningful size (record-scale departure {record_departure:.4g} "
+            f">= {config.mk_trend_departure_fraction:.2f} x tolerance "
+            f"{eps:.4g}); the static-monitor escape hatch is refused"
         )
     else:
         largest_change = float(np.max(np.abs(np.diff(window)))) if n_window > 1 else 0.0
@@ -271,6 +304,7 @@ def assess_monitor(name: str, y: np.ndarray, config,
         ols_slope=fit.slope,
         theil_sen_slope=robust_slope,
         projected_drift=projected_drift,
+        record_departure=record_departure,
         mann_kendall_z=mk.z,
         mann_kendall_p=mk.p,
         two_halves_delta=two_halves_delta,

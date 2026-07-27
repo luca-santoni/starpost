@@ -72,11 +72,22 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
                       else "solver regime unknown: not assessed")
             confidence, rule = Confidence.LOW, "Low — non-steady or unknown-regime runs are not assessed"
         else:
+            # "No residuals/monitors survived" only means evidence was
+            # *destroyed* when at least one such signal was collected before
+            # preconditioning dropped every one of them. A data set that
+            # simply never had residual (or monitor) history to begin with —
+            # a monitor-only portable CSV, a deleted Residuals plot, a
+            # classification override — is a different, benign situation and
+            # must not read the same as one where evidence was thrown away.
+            residual_evidence_destroyed = bool(residual_signals) and not residuals
+            monitor_evidence_destroyed = bool(qoi_signals) and not monitors
             state, flags, index, binding = roll_up(
-                metadata, residuals, monitors, restart_seen, config
+                metadata, residuals, monitors, restart_seen, config,
+                residual_evidence_destroyed,
             )
             confidence, rule = confidence_of(
-                metadata, residuals, monitors, integrity_errors, config
+                metadata, residuals, monitors, integrity_errors, config,
+                residual_evidence_destroyed, monitor_evidence_destroyed,
             )
         return ConvergenceAssessment(
             sim_path=result.sim_path,

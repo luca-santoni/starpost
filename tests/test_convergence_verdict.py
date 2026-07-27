@@ -31,6 +31,19 @@ def converged_qoi(n: int = 3000, mean: float = 100.0, seed: int = 0) -> np.ndarr
     return mean + rng.normal(scale=1e-5, size=n)
 
 
+def qoi_with_geometric_decay(n: int = 3000, seed: int = 1) -> np.ndarray:
+    """Unlike ``converged_qoi``, this settles by a genuine exponential
+    approach (the same shape as V2 in test_convergence_steady.py), so its
+    change series has real geometric structure and the iterative estimator
+    is valid. ``converged_qoi``'s pure white noise has no such structure —
+    |diff| does not decay with iteration at all — so its iterative estimator
+    always declines (NO_ESTIMATE) and, after the F5 fix, ITERATIVE_ERROR_
+    UNBOUNDED correctly caps its confidence at Medium. This helper is what a
+    genuinely High-confidence end-to-end case looks like."""
+    rng = np.random.default_rng(seed)
+    return 2.0 * (1.0 - np.exp(-np.arange(n) / 200.0)) + rng.normal(scale=1e-9, size=n)
+
+
 def healthy_residual(n: int = 3000) -> np.ndarray:
     return 10.0 ** (-np.arange(n, dtype=float) / 400.0) + 1e-12
 
@@ -67,13 +80,35 @@ def primary(name: str = "Drag", **kw) -> ConvergenceConfig:
 # --- end-to-end states -----------------------------------------------------
 
 def test_a_healthy_settled_run_is_converged():
-    result = make_result(converged_qoi(), healthy_residual(),
+    """Uses qoi_with_geometric_decay rather than converged_qoi: a genuine
+    decaying approach is what lets the iterative estimator produce a real
+    bound, so this is the case that legitimately earns High confidence."""
+    result = make_result(qoi_with_geometric_decay(), healthy_residual(),
                          convergence_rows=[("precision", "double"),
                                            ("residual_normalization", "auto")])
     a = assess(result, primary(), CLASSIFICATION)
     assert a.state is ConvergenceState.CONVERGED
     assert a.convergence_index > 1.0
     assert a.confidence is Confidence.HIGH
+
+
+def test_a_purely_noisy_settled_run_is_converged_but_capped_at_medium():
+    """converged_qoi has no geometric decay to fit — the change series is
+    pure noise around a fixed mean — so the iterative estimator always
+    declines (NO_ESTIMATE) and the remaining error is never bounded. The run
+    still reaches CONVERGED (the static-monitor escape hatch judges it on its
+    largest single-iteration change, which is tiny relative to tolerance),
+    but confidence must not read High: ITERATIVE_ERROR_UNBOUNDED caps it at
+    Medium, and a reason names the monitor."""
+    result = make_result(converged_qoi(), healthy_residual(),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.CONVERGED
+    assert a.confidence is Confidence.MEDIUM
+    assert AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED in a.flags
+    assert any("iterative error could not be bounded" in r.message.lower()
+              and r.target == "Drag" for r in a.reasons)
 
 
 def test_a_drifting_run_is_slow_drift_and_names_its_binding_constraint():
@@ -361,8 +396,11 @@ def test_the_confidence_rule_is_reported():
 
 def test_incomplete_evidence_alone_does_not_cap_confidence():
     """It is raised unconditionally in phase 1 because the conservation check
-    is not implemented; letting it cap confidence would make High unreachable."""
-    result = make_result(converged_qoi(), healthy_residual(),
+    is not implemented; letting it cap confidence would make High unreachable.
+    Uses qoi_with_geometric_decay so the iterative estimator is valid and
+    ITERATIVE_ERROR_UNBOUNDED does not also fire, isolating this test to
+    INCOMPLETE_EVIDENCE alone."""
+    result = make_result(qoi_with_geometric_decay(), healthy_residual(),
                          convergence_rows=[("precision", "double"),
                                            ("residual_normalization", "auto")])
     a = assess(result, primary(), CLASSIFICATION)
@@ -437,6 +475,202 @@ def test_a_residual_jump_without_an_index_reset_is_advisory_only():
               CLASSIFICATION)
     assert AdvisoryFlag.RESTART_SUSPECTED in a.flags
     assert a.n_segments == 1        # advisory: we did not segment
+
+
+# --- F5: record_departure + the honest iterative-error backstop, verdict --
+# --- level. The gate-level sweep lives in test_convergence_steady.py.     --
+
+def _creeping_qoi(rho: float, n: int = 3000, amplitude: float = 1.09,
+                  seed: int = 0, noise: float = 1e-2) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    return 100.0 - amplitude * rho ** np.arange(n, dtype=float) + rng.normal(
+        scale=noise, size=n)
+
+
+@pytest.mark.parametrize("rho", [0.999, 0.9999, 0.99996])
+def test_f5_creeping_monitors_never_reach_converged(rho):
+    """record_departure catches these three rho values at the gate level for
+    every one of 20 seeds (see test_convergence_steady.py); confirm the full
+    assess() pipeline agrees end to end."""
+    for seed in range(10):
+        result = make_result(_creeping_qoi(rho, seed=seed), healthy_residual(),
+                             convergence_rows=[("precision", "double"),
+                                               ("residual_normalization", "auto")])
+        a = assess(result, primary(), CLASSIFICATION)
+        assert a.state not in (ConvergenceState.CONVERGED,
+                               ConvergenceState.CONVERGED_MACHINE), (
+            f"rho={rho} seed={seed}"
+        )
+
+
+def test_f5_the_boundary_and_extreme_rho_are_never_reported_fully_certain():
+    """rho=0.99999 is a mixed population at the gate level (some seeds denied,
+    some pass through the escape hatch) and rho=0.999995 always passes — the
+    acknowledged residual gap record_departure cannot close (see
+    test_convergence_steady.py). Whenever either reaches CONVERGED at the
+    verdict level, it must never read High confidence: ITERATIVE_ERROR_
+    UNBOUNDED is raised, confidence is capped at Medium, and a reason names
+    the monitor. This is what makes the gap safe rather than silent."""
+    for rho in (0.99999, 0.999995):
+        for seed in range(10):
+            result = make_result(_creeping_qoi(rho, seed=seed), healthy_residual(),
+                                 convergence_rows=[("precision", "double"),
+                                                   ("residual_normalization", "auto")])
+            a = assess(result, primary(), CLASSIFICATION)
+            if a.state in (ConvergenceState.CONVERGED, ConvergenceState.CONVERGED_MACHINE):
+                assert a.confidence is not Confidence.HIGH, f"rho={rho} seed={seed}"
+                assert AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED in a.flags, (
+                    f"rho={rho} seed={seed}"
+                )
+                assert any(
+                    "Drag" in r.message
+                    and "iterative error could not be bounded" in r.message.lower()
+                    for r in a.reasons
+                ), f"rho={rho} seed={seed}"
+
+
+@pytest.mark.parametrize("scale", [1e-2, 1e-3, 1e-4, 1e-5])
+def test_f5_settled_noise_still_reaches_converged_at_several_scales(scale):
+    """The false-refusal counterpart, at the verdict level: ordinary settled
+    noise must still reach CONVERGED (it may or may not reach High
+    confidence — see test_a_purely_noisy_settled_run_is_converged_but_capped_
+    at_medium — but it must not be refused)."""
+    for seed in range(5):
+        rng = np.random.default_rng(seed)
+        qoi = 100.0 + rng.normal(scale=scale, size=3000)
+        result = make_result(qoi, healthy_residual(),
+                             convergence_rows=[("precision", "double"),
+                                               ("residual_normalization", "auto")])
+        a = assess(result, primary(), CLASSIFICATION)
+        assert a.state in (ConvergenceState.CONVERGED,
+                          ConvergenceState.CONVERGED_MACHINE), f"scale={scale} seed={seed}"
+
+
+def test_f5_a_stationary_ar1_and_a_small_real_drift_still_reach_converged():
+    """AR(1) at phi=0.99 (stationary, no trend in the generating process at
+    all) and a small real drift well inside tolerance must both still reach
+    CONVERGED — refusing every noisy settled monitor is the bug this whole
+    area exists to avoid."""
+    n = 3000
+    config = ConvergenceConfig()
+    eps = config.tolerance_fraction * 100.0
+
+    rng = np.random.default_rng(2)
+    noise = rng.normal(size=n)
+    raw = np.empty(n)
+    raw[0] = noise[0]
+    for i in range(1, n):
+        raw[i] = 0.99 * raw[i - 1] + noise[i]
+    band_target = 0.02 * eps
+    ar1_qoi = 100.0 + raw * (band_target / (raw.std() * 4.0))
+
+    rng2 = np.random.default_rng(0)
+    drift_per_iter = 0.01 * eps / 600.0
+    drift_qoi = (100.0 + drift_per_iter * np.arange(n, dtype=float)
+                + rng2.normal(scale=0.01 * eps, size=n))
+
+    for qoi, label in ((ar1_qoi, "ar1"), (drift_qoi, "drift")):
+        result = make_result(qoi, healthy_residual(),
+                             convergence_rows=[("precision", "double"),
+                                               ("residual_normalization", "auto")])
+        a = assess(result, primary(), CLASSIFICATION)
+        assert a.state in (ConvergenceState.CONVERGED,
+                          ConvergenceState.CONVERGED_MACHINE), label
+
+
+# --- F6: "no residual monitors exist" is not "residual evidence destroyed" --
+
+def test_f6_a_dataset_with_no_residual_monitors_can_still_reach_converged():
+    """A data set whose only plot is a Drag monitor (no Residuals plot at
+    all — a deleted plot, a monitor-only portable CSV, a classification
+    override) has had nothing destroyed. Before the fix this was
+    indistinguishable from every residual failing its integrity check: held
+    at CONVERGING, NO_RESIDUAL_EVIDENCE flagged, and a confidence_rule
+    claiming residual evidence 'survived preconditioning' with a suggested
+    action pointing at per-series warnings that were never raised. After the
+    fix this reaches CONVERGED, carries no false NO_RESIDUAL_EVIDENCE flag,
+    and a distinct reason says plainly that the verdict rests on QoI
+    evidence alone."""
+    result = make_result(qoi_with_geometric_decay(), residual=None,
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.residuals == []
+    assert a.integrity_errors == []
+    assert a.state is ConvergenceState.CONVERGED
+    assert AdvisoryFlag.NO_RESIDUAL_EVIDENCE not in a.flags
+    assert AdvisoryFlag.INCOMPLETE_EVIDENCE in a.flags
+    assert any("no residual monitors at all" in r.message.lower()
+              and "qoi evidence alone" in r.message.lower()
+              for r in a.reasons)
+    assert "survived preconditioning" not in a.confidence_rule.lower()
+
+
+def test_f6_the_destroyed_case_is_unaffected_by_the_fix():
+    """The counterpart: when residual evidence did exist and every one of it
+    was then dropped by an integrity check, the original behaviour must be
+    unchanged — NO_RESIDUAL_EVIDENCE still fires and the state is still held
+    at CONVERGING. (Full reproduction in
+    test_f1_a_dropped_diverging_residual_no_longer_certifies_a_false_converged;
+    this is the minimal version distinguishing 'destroyed' from 'never
+    existed'.)"""
+    n = 3000
+    result = make_result(qoi_with_geometric_decay(), healthy_residual(n),
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    result.plots[1].series[0].x[-1] = result.plots[1].series[0].x[-2]
+    a = assess(result, primary(), CLASSIFICATION)
+    assert a.residuals == []
+    assert a.integrity_errors      # the dropped Continuity series
+    assert a.state is ConvergenceState.CONVERGING
+    assert AdvisoryFlag.NO_RESIDUAL_EVIDENCE in a.flags
+
+
+def test_f6_a_dataset_with_no_qoi_monitors_is_not_told_evidence_was_destroyed():
+    """The identical conflation on the monitor side: a residual-only data set
+    (no QoI monitor plot at all) must not have its confidence_rule claim 'no
+    monitor evidence survived preconditioning' — nothing failed an integrity
+    check, there simply is no QoI monitor here. The state is still held at
+    CONVERGING (a verdict needs a primary QoI to certify CONVERGED — a
+    different, correct rule, unaffected by this fix), but the confidence
+    text must be honest about why."""
+    result = SimResult(
+        sim_path="/tmp/residual_only.sim",
+        plots=[MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                           series=[PlotSeries(name="Continuity",
+                                              x=list(map(float, range(3000))),
+                                              y=healthy_residual().tolist())])],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                          entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="",
+                          entries=[("precision", "double"),
+                                   ("residual_normalization", "auto")]),
+        ]),
+    )
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert a.monitors == []
+    assert a.integrity_errors == []
+    assert a.state is ConvergenceState.CONVERGING     # no primary QoI to certify
+    assert "survived preconditioning" not in a.confidence_rule.lower()
+
+
+# --- F7: a malformed integrity message must not render a nonsense clause --
+
+def test_f7_series_label_falls_back_to_run_for_a_colonless_message():
+    """Every per-series integrity message is '<series>: <detail>', but the
+    run-level 'no monitor histories were found in this data set' has no
+    colon. Splitting on ':' unconditionally (the old code) would fold that
+    whole sentence into a bogus series label wherever it is used to build a
+    rule clause. Currently confidence_of's low-evidence checks always
+    short-circuit before that string is used for such a run (see
+    test_an_empty_result_fails_integrity), so this is not reachable today —
+    but the extraction is latent breakage waiting for that circuit to
+    change, so it gets its own direct, tested helper."""
+    from starpost.core.convergence.verdict import _series_label
+
+    assert _series_label("Drag: fewer than 2 points") == "Drag"
+    assert _series_label("no monitor histories were found in this data set") == "run"
 
 
 # --- reasons ---------------------------------------------------------------

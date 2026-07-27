@@ -21,12 +21,26 @@ All notable changes to StarPost are recorded here. Versions follow the
   change) instead of a blank dash whenever the geometric-tail estimator
   declined but the gate still bound the verdict. A new advisory flag,
   AUTOCORRELATION_UNRELIABLE, fires when a monitor's decorrelation estimate
-  does not meet its own validity assumption. Unsteady runs are reported as not
-  yet supported rather than assessed with steady tests; a run whose solver
-  regime cannot be determined at all is refused the same way, since assessing
-  an unknown regime as steady would risk a confident wrong answer on a case
-  that may actually be transient. Reads cached data only — no STAR-CCM+
-  re-run.
+  does not meet its own validity assumption. A second new flag,
+  ITERATIVE_ERROR_UNBOUNDED, fires whenever a primary monitor's geometric-tail
+  estimator declined for any reason (no structure to extrapolate, too little
+  data, or genuine stagnation): the monitor can still pass, but confidence for
+  that run is now capped at Medium and a reason names the monitor, since the
+  remaining iterative error was never actually bounded. The static-monitor
+  escape hatch's denial (for a monitor creeping toward its asymptote with
+  noise on top) now measures how far the monitor has moved across its whole
+  record rather than within the trailing window alone, which no longer
+  under-reads the remaining approach as the creep rate approaches one. A data
+  set or monitor set with no residual (or QoI monitor) history at all is no
+  longer treated the same as one where that evidence existed and was then
+  destroyed by an integrity failure — the former can still reach CONVERGED,
+  with a reason noting the verdict rests on the other evidence alone, while
+  the latter still holds the verdict at "still converging". Unsteady runs are
+  reported as not yet supported rather than assessed with steady tests; a run
+  whose solver regime cannot be determined at all is refused the same way,
+  since assessing an unknown regime as steady would risk a confident wrong
+  answer on a case that may actually be transient. Reads cached data only —
+  no STAR-CCM+ re-run.
 - Extraction now records solver precision, residual normalization mode, and the
   unsteady solver parameters. Convergence assessment refuses a data set
   outright — rather than assessing it at reduced confidence — when its solver

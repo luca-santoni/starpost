@@ -38,7 +38,14 @@ def make_result(path: str, drifting: bool = False) -> SimResult:
     if drifting:
         qoi = 100.0 + 0.01 * np.arange(n, dtype=float)
     else:
-        qoi = 100.0 + rng.normal(scale=1e-5, size=n)
+        # A genuine (if tiny) exponential approach, not pure white noise: the
+        # iterative estimator needs real geometric structure to fit or it
+        # declines (NO_ESTIMATE) and the ITERATIVE_ERROR_UNBOUNDED flag caps
+        # confidence at Medium — correct for a monitor that is only noise,
+        # but this fixture is meant to demonstrate the genuinely High-
+        # confidence, everything-checks-out case end to end.
+        qoi = 100.0 + 2.0 * (1.0 - np.exp(-np.arange(n) / 200.0)) + rng.normal(
+            scale=1e-9, size=n)
     residual = 10.0 ** (-np.arange(n, dtype=float) / 400.0) + 1e-12
     x = list(map(float, range(n)))
     return SimResult(

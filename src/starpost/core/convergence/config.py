@@ -40,7 +40,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "marginal_low": "[D]",
     "marginal_high": "[D]",
     "mk_trend_z": "[D]",
-    "mk_trend_drift_fraction": "[D]",
+    "mk_trend_departure_fraction": "[D]",
 }
 
 
@@ -76,13 +76,22 @@ class ConvergenceConfig:
                                    # iterative fit, denies the static-monitor
                                    # escape hatch: the window still shows a
                                    # statistically resolvable monotonic trend
-    mk_trend_drift_fraction: float = 0.25
+    mk_trend_departure_fraction: float = 0.25
                                    # the mk_trend_z denial above also requires
-                                   # the projected drift to be at least this
-                                   # fraction of tolerance — z alone is a pure
-                                   # significance test with no effect size, and
-                                   # a long enough record makes a physically
-                                   # irrelevant difference significant
+                                   # the record-scale departure (trailing
+                                   # window mean vs. first-block mean) to be
+                                   # at least this fraction of tolerance — z
+                                   # alone is a pure significance test with no
+                                   # effect size, and a long enough record
+                                   # makes a physically irrelevant difference
+                                   # significant. Chosen from a sweep at
+                                   # n=3000, screening tolerance: it separates
+                                   # every creeping case at rho <= 0.99999
+                                   # (departure >= 0.271 x eps) from a benign
+                                   # small real drift (0.218 x eps) — see
+                                   # steady.py's module docstring and
+                                   # c3-closure-report.md for the full sweep
+                                   # and its acknowledged residual gap.
 
     # --- QoI gates ------------------------------------------------------
     tolerance_fraction: float = TOLERANCE_PRESETS["screening"]

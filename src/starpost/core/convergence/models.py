@@ -51,6 +51,7 @@ class AdvisoryFlag(str, Enum):
     OSCILLATORY_SUSPECTED = "OSCILLATORY_SUSPECTED"
     AUTOCORRELATION_UNRELIABLE = "AUTOCORRELATION_UNRELIABLE"
     NO_RESIDUAL_EVIDENCE = "NO_RESIDUAL_EVIDENCE"
+    ITERATIVE_ERROR_UNBOUNDED = "ITERATIVE_ERROR_UNBOUNDED"
 
 
 class Provenance(str, Enum):
@@ -186,6 +187,7 @@ class MonitorAssessment:
     ols_slope: float
     theil_sen_slope: float
     projected_drift: float
+    record_departure: float
     mann_kendall_z: float
     mann_kendall_p: float
     two_halves_delta: float

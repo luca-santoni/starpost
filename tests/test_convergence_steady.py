@@ -241,8 +241,9 @@ def test_c3_settled_monitors_still_pass_across_seeds(scale):
 def test_f2_a_trivially_small_real_drift_is_not_refused():
     """Drifting at 1% of the tolerance the user set. z alone is significant
     (a pure significance test has no notion of 'too small to matter'), but
-    the projected drift is a small fraction of tolerance, so the denial's
-    effect-size term must let the escape hatch through."""
+    the record-scale departure is a small fraction of tolerance (measured at
+    ~0.04 x eps), so the denial's effect-size term must let the escape hatch
+    through."""
     n = 3000
     config = ConvergenceConfig()
     eps = config.tolerance_fraction * 100.0
@@ -253,7 +254,7 @@ def test_f2_a_trivially_small_real_drift_is_not_refused():
     a = assess_monitor("Drag", y, config, is_primary=True)
     assert a.iterative.valid is False
     assert abs(a.mann_kendall_z) > config.mk_trend_z            # "significant"...
-    assert a.projected_drift < config.mk_trend_drift_fraction * a.tolerance_abs  # ...but tiny
+    assert a.record_departure < config.mk_trend_departure_fraction * a.tolerance_abs  # ...but tiny
     assert gate(a, GATE_ITERATIVE).passed is True
     assert a.passed is True
 
@@ -264,8 +265,9 @@ def test_f2_a_stationary_ar1_record_is_not_refused_on_correlated_noise(phi, seed
     measured flipping to |z| > mk_trend_z on autocorrelation alone, with
     drift, band and the window gate all passing — there is no trend in the
     generating process, only correlated noise Mann-Kendall's variance formula
-    does not expect. The effect-size term (near-zero projected drift) must
-    still let the escape hatch through."""
+    does not expect. The effect-size term (near-zero record-scale departure,
+    since a stationary AR(1) does not move the record mean) must still let
+    the escape hatch through."""
     n = 30000
     config = ConvergenceConfig()
     rng = np.random.default_rng(seed)
@@ -279,7 +281,7 @@ def test_f2_a_stationary_ar1_record_is_not_refused_on_correlated_noise(phi, seed
     y = 100.0 + raw * (band_target / (raw.std() * 4.0))
     a = assess_monitor("Drag", y, config, is_primary=True)
     assert abs(a.mann_kendall_z) > config.mk_trend_z
-    assert a.projected_drift < config.mk_trend_drift_fraction * a.tolerance_abs
+    assert a.record_departure < config.mk_trend_departure_fraction * a.tolerance_abs
     assert gate(a, GATE_ITERATIVE).passed is True
     assert a.passed is True
 
@@ -288,9 +290,10 @@ def test_f2_a_stationary_ar1_record_is_not_refused_on_correlated_noise(phi, seed
                                         (0.9999, 1e-3), (0.9999, 1e-2)])
 def test_f2_the_creeping_population_still_denied_with_the_effect_size_term(rho, noise):
     """The counterpart sweep: adding the effect-size term must not reopen the
-    hole C3 closed. Every creeping seed's projected drift sits at 0.42-0.53 of
-    tolerance, comfortably above mk_trend_drift_fraction (0.25 by default), so
-    the denial must still fire for all of them."""
+    hole C3 closed. Every creeping seed's record-scale departure sits at
+    roughly 2.5-9.2x tolerance (rho=0.9999 and rho=0.999 respectively),
+    comfortably above mk_trend_departure_fraction (0.25 by default), so the
+    denial must still fire for all of them."""
     n = 3000
     config = ConvergenceConfig()
     for seed in range(20):
@@ -298,11 +301,90 @@ def test_f2_the_creeping_population_still_denied_with_the_effect_size_term(rho, 
         y = (100.0 - 1.09 * rho ** np.arange(n, dtype=float)
              + rng.normal(scale=noise, size=n))
         a = assess_monitor("Drag", y, config, is_primary=True)
-        assert a.projected_drift >= config.mk_trend_drift_fraction * a.tolerance_abs, (
+        assert a.record_departure >= config.mk_trend_departure_fraction * a.tolerance_abs, (
             f"rho={rho} noise={noise} seed={seed}"
         )
         assert gate(a, GATE_ITERATIVE).passed is False, f"rho={rho} noise={noise} seed={seed}"
         assert a.passed is False, f"rho={rho} noise={noise} seed={seed}"
+
+
+# --- F5: record_departure replaces projected_drift as the denial's effect- --
+# --- size term, closing a hole projected_drift's own N_W*(1-rho) deflation --
+# --- reopened right where the under-reading is worst.                     --
+#
+# All four cases below use the reproduction from the review: n=3000,
+# A=1.09, mean 100, screening tolerance, noise=1e-2 — the same population
+# that, judged on projected_drift alone, passed every gate at rho=0.99996
+# and rho=0.99999 with the true remaining error 10-11x tolerance.
+
+def test_f5_record_departure_catches_creeping_monitors_projected_drift_missed():
+    """rho in {0.999, 0.9999, 0.99996}: record_departure sits at roughly
+    1.0-9.2x tolerance for every one of 20 seeds, comfortably above
+    mk_trend_departure_fraction (0.25x), so every seed must fail. rho=0.99996
+    in particular is the case the old projected_drift-gated denial let
+    through (departure/eps = 0.242 in the review's measurement, under the old
+    threshold) — record_departure catches it (~1.0-1.1x eps here)."""
+    n = 3000
+    config = ConvergenceConfig()
+    for rho in (0.999, 0.9999, 0.99996):
+        for seed in range(20):
+            rng = np.random.default_rng(seed)
+            y = (100.0 - 1.09 * rho ** np.arange(n, dtype=float)
+                 + rng.normal(scale=1e-2, size=n))
+            a = assess_monitor("Drag", y, config, is_primary=True)
+            assert a.record_departure >= config.mk_trend_departure_fraction * a.tolerance_abs, (
+                f"rho={rho} seed={seed}"
+            )
+            assert a.passed is False, f"rho={rho} seed={seed}"
+
+
+def test_f5_the_boundary_rho_is_a_mixed_population_by_design():
+    """rho=0.99999 sits right at the edge record_departure can resolve
+    (measured departure/eps in roughly 0.27-0.30 against a 0.25 threshold):
+    some seeds clear the threshold and are correctly denied, others fall
+    just under it and pass through the escape hatch. Neither outcome is a
+    bug — this is the transition zone between what Part 1 can and cannot
+    catch. Every seed that does pass must still show iterative.valid is
+    False (no geometric fit was trusted), which is exactly what
+    ITERATIVE_ERROR_UNBOUNDED and the Medium confidence cap are for (see
+    the verdict-level test in test_convergence_verdict.py)."""
+    n = 3000
+    rho, A = 0.99999, 1.09
+    config = ConvergenceConfig()
+    outcomes = []
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        y = 100.0 - A * rho ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
+        a = assess_monitor("Drag", y, config, is_primary=True)
+        outcomes.append(a.passed)
+        if a.passed:
+            assert a.iterative.valid is False, seed
+    assert any(outcomes), "expected at least one seed to pass at the boundary"
+    assert not all(outcomes), "expected at least one seed to still be denied"
+
+
+def test_f5_the_denial_does_not_fully_close_the_hole_at_extreme_rho():
+    """The acknowledged residual gap. At rho=0.999995 the monitor is
+    analytically ~2e6x tolerance from its asymptote (A*rho^(n-1)/(1-rho),
+    not a fitted estimate — the geometric fit itself declines on this noisy
+    data), yet record_departure (~0.13-0.16x eps) falls *below* a benign
+    small-real-drift population (~0.22x eps measured in
+    test_f2_a_trivially_small_real_drift_is_not_refused) — the record simply
+    has not moved far enough yet in absolute terms for record_departure to
+    tell the two populations apart, for any threshold. Every seed here passes
+    every gate. This is exactly the case Part 2 exists for: verified at the
+    verdict level that such a run is never reported as fully certain."""
+    n = 3000
+    rho, A = 0.999995, 1.09
+    config = ConvergenceConfig()
+    true_remaining = A * rho ** (n - 1) / (1.0 - rho)
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        y = 100.0 - A * rho ** np.arange(n, dtype=float) + rng.normal(scale=1e-2, size=n)
+        a = assess_monitor("Drag", y, config, is_primary=True)
+        assert true_remaining > 1e6 * a.tolerance_abs
+        assert a.passed is True, f"seed={seed}"
+        assert a.iterative.valid is False, f"seed={seed}"
 
 
 def test_a_short_record_fails_the_window_gate():

@@ -54,6 +54,16 @@ def _gate(monitor: MonitorAssessment, name: str):
     return next(g for g in monitor.gates if g.name == name)
 
 
+def _series_label(msg: str) -> str:
+    """The series-name prefix of an integrity message, formatted
+    ``"<series>: <detail>"``. Not every integrity message has that shape —
+    the run-level "no monitor histories were found in this data set" message
+    has no colon at all — so this falls back to a generic label rather than
+    rendering the whole sentence as a bogus series name."""
+    name, sep, _ = msg.partition(": ")
+    return name if sep else "run"
+
+
 def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
                   restart_seen: bool, config) -> list[AdvisoryFlag]:
     """Advisory flags. Any of these may attach to any state, including
@@ -76,6 +86,14 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
             flags.append(AdvisoryFlag.AUTOCORRELATION_UNRELIABLE)
         if not monitor.iterative.valid and "ASYMPTOTICALLY_STAGNANT" in monitor.iterative.reason:
             flags.append(AdvisoryFlag.ASYMPTOTICALLY_STAGNANT)
+        if monitor.is_primary and not monitor.iterative.valid:
+            # Whenever the geometric fit declines — for any reason: no
+            # structure, too little data, or genuine stagnation — this
+            # module has no numeric bound on the monitor's remaining error.
+            # The monitor may still pass (see steady.py's escape hatch), but
+            # the verdict must say so rather than silently claiming more
+            # certainty than the evidence supports.
+            flags.append(AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED)
         if _slopes_disagree(monitor):
             flags.append(AdvisoryFlag.TREND_ESTIMATE_UNSTABLE)
         if (_gate(monitor, GATE_DRIFT).passed
@@ -87,7 +105,7 @@ def collect_flags(metadata: RunMetadata, monitors: list[MonitorAssessment],
 
 
 def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
-            restart_seen: bool, config
+            restart_seen: bool, config, residual_evidence_destroyed: bool = False
             ) -> tuple[ConvergenceState, list[AdvisoryFlag], Optional[float], str]:
     """Resolve the terminal state, flags, convergence index and binding
     constraint. The state ladder is evaluated in order, first match wins, so a
@@ -101,12 +119,20 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
 
     Residuals are necessary, never sufficient (see the module docstring), so
     CONVERGED and CONVERGED_MACHINE both require at least one surviving
-    residual. Dropping a bad series is meant to let the run continue on what
-    is left, not to quietly remove the one thing that can veto it — if every
-    residual failed its integrity check (the likely shape of the failure,
-    since every equation in a STAR-CCM+ export shares one iteration column),
-    the QoI gates alone cannot certify convergence and the strongest
-    available verdict is CONVERGING."""
+    residual *unless residual evidence never existed in the first place*.
+    ``residual_evidence_destroyed`` is True only when at least one residual
+    series was collected and every one of them was then dropped by an
+    integrity check — the caller (``assess``) is the only place that knows
+    whether ``residuals`` came out empty because a residual plot never
+    existed or because every one that did exist failed preconditioning; a
+    data set with no residual monitors at all (a monitor-only portable CSV, a
+    deleted Residuals plot, a classification override) has had nothing
+    destroyed and is a different situation. Dropping a bad series is meant to
+    let the run continue on what is left, not to quietly remove the one thing
+    that can veto it — if every residual failed its integrity check (the
+    likely shape of the failure, since every equation in a STAR-CCM+ export
+    shares one iteration column), the QoI gates alone cannot certify
+    convergence and the strongest available verdict is CONVERGING."""
     primary_monitors = [m for m in monitors if m.is_primary]
     flags = collect_flags(metadata, monitors, restart_seen, config)
 
@@ -135,7 +161,7 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
         return ConvergenceState.SLOW_DRIFT, flags, index, binding
     if not all(m.passed for m in primary_monitors):
         return ConvergenceState.CONVERGING, flags, index, binding
-    if not residuals:
+    if residual_evidence_destroyed:
         flags = list(dict.fromkeys([*flags, AdvisoryFlag.NO_RESIDUAL_EVIDENCE]))
         return ConvergenceState.CONVERGING, flags, index, binding
     if primary_residuals and all(
@@ -145,17 +171,23 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
 
 
 def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
-                  integrity_errors: Optional[list[str]], config) -> tuple[Confidence, str]:
+                  integrity_errors: Optional[list[str]], config,
+                  residual_evidence_destroyed: bool = False,
+                  monitor_evidence_destroyed: bool = False) -> tuple[Confidence, str]:
     """High/Medium/Low with the rule that produced it, so the level is
     auditable rather than an opinion.
 
     Dropped series must show up here, not just in the reasons list: losing an
-    entire class of evidence (every residual, or every monitor, failed its
-    integrity check) caps confidence at Low — the same class of loss that, for
-    residuals, also holds the state at CONVERGING (see ``roll_up``). Any
-    integrity error at all, even one series among many, caps confidence at
-    Medium — evidence was thrown away, so the remaining record is not
-    complete enough to call High regardless of how clean it looks."""
+    entire class of evidence — every residual, or every monitor, that existed
+    then failed its integrity check — caps confidence at Low, the same class
+    of loss that, for residuals, also holds the state at CONVERGING (see
+    ``roll_up``). ``residual_evidence_destroyed``/``monitor_evidence_destroyed``
+    key on that distinction: a data set that simply never had residual (or
+    monitor) history is a different, benign situation and must not read the
+    same as one where evidence was thrown away. Any integrity error at all,
+    even one series among many, caps confidence at Medium — evidence was
+    thrown away, so the remaining record is not complete enough to call High
+    regardless of how clean it looks."""
     primary = [m for m in monitors if m.is_primary]
     integrity_errors = integrity_errors or []
     low: list[str] = []
@@ -163,9 +195,9 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
 
     if not primary:
         low.append("no primary QoI declared")
-    if not residuals:
+    if residual_evidence_destroyed:
         low.append("no residual evidence survived preconditioning")
-    if not monitors:
+    if monitor_evidence_destroyed:
         low.append("no monitor evidence survived preconditioning")
     if not metadata.residual_normalization.known:
         low.append("residual normalization unknown")
@@ -176,7 +208,7 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
         if not field.known:
             medium.append(f"{label} unknown")
     if integrity_errors:
-        dropped = ", ".join(msg.split(":", 1)[0] for msg in integrity_errors)
+        dropped = ", ".join(_series_label(msg) for msg in integrity_errors)
         medium.append(f"series dropped during preconditioning ({dropped})")
 
     for monitor in primary:
@@ -188,6 +220,15 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
             low.append(f"{monitor.name}: window shorter than {config.window_min}")
         if config.marginal_low <= monitor.margin <= config.marginal_high:
             medium.append(f"{monitor.name}: margin {monitor.margin:.2f} is marginal")
+        if not monitor.iterative.valid:
+            # The geometric fit declined, so there is no numeric bound on
+            # this monitor's remaining error — the gate may still have
+            # passed on the static-monitor escape hatch, but a High verdict
+            # would claim more certainty than the evidence supports.
+            medium.append(
+                f"{monitor.name}: iterative error could not be bounded "
+                f"({monitor.iterative.reason})"
+            )
 
     if low:
         return Confidence.LOW, "Low — " + "; ".join(low)
@@ -315,6 +356,25 @@ def build_reasons(state: ConvergenceState, residuals,
                 ),
             ))
 
+    if (monitors and not residuals
+            and AdvisoryFlag.NO_RESIDUAL_EVIDENCE not in flags):
+        # Distinct from NO_RESIDUAL_EVIDENCE: that flag means residual
+        # evidence existed and was destroyed by an integrity failure, which
+        # holds the state at CONVERGING. Here there simply never were any
+        # residual monitors to begin with — this data set may still reach
+        # CONVERGED, but it did so on QoI evidence alone, with no residual
+        # health check at all, and the user should see that plainly rather
+        # than infer it from an empty residuals table.
+        reasons.append(Reason(
+            severity=Severity.INFO, target="run",
+            message=("This data set has no residual monitors at all, so the "
+                     "verdict rests on QoI evidence alone with no residual "
+                     "health check."),
+            suggested_action=("If residual histories should be present, "
+                              "check the classification settings or "
+                              "re-extract this data set."),
+        ))
+
     for monitor in monitors:
         severity = Severity.ERROR if monitor.is_primary else Severity.WARNING
         for gate in monitor.gates:
@@ -357,6 +417,19 @@ def build_reasons(state: ConvergenceState, residuals,
                 suggested_action=("Supply a physical reference scale for this "
                                   "monitor (for a force, 0.5 * rho * U^2 * A) so "
                                   "the tolerance means what you intend."),
+            ))
+        if monitor.is_primary and not monitor.iterative.valid:
+            reasons.append(Reason(
+                severity=Severity.WARNING, target=monitor.name,
+                message=(f"{monitor.name}'s remaining iterative error could not "
+                         "be bounded: its change series carried no geometric "
+                         f"structure ({monitor.iterative.reason}), so the "
+                         "verdict rests on the other four gates and on this "
+                         "monitor having stopped moving at the tolerance scale."),
+                suggested_action=("Continue iterating so the change series "
+                                  "develops a clear geometric trend, or treat "
+                                  "this verdict's confidence as capped rather "
+                                  "than definitive."),
             ))
 
     for flag, message, action in _FLAG_TEXT:
@@ -445,4 +518,14 @@ _FLAG_TEXT: tuple[tuple[AdvisoryFlag, str, str], ...] = (
      "Check why every residual series failed its integrity check (see the "
      "per-series warnings above) and re-extract this data set if the "
      "residual monitors should be present."),
+    (AdvisoryFlag.ITERATIVE_ERROR_UNBOUNDED,
+     "At least one primary monitor's remaining iterative error could not be "
+     "bounded: its change series carried no geometric structure to "
+     "extrapolate, so there is no numeric bound on how far it may still be "
+     "from its converged value. The verdict rests on the other four gates "
+     "and on the monitor having stopped moving at the tolerance scale, not "
+     "on a quantified remaining error, so confidence is capped at Medium.",
+     "Continue iterating in the hope the change series develops a clear "
+     "geometric trend, or treat this verdict's confidence as capped rather "
+     "than definitive."),
 )
