@@ -144,6 +144,62 @@ def test_unticking_the_only_primary_monitor_drops_confidence_to_low(app):
     dlg.close()
 
 
+def make_aggregate_and_element_result(path: str) -> SimResult:
+    """One aggregate monitor ('Downforce ALL Monitor') and one per-element
+    sibling ('Downforce wing front 1 Monitor'), so the auto-primary rule
+    picks the aggregate and demotes the other."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    x = list(map(float, range(n)))
+    qoi_all = 100.0 + 2.0 * (1.0 - np.exp(-np.arange(n) / 200.0)) + rng.normal(
+        scale=1e-9, size=n)
+    qoi_part = 10.0 + 0.5 * (1.0 - np.exp(-np.arange(n) / 200.0)) + rng.normal(
+        scale=1e-9, size=n)
+    residual = 10.0 ** (-np.arange(n, dtype=float) / 400.0) + 1e-12
+    return SimResult(
+        sim_path=path,
+        plots=[
+            MonitorPlot(name="Downforce plots", kind=PlotKind.FORCE, series=[
+                PlotSeries(name="Downforce ALL Monitor", x=x, y=qoi_all.tolist()),
+                PlotSeries(name="Downforce wing front 1 Monitor", x=x,
+                          y=qoi_part.tolist()),
+            ]),
+            MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                        series=[PlotSeries(name="Continuity", x=x,
+                                           y=residual.tolist())]),
+        ],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                          entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="", entries=[
+                ("precision", "double"), ("residual_normalization", "auto")]),
+        ]),
+    )
+
+
+def test_auto_primary_prefers_the_aggregate_and_a_manual_swap_still_works(app):
+    """Regression for the aggregate-preferred auto-primary default: the
+    aggregate starts ticked and its per-element sibling does not; unticking
+    the aggregate and ticking the per-element monitor by hand must still
+    re-run the assessment without error, honouring the manual choice."""
+    from PySide6.QtCore import Qt
+
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim")))
+    assert dlg._monitor_table.item(0, 1).text() == "Downforce ALL Monitor"
+    assert dlg._monitor_table.item(1, 1).text() == "Downforce wing front 1 Monitor"
+    assert dlg._monitor_table.item(0, 0).checkState() == Qt.CheckState.Checked
+    assert dlg._monitor_table.item(1, 0).checkState() == Qt.CheckState.Unchecked
+
+    dlg._monitor_table.item(0, 0).setCheckState(Qt.CheckState.Unchecked)
+    dlg._monitor_table.item(1, 0).setCheckState(Qt.CheckState.Checked)
+
+    assessment = dlg._current()
+    gates = {m.name: m.is_primary for m in assessment.monitors}
+    assert gates["Downforce ALL Monitor"] is False
+    assert gates["Downforce wing front 1 Monitor"] is True
+    dlg.close()
+
+
 def test_parse_percent_tolerates_a_percent_sign_with_no_space():
     """F4: the rendered cell is '0.1 %', but a user typing '0.2%' with no
     space hit float(text.split()[0]) failing on the glued '%' and silently

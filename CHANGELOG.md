@@ -52,6 +52,28 @@ All notable changes to StarPost are recorded here. Versions follow the
   re-extraction before it can be assessed.
 
 ### Fixes
+- **Convergence tool: the auto-primary default now prefers an aggregate
+  monitor over its per-element siblings.** A monitor whose name matches a
+  force keyword (force, drag, lift, moment, cd, cl) is auto-marked primary
+  when the user hasn't set it by hand, and primary monitors alone gate the
+  headline verdict. A data set that reports both a total ("Downforce ALL")
+  and its per-element contributors ("Downforce wing front 1", "Downforce
+  wing rear 1", ...) matched every one of them, so the verdict rode on
+  whichever sub-component happened to be noisiest — a real 40-monitor
+  car-aero run had 36 primaries and its headline state was set by
+  `Downforce undertray Monitor` rather than the `Downforce ALL Monitor` the
+  engineer actually cared about. Auto-selection now prefers monitors whose
+  name matches a new, configurable aggregate keyword (ALL, Total, Sum,
+  Overall, Combined — `plot_classification.aggregate_keywords` in Settings,
+  matched as a whole word so "Wall" doesn't match "ALL") among the
+  force-keyword matches; when at least one aggregate is detected, only the
+  aggregate(s) are primary and the per-element monitors are still assessed
+  and can still raise warnings, they just don't gate. When no aggregate is
+  detectable, every force-keyword match is primary, exactly as before. A new
+  INFO reason names which monitors were auto-selected and why (or that no
+  aggregate was found and every match was kept), and a user can still tick
+  or untick any monitor by hand in the Convergence window, which overrides
+  the auto choice either way.
 - **Convergence tool: an oscillating residual no longer reads as DIVERGING.**
   The sustained-growth rung fit only the last 50 iterations and trusted its
   slope regardless of fit quality; on a residual that oscillates around a

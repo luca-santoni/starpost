@@ -84,6 +84,131 @@ def primary(name: str = "Drag", **kw) -> ConvergenceConfig:
     return ConvergenceConfig(monitors={name: MonitorConfig(is_primary=True, **kw)})
 
 
+def make_multi_monitor_result(monitor_names: list[str], *, n: int = 3000,
+                              residual: np.ndarray | None = None,
+                              plot_name: str = "Force plots") -> SimResult:
+    """A single FORCE-kind plot carrying one series per monitor name — the
+    shape STAR-CCM+ actually exports when several report monitors are
+    grouped into one plot (see the real SDM25-RW-014 car-aero data set,
+    whose naming this backs the aggregate-vs-per-element tests below)."""
+    plots = [MonitorPlot(
+        name=plot_name, kind=PlotKind.FORCE,
+        series=[PlotSeries(name=name, x=list(map(float, range(n))),
+                           y=converged_qoi(n, seed=i).tolist())
+               for i, name in enumerate(monitor_names)],
+    )]
+    if residual is not None:
+        plots.append(MonitorPlot(
+            name="Residuals", kind=PlotKind.RESIDUAL,
+            series=[PlotSeries(name="Continuity",
+                               x=list(map(float, range(residual.size))),
+                               y=residual.tolist())],
+        ))
+    groups = [PropertyGroup(section="continuum", name="Physics 1",
+                            entries=[("models", "Steady; Segregated Flow")])]
+    return SimResult(sim_path="/tmp/multi.sim", plots=plots,
+                     properties=SimProperties(groups=groups))
+
+
+# --- aggregate-preferred auto-primary selection -----------------------------
+
+def test_an_aggregate_among_per_element_monitors_is_the_only_auto_primary():
+    names = ["Downforce ALL Monitor", "Downforce wing front 1 Monitor",
+             "Downforce wing front 2 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert {m.name for m in a.monitors if m.is_primary} == {"Downforce ALL Monitor"}
+    non_primary = {m.name for m in a.monitors if not m.is_primary}
+    assert non_primary == {"Downforce wing front 1 Monitor",
+                           "Downforce wing front 2 Monitor"}
+
+
+def test_no_detectable_aggregate_falls_back_to_marking_every_match_primary():
+    names = ["Downforce wing front 1 Monitor", "Downforce wing front 2 Monitor",
+             "Drag wing rear 1 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert {m.name for m in a.monitors if m.is_primary} == set(names)
+
+
+def test_whole_word_aggregate_matching_excludes_a_wall_monitor():
+    """A naive substring test ('all' in name.lower()) would wrongly treat
+    'Downforce wall Monitor' as an aggregate."""
+    names = ["Downforce wall Monitor", "Downforce ALL Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert {m.name for m in a.monitors if m.is_primary} == {"Downforce ALL Monitor"}
+    wall = next(m for m in a.monitors if m.name == "Downforce wall Monitor")
+    assert wall.is_primary is False
+
+
+def test_explicit_override_beats_the_auto_aggregate_choice_in_both_directions():
+    names = ["Downforce ALL Monitor", "Downforce wing front 1 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    config = ConvergenceConfig(monitors={
+        "Downforce ALL Monitor": MonitorConfig(is_primary=False),
+        "Downforce wing front 1 Monitor": MonitorConfig(is_primary=True),
+    })
+    a = assess(result, config, CLASSIFICATION)
+    assert {m.name for m in a.monitors if m.is_primary} == {
+        "Downforce wing front 1 Monitor"
+    }
+
+
+def test_the_real_car_aero_naming_shape_selects_only_the_two_all_monitors():
+    """Mirrors the naming shape of the real SDM25-RW-014 car-aero data set
+    (see .superpowers/sdd/aggregate-primary-report.md for the actual run):
+    40 monitors total, 36 of which match a force keyword — 18 Downforce
+    sub-components (17 per-element + 1 ALL) and the same 18-way split for
+    Drag. Before this change all 36 became primary and the headline verdict
+    rode on whichever sub-component was noisiest; now only the two ALL
+    monitors gate it."""
+    downforce_parts = [
+        "Downforce undertray Monitor",
+        *(f"Downforce wing front {i} Monitor" for i in range(1, 7)),
+        *(f"Downforce wing rear {i} Monitor" for i in range(1, 6)),
+        *(f"Downforce wing side {i} Monitor" for i in range(1, 4)),
+        "Downforce duct Monitor", "Downforce Center body Monitor",
+    ]
+    drag_parts = [name.replace("Downforce", "Drag") for name in downforce_parts]
+    names = (downforce_parts + ["Downforce ALL Monitor"]
+             + drag_parts + ["Drag ALL Monitor"])
+    assert len(names) == 36
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert len(a.monitors) == 36
+    assert {m.name for m in a.monitors if m.is_primary} == {
+        "Downforce ALL Monitor", "Drag ALL Monitor"
+    }
+
+
+def test_the_reasons_explain_which_monitors_were_auto_selected_and_why():
+    names = ["Downforce ALL Monitor", "Downforce wing front 1 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    info = [r for r in a.reasons if r.severity is Severity.INFO]
+    assert any("Downforce ALL Monitor" in r.message
+               and "aggregate" in r.message.lower() for r in info)
+
+
+def test_the_reasons_explain_the_fallback_when_no_aggregate_is_detected():
+    names = ["Downforce wing front 1 Monitor", "Downforce wing front 2 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    info = [r for r in a.reasons if r.severity is Severity.INFO]
+    assert any("no aggregate" in r.message.lower() for r in info)
+
+
+def test_an_auto_selected_reason_is_not_added_when_every_match_is_overridden():
+    """The auto-selection note names what the auto rule decided; a monitor
+    the user explicitly overrode is that override's doing, not the rule's, so
+    it must not be credited to the auto note."""
+    result = make_result(converged_qoi(), healthy_residual())
+    a = assess(result, primary(), CLASSIFICATION)
+    info = [r for r in a.reasons if r.severity is Severity.INFO]
+    assert not any("auto-selected" in r.message.lower() for r in info)
+
+
 # --- end-to-end states -----------------------------------------------------
 
 def test_a_healthy_settled_run_is_converged():

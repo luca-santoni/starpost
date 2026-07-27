@@ -249,3 +249,38 @@ def test_legend_opacity_round_trip():
 def test_legend_opacity_clamped_on_load():
     assert Settings.from_dict({"legend_opacity": 1.7}).legend_opacity == 1.0
     assert Settings.from_dict({"legend_opacity": -0.3}).legend_opacity == 0.0
+
+
+def test_plot_classification_defaults_include_aggregate_keywords():
+    """aggregate_keywords lets the Convergence tool prefer an aggregate
+    monitor ("Downforce ALL") over its per-element siblings when
+    auto-selecting primary monitors — see core/convergence/__init__.py."""
+    s = Settings.from_dict({})
+    assert s.plot_classification["aggregate_keywords"] == [
+        "ALL", "Total", "Sum", "Overall", "Combined"
+    ]
+
+
+def test_plot_classification_round_trips_aggregate_keywords():
+    custom = {
+        "residual_keywords": ["residual"],
+        "force_keywords": ["force"],
+        "aggregate_keywords": ["ALL", "Net"],
+    }
+    s = Settings.from_dict({"plot_classification": custom})
+    d = s.to_dict()
+    assert d["plot_classification"] == custom
+    assert Settings.from_dict(d).plot_classification == custom
+
+
+def test_plot_classification_missing_aggregate_keywords_key_does_not_crash():
+    """A settings.yaml written before this key existed has plot_classification
+    without it; loading must not raise, and downstream code falls back to the
+    default list (see core/convergence's classification.get with a default)."""
+    s = Settings.from_dict({
+        "plot_classification": {
+            "residual_keywords": ["residual"],
+            "force_keywords": ["force"],
+        }
+    })
+    assert "aggregate_keywords" not in s.plot_classification
