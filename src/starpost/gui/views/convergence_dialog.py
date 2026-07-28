@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QPushButton,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -137,6 +138,35 @@ class ConvergenceDialog(QDialog):
         self._monitor_table.verticalHeader().setVisible(False)
         self._monitor_table.itemChanged.connect(self._on_monitor_edited)
 
+        # Bulk primary selection. A real car-aero export carries ~40 monitors,
+        # so "clear everything, then tick the one I care about" is otherwise a
+        # 40-click operation. Each button rewrites the selected data set's
+        # configuration and re-assesses once — see _set_all_primary.
+        self._select_all_btn = QPushButton("Select all")
+        self._select_all_btn.setToolTip(
+            "Mark every monitor in this data set as a primary QoI."
+        )
+        self._select_all_btn.clicked.connect(lambda: self._set_all_primary(True))
+        self._clear_btn = QPushButton("Clear")
+        self._clear_btn.setToolTip(
+            "Mark every monitor in this data set as non-primary. With no "
+            "primary QoI the verdict reads 'no primary QoI declared' at Low "
+            "confidence until you tick one."
+        )
+        self._clear_btn.clicked.connect(lambda: self._set_all_primary(False))
+        self._reset_btn = QPushButton("Reset to auto")
+        self._reset_btn.setToolTip(
+            "Hand the primary choice back to the tool, which prefers an "
+            "aggregate monitor (Downforce ALL) over its per-element siblings. "
+            "Tolerance and reference-scale edits are kept."
+        )
+        self._reset_btn.clicked.connect(lambda: self._set_all_primary(None))
+
+        buttons = QHBoxLayout()
+        for button in (self._select_all_btn, self._clear_btn, self._reset_btn):
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+
         panel = QWidget()
         box = QVBoxLayout(panel)
         box.addLayout(form)
@@ -144,6 +174,7 @@ class ConvergenceDialog(QDialog):
         box.addWidget(self._summary)
         box.addWidget(QLabel("Monitors"))
         box.addWidget(self._monitor_table)
+        box.addLayout(buttons)
         return panel
 
     def _build_right(self) -> QWidget:
@@ -235,16 +266,6 @@ class ConvergenceDialog(QDialog):
             r.sim_path: assess(r, self._config_for(r), classification)
             for r in self._results
         }
-        # Seed the per-monitor configuration from the first assessment, so the
-        # auto-primary choice is visible and editable rather than implicit.
-        for path, assessment in self._assessments.items():
-            known = self._monitor_configs.setdefault(path, {})
-            for monitor in assessment.monitors:
-                known.setdefault(monitor.name, MonitorConfig(
-                    is_primary=monitor.is_primary,
-                    tolerance_fraction=None,
-                    reference_scale=None,
-                ))
         self._populate_summary()
         self._restore_selection(previous_path)
 
@@ -312,6 +333,7 @@ class ConvergenceDialog(QDialog):
         self._monitor_table.setRowCount(0)
         self._residual_table.setRowCount(0)
         self._gate_table.setRowCount(0)
+        self._set_bulk_buttons_enabled(False)
 
     def _current(self):
         row = self._summary.currentRow()
@@ -383,6 +405,7 @@ class ConvergenceDialog(QDialog):
                     QTableWidgetItem(f"{monitor.reference_scale:.6g} "
                                      f"({monitor.scale_source.value})")
                 )
+            self._set_bulk_buttons_enabled(bool(assessment.monitors))
         finally:
             self._updating = False
 
@@ -429,6 +452,39 @@ class ConvergenceDialog(QDialog):
     def _on_preset_changed(self, label: str) -> None:
         self._custom.setEnabled(label == "Custom")
         self._reassess()
+
+    def _set_all_primary(self, value: Optional[bool]) -> None:
+        """Bulk-set the primary tick for every monitor in the selected data
+        set. ``True``/``False`` pin the choice; ``None`` hands it back to the
+        auto rule (see MonitorConfig.is_primary).
+
+        This writes the configuration and re-assesses once rather than driving
+        the checkboxes: each checkbox write emits itemChanged, and
+        _on_monitor_edited re-assesses *every* loaded data set, so ticking 40
+        monitors across 10 loaded sims would run 400 assessments for a single
+        click. The table is repopulated from the fresh assessment, exactly as
+        it is after any single-cell edit."""
+        row = self._summary.currentRow()
+        if row < 0 or row >= len(self._results):
+            return
+        path = self._results[row].sim_path
+        assessment = self._assessments.get(path)
+        if assessment is None:
+            return
+        configs = self._monitor_configs.setdefault(path, {})
+        # Only the monitors the assessment actually carries. Ones excluded
+        # upstream — every value exactly zero at every iteration, i.e. a part
+        # not present in this configuration — must not be resurrected by a
+        # bulk selection.
+        for monitor in assessment.monitors:
+            existing = configs.get(monitor.name, MonitorConfig())
+            existing.is_primary = value
+            configs[monitor.name] = existing
+        self._reassess()
+
+    def _set_bulk_buttons_enabled(self, enabled: bool) -> None:
+        for button in (self._select_all_btn, self._clear_btn, self._reset_btn):
+            button.setEnabled(enabled)
 
     def _on_monitor_edited(self, item: QTableWidgetItem) -> None:
         if self._updating:

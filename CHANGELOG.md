@@ -56,6 +56,18 @@ All notable changes to StarPost are recorded here. Versions follow the
   regime cannot be determined at all; a cached result or portable CSV old
   enough to carry no properties whatsoever falls into that case and needs
   re-extraction before it can be assessed.
+- **Convergence tool: Select all, Clear and Reset to auto for the monitor
+  list.** Primary monitors are the ones that gate the headline verdict, and a
+  real car-aero export carries around 40 of them, so picking a different one
+  by hand meant unticking dozens of checkboxes. Three buttons under the
+  Monitors table now set them in one click, for the selected data set. *Reset
+  to auto* hands the choice back to the tool's own rule, which prefers an
+  aggregate monitor (Downforce ALL) over its per-element siblings — previously
+  the automatic choice was frozen the first time a data set was assessed, so
+  there was no way back to it short of closing and reopening the window.
+  Reset keeps any tolerance and reference-scale edits; it restores the primary
+  ticks only. Clearing every monitor is allowed and reports honestly — the
+  verdict reads "no primary QoI declared" at Low confidence until you tick one.
 
 ### Fixes
 - **Convergence tool: the auto-primary default now prefers an aggregate
