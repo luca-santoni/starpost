@@ -346,6 +346,11 @@ class ConvergenceDialog(QDialog):
             return
         assessment = self._current()
         if assessment is None:
+            # Defensive: currently unreachable, since _restore_selection always
+            # selects a row when any data set is loaded and the table is in
+            # SingleSelection mode. Disabling here keeps "no selection means no
+            # bulk action" true locally, rather than resting on that argument.
+            self._set_bulk_buttons_enabled(False)
             return
         self._populate_verdict(assessment)
         self._populate_reasons(assessment)
