@@ -58,9 +58,13 @@ def test_every_threshold_carries_its_provenance():
     assert THRESHOLD_PROVENANCE["mk_trend_departure_fraction"] == "[D]"
 
 
-def test_monitor_config_defaults_to_non_primary_auto_scale():
+def test_monitor_config_defaults_to_deferring_the_primary_choice():
+    """is_primary is tri-state: None means "no opinion", so the auto-primary
+    rule still decides. A plain False would read as an explicit demotion, and
+    would freeze the primary choice of any monitor that carries some other
+    override (a tolerance edit, say) as a side effect."""
     m = ConvergenceConfig().monitor("anything")
-    assert m.is_primary is False
+    assert m.is_primary is None
     assert m.tolerance_fraction is None
     assert m.reference_scale is None
 

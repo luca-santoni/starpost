@@ -103,6 +103,18 @@ def _select_auto_primary(
     return {s.name for s in chosen}, bool(aggregates), matches
 
 
+def _explicit_primary(config: ConvergenceConfig, name: str) -> Optional[bool]:
+    """The user's explicit primary choice for a monitor, or None when they
+    have expressed none and the auto rule should decide.
+
+    MonitorConfig.is_primary is tri-state (see config.py), so the mere
+    existence of a MonitorConfig — which editing that monitor's tolerance or
+    reference scale alone creates — is not an override of the primary
+    choice."""
+    override = config.monitors.get(name)
+    return None if override is None else override.is_primary
+
+
 def _is_zero_qoi(y: np.ndarray) -> bool:
     """True when a QoI monitor is exactly zero at every iteration — a part not
     present on this configuration (a car-aero export routinely carries 14-29
@@ -150,7 +162,8 @@ def _auto_primary_reason(
     if not force_matches:
         return None
     effective = sorted(
-        name for name in auto_primary_names if config.monitors.get(name) is None
+        name for name in auto_primary_names
+        if _explicit_primary(config, name) is None
     )
     if not effective:
         return None
@@ -324,11 +337,9 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
                 "(a restart split may have left a malformed tail)"
             )
             continue
-        override = config.monitors.get(signal.name)
-        is_primary = (
-            override.is_primary if override is not None
-            else signal.name in auto_primary_names
-        )
+        explicit = _explicit_primary(config, signal.name)
+        is_primary = (explicit if explicit is not None
+                      else signal.name in auto_primary_names)
         monitors.append(assess_monitor(signal.name, segment.y, config,
                                        is_primary=is_primary))
 

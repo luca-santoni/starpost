@@ -156,6 +156,41 @@ def test_explicit_override_beats_the_auto_aggregate_choice_in_both_directions():
     }
 
 
+def test_a_none_primary_override_defers_to_the_auto_rule():
+    """MonitorConfig.is_primary is tri-state: None means "no opinion". The
+    Convergence window's "Reset to auto" button relies on this, and so does a
+    monitor whose *tolerance* was edited without touching its primary tick —
+    under a plain bool that edit would freeze the monitor non-primary as a
+    side effect, because the mere existence of a MonitorConfig read as an
+    explicit override."""
+    names = ["Downforce ALL Monitor", "Downforce wing front 1 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    config = ConvergenceConfig(monitors={
+        "Downforce ALL Monitor": MonitorConfig(tolerance_fraction=5e-4),
+        "Downforce wing front 1 Monitor": MonitorConfig(),
+    })
+    a = assess(result, config, CLASSIFICATION)
+    assert {m.name for m in a.monitors if m.is_primary} == {"Downforce ALL Monitor"}
+    aggregate = next(m for m in a.monitors if m.name == "Downforce ALL Monitor")
+    assert aggregate.tolerance_fraction == 5e-4
+
+
+def test_the_auto_primary_reason_still_names_a_monitor_with_a_tolerance_override():
+    """The INFO reason exists so a wrong auto-choice leaves a trace rather
+    than silently narrowing the verdict. It excludes monitors the *user*
+    pinned, so that exclusion must key on an explicit True/False — not on the
+    mere presence of a MonitorConfig, which a tolerance edit alone creates."""
+    names = ["Downforce ALL Monitor", "Downforce wing front 1 Monitor"]
+    result = make_multi_monitor_result(names, residual=healthy_residual())
+    config = ConvergenceConfig(monitors={
+        "Downforce ALL Monitor": MonitorConfig(tolerance_fraction=5e-4),
+    })
+    a = assess(result, config, CLASSIFICATION)
+    auto = [r for r in a.reasons if "auto-selected as primary" in r.message]
+    assert len(auto) == 1
+    assert "Downforce ALL Monitor" in auto[0].message
+
+
 def test_the_real_car_aero_naming_shape_selects_only_the_two_all_monitors():
     """Mirrors the naming shape of the real SDM25-RW-014 car-aero data set
     (see .superpowers/sdd/aggregate-primary-report.md for the actual run):

@@ -53,8 +53,16 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
 @dataclass
 class MonitorConfig:
     """Per-monitor overrides. ``reference_scale`` set means rung 1 of the
-    scale ladder (user-supplied physical scale) is taken."""
-    is_primary: bool = False
+    scale ladder (user-supplied physical scale) is taken.
+
+    ``is_primary`` is deliberately tri-state: ``True``/``False`` pin the
+    choice, ``None`` means "no opinion" and leaves it to
+    ``_select_auto_primary``. A plain ``bool`` cannot express that, and the
+    difference is not academic — the mere existence of a MonitorConfig would
+    then read as an explicit override, so editing one monitor's *tolerance*
+    would silently freeze its primary state too, and the auto rule could
+    never run for it again."""
+    is_primary: Optional[bool] = None
     tolerance_fraction: Optional[float] = None
     reference_scale: Optional[float] = None
 
