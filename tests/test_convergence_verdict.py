@@ -499,6 +499,41 @@ def test_a_stalled_residual_outranks_a_settled_qoi():
     assert a.state is ConvergenceState.STALLED
 
 
+def test_a_residual_derived_verdict_names_the_residual_as_its_binding_constraint():
+    """Found on a real run whose loads were settled 60x inside tolerance while
+    its residuals stalled at 2.2 decades: every primary QoI gate passed, the
+    state was STALLED from the residual layer, and the binding constraint named
+    a QoI gate that had *passed* — the tightest passing margin. That reads as a
+    contradiction, and it points the user at the wrong thing: a stall is a setup
+    problem to be chased through the per-cell residual field, not a QoI issue.
+
+    So when the verdict comes from the residual layer the binding constraint
+    must name the responsible equation. The convergence index still reports the
+    QoI margin; the two answer different questions."""
+    stalled = np.concatenate([np.full(50, 10 ** -0.5), np.full(2950, 1e-2)])
+    result = make_result(qoi_with_geometric_decay(), stalled,
+                         convergence_rows=[("precision", "double"),
+                                           ("residual_normalization", "auto")])
+    a = assess(result, primary(), CLASSIFICATION)
+
+    assert a.state is ConvergenceState.STALLED
+    # The premise: the QoI side is genuinely fine, so nothing there is binding.
+    assert all(m.passed for m in a.monitors if m.is_primary)
+    assert a.convergence_index >= 1.0
+
+    assert "Continuity" in a.binding_constraint
+    assert "decades" in a.binding_constraint
+    assert "Drag" not in a.binding_constraint
+
+
+def test_a_diverging_verdict_names_the_diverging_equation():
+    diverging = 10.0 ** (np.arange(3000, dtype=float) / 200.0)
+    a = assess(make_result(converged_qoi(), diverging), primary(), CLASSIFICATION)
+    assert a.state is ConvergenceState.DIVERGED
+    assert "Continuity" in a.binding_constraint
+    assert "diverging" in a.binding_constraint.lower()
+
+
 def test_a_diverging_residual_outranks_everything():
     diverging = 10.0 ** (np.arange(3000, dtype=float) / 200.0)
     a = assess(make_result(converged_qoi(), diverging), primary(), CLASSIFICATION)

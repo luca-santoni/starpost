@@ -209,13 +209,27 @@ def roll_up(metadata: RunMetadata, residuals, monitors: list[MonitorAssessment],
 
     if not residuals and not monitors:
         return ConvergenceState.INTEGRITY_FAIL, flags, index, binding, unbounded_count
-    if any(r.state is ResidualState.DIVERGING for r in residuals):
-        return ConvergenceState.DIVERGED, flags, index, binding, unbounded_count
+    # When the verdict comes from the residual layer, the binding constraint has
+    # to name the residual that caused it. Reporting the tightest QoI margin
+    # there is actively misleading: on a run whose loads are settled 60x inside
+    # tolerance but whose residuals stalled at 2.2 decades, it named a QoI gate
+    # that had *passed* while the state said STALLED. The residual is also what
+    # the user's next action follows from — a stall points at the per-cell
+    # residual field function, not at the QoIs.
+    diverging = [r for r in residuals if r.state is ResidualState.DIVERGING]
+    if diverging:
+        worst_residual = min(diverging, key=lambda r: r.decades_dropped)
+        return (ConvergenceState.DIVERGED, flags, index,
+                f"{worst_residual.name}: diverging", unbounded_count)
     # Turbulence residuals routinely stall one to two orders above the momentum
     # residuals without harming the QoIs, so only primary-class equations can
     # force a stall verdict.
-    if any(r.state is ResidualState.STALLED for r in primary_residuals):
-        return ConvergenceState.STALLED, flags, index, binding, unbounded_count
+    stalled = [r for r in primary_residuals if r.state is ResidualState.STALLED]
+    if stalled:
+        worst_residual = min(stalled, key=lambda r: r.decades_dropped)
+        return (ConvergenceState.STALLED, flags, index,
+                f"{worst_residual.name}: only {worst_residual.decades_dropped:.1f} of "
+                f"{config.d_min:.0f} required decades", unbounded_count)
     if not primary_monitors:
         return ConvergenceState.CONVERGING, flags, index, binding, unbounded_count
     if any(not _gate(m, GATE_DRIFT).passed for m in primary_monitors):
