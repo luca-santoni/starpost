@@ -604,3 +604,22 @@ def test_the_bulk_buttons_are_enabled_once_a_data_set_is_loaded(app):
     assert dlg._clear_btn.isEnabled() is True
     assert dlg._reset_btn.isEnabled() is True
     dlg.close()
+
+
+def test_the_custom_tolerance_row_greys_out_unless_that_preset_is_picked(app):
+    """The custom field only feeds _tolerance_fraction when the preset is
+    "Custom", so otherwise both it and the label naming it must read as
+    inactive. The label is half of this: a live "Custom" beside a dead field
+    still reads as an input you may edit."""
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    assert dlg._custom.isEnabled() is False
+    assert dlg._custom_label.isEnabled() is False
+
+    dlg._preset.setCurrentText("Custom")
+    assert dlg._custom.isEnabled() is True
+    assert dlg._custom_label.isEnabled() is True
+
+    dlg._preset.setCurrentText("Production (0.05%)")
+    assert dlg._custom.isEnabled() is False
+    assert dlg._custom_label.isEnabled() is False
+    dlg.close()
