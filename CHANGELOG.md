@@ -42,7 +42,13 @@ All notable changes to StarPost are recorded here. Versions follow the
   reported as not yet supported rather than assessed with steady tests; a run
   whose solver regime cannot be determined at all is refused the same way,
   since assessing an unknown regime as steady would risk a confident wrong
-  answer on a case that may actually be transient. Reads cached data only —
+  answer on a case that may actually be transient. A **Residual drop** control
+  sits under the tolerance selector: 3 decades is the published ASME
+  requirement and the default, but whether a run whose loads are settled well
+  inside tolerance counts as converged with a shallower residual drop is an
+  engineering judgement, so the requirement is yours to set. Turbulence
+  equations keep their weaker bar and are never held to a stricter one than the
+  primary equations. Reads cached data only —
   no STAR-CCM+ re-run.
 - Extraction now records solver precision, residual normalization mode, and the
   unsteady solver parameters. Convergence assessment refuses a data set

@@ -98,9 +98,31 @@ class ConvergenceDialog(QDialog):
         self._custom.setEnabled(False)
         self._custom.valueChanged.connect(lambda _v: self._reassess())
 
+        # The required residual drop. 3 decades is the ASME Journal of Fluids
+        # Engineering editorial policy's figure and the default, but it is a
+        # judgement a practice can legitimately make differently — several real
+        # runs settle their loads well inside tolerance while their residuals
+        # plateau around 2.5 decades, and whether that counts as converged is
+        # the engineer's call, not the tool's.
+        self._d_min = QDoubleSpinBox()
+        self._d_min.setDecimals(1)
+        self._d_min.setRange(0.5, 8.0)
+        self._d_min.setSingleStep(0.5)
+        self._d_min.setSuffix(" decades")
+        self._d_min.setValue(ConvergenceConfig().d_min)
+        self._d_min.setToolTip(
+            "Residual drop required of the continuity, momentum and energy "
+            "equations before the solve counts as healthy.\n"
+            "3 decades is the published ASME requirement and the default. "
+            "Turbulence equations (Tke, Sdr, ...) are held to a lower bar and "
+            "never held to a stricter one than this."
+        )
+        self._d_min.valueChanged.connect(lambda _v: self._reassess())
+
         form = QFormLayout()
         form.addRow("Tolerance", self._preset)
         form.addRow("Custom", self._custom)
+        form.addRow("Residual drop", self._d_min)
 
         self._summary = QTableWidget(0, len(_SUMMARY_COLUMNS))
         self._summary.setHorizontalHeaderLabels(_SUMMARY_COLUMNS)
@@ -191,8 +213,16 @@ class ConvergenceDialog(QDialog):
         return self._custom.value() / 100.0
 
     def _config_for(self, result) -> ConvergenceConfig:
+        d_min = self._d_min.value()
         return ConvergenceConfig(
             tolerance_fraction=self._tolerance_fraction(),
+            d_min=d_min,
+            # Turbulence equations are deliberately held to a weaker bar than
+            # the primary ones — they routinely stall one to two orders above
+            # the momentum residuals without harming the QoIs. Clamping keeps
+            # that ordering true when the user lowers the primary requirement
+            # below the turbulence default, which would otherwise invert it.
+            d_min_turb=min(ConvergenceConfig().d_min_turb, d_min),
             monitors=dict(self._monitor_configs.get(result.sim_path, {})),
         )
 

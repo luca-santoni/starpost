@@ -3,6 +3,8 @@ import numpy as np
 import pytest
 
 import starpost.utils.paths as paths
+from starpost.core.convergence.config import ConvergenceConfig
+from starpost.core.convergence.models import ConvergenceState
 from starpost.core.settings import Settings
 from starpost.data.models import (
     MonitorPlot,
@@ -360,6 +362,89 @@ def test_changing_the_tolerance_preset_re_runs_the_assessment(app):
     dlg._preset.setCurrentText("Production (0.05%)")
     after = dlg._assessments["/tmp/a.sim"].monitors[0].tolerance_abs
     assert after == pytest.approx(before / 2.0, rel=1e-6)
+    dlg.close()
+
+
+def _result_with_residual_decades(path: str, decades: float) -> SimResult:
+    """A settled QoI beside a residual that plateaus after exactly ``decades``.
+    Lets a test move the required-drop setting across the plateau and watch the
+    verdict follow."""
+    n = 3000
+    rng = np.random.default_rng(0)
+    qoi = 100.0 + 2.0 * (1.0 - np.exp(-np.arange(n) / 200.0)) + rng.normal(
+        scale=1e-9, size=n)
+    residual = np.concatenate([np.full(50, 1.0), np.full(n - 50, 10.0 ** -decades)])
+    x = list(map(float, range(n)))
+    return SimResult(
+        sim_path=path,
+        plots=[
+            MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                        series=[PlotSeries(name="Drag", x=x, y=qoi.tolist())]),
+            MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                        series=[PlotSeries(name="Continuity", x=x,
+                                           y=residual.tolist())]),
+        ],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                          entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="", entries=[
+                ("precision", "double"), ("residual_normalization", "auto")]),
+        ]),
+    )
+
+
+def test_the_required_residual_drop_defaults_to_the_published_figure(app):
+    """3 decades is the ASME Journal of Fluids Engineering editorial policy's
+    requirement, and the control must not quietly ship something else."""
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    assert dlg._d_min.value() == pytest.approx(ConvergenceConfig().d_min)
+    assert dlg._d_min.value() == pytest.approx(3.0)
+    dlg.close()
+
+
+def test_lowering_the_required_residual_drop_can_clear_a_stalled_verdict(app):
+    """The case this control exists for: a run whose loads are settled well
+    inside tolerance while its residuals plateau short of 3 decades. Whether
+    that counts as converged is the engineer's judgement, so the requirement is
+    theirs to set — and changing it must re-run the assessment."""
+    dlg = open_dialog(store_with(_result_with_residual_decades("/tmp/a.sim", 2.5)))
+
+    assert dlg._assessments["/tmp/a.sim"].state is ConvergenceState.STALLED
+    assert "2.5 of 3 required decades" in \
+        dlg._assessments["/tmp/a.sim"].binding_constraint
+
+    dlg._d_min.setValue(2.0)
+
+    assert dlg._assessments["/tmp/a.sim"].state is ConvergenceState.CONVERGED
+    dlg.close()
+
+
+def test_turbulence_equations_are_never_held_stricter_than_the_primary_ones(app):
+    """Turbulence residuals routinely stall one to two orders above the
+    momentum residuals without harming the QoIs, which is why they carry a
+    weaker requirement. Lowering the primary requirement below that default
+    would invert the relationship, so it is clamped."""
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    default_turb = ConvergenceConfig().d_min_turb
+
+    dlg._d_min.setValue(1.0)
+    config = dlg._config_for(dlg._results[0])
+    assert config.d_min == pytest.approx(1.0)
+    assert config.d_min_turb == pytest.approx(1.0)
+
+    dlg._d_min.setValue(4.0)
+    config = dlg._config_for(dlg._results[0])
+    assert config.d_min == pytest.approx(4.0)
+    assert config.d_min_turb == pytest.approx(default_turb)
+    dlg.close()
+
+
+def test_changing_the_required_residual_drop_keeps_the_selected_data_set(app):
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
+                                 make_result("/tmp/b.sim", drifting=True)))
+    dlg._summary.selectRow(1)
+    dlg._d_min.setValue(4.0)
+    assert dlg._summary.currentRow() == 1
     dlg.close()
 
 
