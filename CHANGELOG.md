@@ -70,6 +70,16 @@ All notable changes to StarPost are recorded here. Versions follow the
   verdict reads "no primary QoI declared" at Low confidence until you tick one.
 
 ### Fixes
+- **Disabled fields and their labels now actually look disabled.** The
+  Convergence window's custom-tolerance box is only live when the Tolerance
+  preset is *Custom*, but it and its "Custom" label rendered exactly like the
+  editable rows above and below, so the greying was invisible and the field
+  looked editable. Two theme rules were missing behind that: the stylesheet's
+  unconditional label colour also painted disabled labels at full brightness,
+  and spin boxes had no disabled styling at all. Both are fixed app-wide, in
+  the light and dark themes, so the license-mode rows in Settings and Welcome
+  — which have always disabled their labels alongside their fields — now grey
+  too. Purpose-coloured labels such as the tab hints are unaffected.
 - **Convergence tool: the auto-primary default now prefers an aggregate
   monitor over its per-element siblings.** A monitor whose name matches a
   force keyword (force, drag, lift, moment, cd, cl) is auto-marked primary

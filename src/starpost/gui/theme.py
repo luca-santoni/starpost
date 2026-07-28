@@ -181,6 +181,12 @@ QComboBox, QLineEdit {
     padding: 3px 6px;
 }
 QComboBox:disabled, QLineEdit:disabled { color: $dis_text; border-color: $dis_border; }
+/* Spin boxes are otherwise unstyled (they take the palette), and the palette's
+   disabled group does not reach their text here — so a disabled QDoubleSpinBox
+   such as the Convergence window's custom tolerance rendered identically to an
+   editable one. Colour only: giving them a border or background would switch
+   the whole widget to stylesheet drawing and cost the native up/down arrows. */
+QAbstractSpinBox:disabled { color: $dis_text; }
 QComboBox QAbstractItemView {
     background: $input_bg;
     color: $text;
@@ -268,6 +274,13 @@ QGroupBox::title {
 
 QToolBar { background: $toolbar_bg; border-bottom: 1px solid $border; spacing: 4px; }
 QLabel { color: $text; }
+/* The unconditional colour above also paints *disabled* labels, so a label
+   greyed with setEnabled(False) stayed at full brightness — the same trap the
+   QMenu::item:disabled rule below exists for. This is what lets a form label
+   fade with the field it names (the Convergence window's custom tolerance, the
+   license-mode rows in Settings and Welcome). More specific ID rules such as
+   QLabel#hint still win, so purpose-coloured labels are unaffected. */
+QLabel:disabled { color: $dis_text; }
 
 /* Frameless-window caption pieces living in the top bar: the version label and
    the integrated window buttons on the right. Labels are transparent so they

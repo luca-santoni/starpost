@@ -96,8 +96,13 @@ class ConvergenceDialog(QDialog):
         self._custom.setRange(0.0001, 100.0)
         self._custom.setSuffix(" %")
         self._custom.setValue(TOLERANCE_PRESETS["screening"] * 100.0)
-        self._custom.setEnabled(False)
         self._custom.valueChanged.connect(lambda _v: self._reassess())
+        # Kept as an attribute rather than passing the bare string to addRow,
+        # so the label can be greyed alongside the field it names — the same
+        # pattern the license-mode rows in Settings and Welcome use. A live
+        # label beside a dead field reads as an input you may edit.
+        self._custom_label = QLabel("Custom")
+        self._set_custom_enabled(False)
 
         # The required residual drop. 3 decades is the ASME Journal of Fluids
         # Engineering editorial policy's figure and the default, but it is a
@@ -122,7 +127,7 @@ class ConvergenceDialog(QDialog):
 
         form = QFormLayout()
         form.addRow("Tolerance", self._preset)
-        form.addRow("Custom", self._custom)
+        form.addRow(self._custom_label, self._custom)
         form.addRow("Residual drop", self._d_min)
 
         self._summary = QTableWidget(0, len(_SUMMARY_COLUMNS))
@@ -454,8 +459,15 @@ class ConvergenceDialog(QDialog):
 
     # --- editing --------------------------------------------------------
 
+    def _set_custom_enabled(self, enabled: bool) -> None:
+        """Enable/grey the custom-tolerance field and its label together. The
+        field only feeds _tolerance_fraction when the preset is "Custom", so
+        when it is not, both must read as inactive."""
+        self._custom.setEnabled(enabled)
+        self._custom_label.setEnabled(enabled)
+
     def _on_preset_changed(self, label: str) -> None:
-        self._custom.setEnabled(label == "Custom")
+        self._set_custom_enabled(label == "Custom")
         self._reassess()
 
     def _set_all_primary(self, value: Optional[bool]) -> None:
