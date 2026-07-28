@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -55,6 +55,14 @@ _RESIDUAL_COLUMNS = ("Equation", "Decades", "Slope", "rho", "r^2", "State",
 _GATE_COLUMNS = ("Monitor", "Primary", "Mean", "Band (95%)", "Drift",
                  "Iterative error", "N_eff", "Margin", "Binding gate")
 
+# How long a spin box must sit still before its edit is acted on. A
+# QDoubleSpinBox emits valueChanged once per keystroke, and one re-assessment
+# walks every loaded data set — measured at 1.7 s across ten real car-aero
+# exports — so typing "0.2534" ran four full passes and locked the window for
+# the duration. Long enough to swallow a burst of typing, short enough that a
+# deliberate single edit still feels immediate.
+_SPIN_DEBOUNCE_MS = 250
+
 
 class ConvergenceDialog(QDialog):
     """Non-modal convergence assessment over every loaded data set."""
@@ -69,6 +77,15 @@ class ConvergenceDialog(QDialog):
         # a tolerance does not reset the primary ticks.
         self._monitor_configs: dict[str, dict[str, MonitorConfig]] = {}
         self._updating = False
+
+        # Coalesces a burst of spin-box keystrokes into one re-assessment (see
+        # _SPIN_DEBOUNCE_MS). Only the spin boxes use it: a preset choice, a
+        # checkbox and a bulk button are each one deliberate action with no
+        # burst to collapse, so they re-assess immediately.
+        self._reassess_timer = QTimer(self)
+        self._reassess_timer.setSingleShot(True)
+        self._reassess_timer.setInterval(_SPIN_DEBOUNCE_MS)
+        self._reassess_timer.timeout.connect(self._reassess)
 
         self.setWindowTitle("Convergence")
         # Deliberately the main window's own default size (main_window.py's
@@ -102,7 +119,7 @@ class ConvergenceDialog(QDialog):
         self._custom.setRange(0.0001, 100.0)
         self._custom.setSuffix(" %")
         self._custom.setValue(TOLERANCE_PRESETS["screening"] * 100.0)
-        self._custom.valueChanged.connect(lambda _v: self._reassess())
+        self._custom.valueChanged.connect(lambda _v: self._reassess_soon())
         # Kept as an attribute rather than passing the bare string to addRow,
         # so the label can be greyed alongside the field it names — the same
         # pattern the license-mode rows in Settings and Welcome use. A live
@@ -129,7 +146,7 @@ class ConvergenceDialog(QDialog):
             "Turbulence equations (Tke, Sdr, ...) are held to a lower bar and "
             "never held to a stricter one than this."
         )
-        self._d_min.valueChanged.connect(lambda _v: self._reassess())
+        self._d_min.valueChanged.connect(lambda _v: self._reassess_soon())
 
         form = QFormLayout()
         form.addRow("Tolerance", self._preset)
@@ -268,7 +285,25 @@ class ConvergenceDialog(QDialog):
             monitors=dict(self._monitor_configs.get(result.sim_path, {})),
         )
 
+    def _reassess_soon(self) -> None:
+        """Queue a re-assessment, restarting the debounce window. Each further
+        keystroke pushes the deadline out, so only the pause at the end of
+        typing costs an assessment."""
+        self._reassess_timer.start()
+
+    def _flush_pending_reassess(self) -> None:
+        """Run a queued re-assessment now instead of waiting out the timer.
+        Used by tests, which drive the spin boxes without an event loop to
+        fire it."""
+        if self._reassess_timer.isActive():
+            self._reassess_timer.stop()
+            self._reassess()
+
     def _reassess(self) -> None:
+        # A direct re-assessment supersedes any queued one, so a reload or a
+        # discrete edit landing mid-burst does not leave a stale pass to fire
+        # a moment later and redo the same work.
+        self._reassess_timer.stop()
         # Capture the selection by sim_path (not row index) so it survives a
         # re-population even though the row count/order can change.
         previous_path = self._selected_path()
