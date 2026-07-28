@@ -3007,6 +3007,22 @@ def test_tools_menu_offers_convergence(app):
     win.close()
 
 
+def test_convergence_opens_at_the_main_window_default_size(app):
+    """The Convergence window packs a data-set table, an editable monitor
+    table, the verdict card and three detail tabs side by side, so it opens at
+    the same default size as the main window rather than something smaller.
+
+    Asserted against the main window's actual default rather than a repeated
+    literal: the two are meant to stay in step, and a comment alone would not
+    notice if one of them moved."""
+    win = mw.MainWindow(Settings())
+    win._open_convergence()
+    dlg = win._convergence_dialog
+    assert dlg.size() == win.size()
+    dlg.close()
+    win.close()
+
+
 def test_opening_convergence_twice_reuses_one_window(app):
     """Same lifecycle as Part Search: keep a reference so the window is not
     garbage-collected, and raise-and-refresh rather than spawning a duplicate."""

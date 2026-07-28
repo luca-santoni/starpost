@@ -71,7 +71,13 @@ class ConvergenceDialog(QDialog):
         self._updating = False
 
         self.setWindowTitle("Convergence")
-        self.resize(1100, 700)
+        # Deliberately the main window's own default size (main_window.py's
+        # `self.resize(1280, 800)`) — keep the two in step. This window carries
+        # a summary table, an editable monitor table, the verdict card and
+        # three detail tabs side by side, so it needs the room as much as the
+        # main window does; the reasons and binding-constraint text were the
+        # first things to suffer at the smaller default.
+        self.resize(1280, 800)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._build_left())
