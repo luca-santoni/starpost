@@ -2929,15 +2929,15 @@ def test_file_menu_actions_call_slots(app, monkeypatch):
 
 
 def test_unbuilt_tools_are_marked_coming_soon_and_disabled(app):
-    """Correlation and Convergence have no implementation yet, so they carry a
-    "(coming soon)" tag and are disabled — the theme paints disabled menu items
-    in the muted text colour, which is what greys them out."""
+    """Correlation has no implementation yet, so it carries a "(coming soon)"
+    tag and is disabled — the theme paints disabled menu items in the muted
+    text colour, which is what greys them out."""
     win = mw.MainWindow(Settings())
     entries = {a.text(): a for a in win._tools_menu.actions()}
-    for name in ("Correlation", "Convergence"):
-        act = entries[f"{name} (coming soon)"]
-        assert not act.isEnabled()
-    # The working entry is untagged and still usable.
+    act = entries["Correlation (coming soon)"]
+    assert not act.isEnabled()
+    # The working entries are untagged and still usable.
+    assert entries["Convergence"].isEnabled()
     assert entries["Part Search"].isEnabled()
     win.close()
 
@@ -2992,4 +2992,28 @@ def test_settings_legend_opacity_applied_to_plot_view(app):
     win.settings.legend_opacity = 0.6
     win._apply_settings_to_views()
     assert win.plot_view._legend_opacity == 0.6
+    win.close()
+
+
+def test_tools_menu_offers_convergence(app):
+    """Convergence is wired up now, so it must be enabled and must not carry
+    the '(coming soon)' placeholder suffix. Correlation still does."""
+    win = mw.MainWindow(Settings())
+    labels = {a.text(): a for a in win._tools_menu.actions()}
+    assert "Convergence" in labels
+    assert labels["Convergence"].isEnabled()
+    assert "Correlation (coming soon)" in labels
+    assert not labels["Correlation (coming soon)"].isEnabled()
+    win.close()
+
+
+def test_opening_convergence_twice_reuses_one_window(app):
+    """Same lifecycle as Part Search: keep a reference so the window is not
+    garbage-collected, and raise-and-refresh rather than spawning a duplicate."""
+    win = mw.MainWindow(Settings())
+    win._open_convergence()
+    first = win._convergence_dialog
+    win._open_convergence()
+    assert win._convergence_dialog is first
+    first.close()
     win.close()

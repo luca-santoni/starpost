@@ -207,6 +207,10 @@ class Settings:
         default_factory=lambda: {
             "residual_keywords": ["residual", "residuals"],
             "force_keywords": ["force", "drag", "lift", "moment", "cd", "cl"],
+            # Whole-word (case-insensitive) keywords that mark a force-keyword
+            # monitor as an aggregate rather than a per-element contributor —
+            # see core/convergence/__init__.py's _select_auto_primary.
+            "aggregate_keywords": ["ALL", "Total", "Sum", "Overall", "Combined"],
         }
     )
     # Show the first-run welcome/setup wizard on startup. Defaults on so new

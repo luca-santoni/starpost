@@ -93,9 +93,14 @@ region_stats: [Avg, Std Dev, Range]
 # Plot axis classification heuristics. A monitor plot whose name matches a
 # residual keyword gets a log Y axis; force keywords get a linear axis. Any plot
 # can be overridden per-plot in the UI or pinned in a profile.
+# aggregate_keywords is used by the Convergence tool only: among the monitors
+# that match a force keyword, one whose name also matches an aggregate keyword
+# (matched as a whole word, e.g. "ALL" does not match "Wall") is preferred as
+# the auto-selected primary monitor over its per-element siblings.
 plot_classification:
   residual_keywords: [residual, residuals]
   force_keywords: [force, drag, lift, moment, "cd", "cl"]
+  aggregate_keywords: [ALL, Total, Sum, Overall, Combined]
 
 # Check GitHub for a newer release when the application starts and offer to
 # update if one is available. Toggle in Settings -> Misc.

@@ -5,6 +5,165 @@ All notable changes to StarPost are recorded here. Versions follow the
 
 ## [Unreleased]
 
+### New Features
+- **Convergence tool.** Tools → Convergence assesses whether each loaded data
+  set has converged, for steady runs. It reports a state (converged, still
+  converging, stalled, diverged, drifting), a High/Medium/Low confidence with
+  the rule that produced it, a convergence index, the binding constraint, and a
+  list of reasons with suggested actions and an estimate of the iterations
+  remaining. Residual health, remaining iterative error and the engineering
+  quantities are assessed separately and then combined; residuals can veto a
+  verdict but never certify one on their own, so a run left with no usable
+  residual history is held at "still converging" rather than reading as
+  converged. The Monitors table's Tolerance column shows its '%' suffix, and
+  the QoI-gates table's Iterative error column shows the value the gate was
+  actually decided on (including "unbounded", or the largest single-iteration
+  change) instead of a blank dash whenever the geometric-tail estimator
+  declined but the gate still bound the verdict. A new advisory flag,
+  AUTOCORRELATION_UNRELIABLE, fires when a monitor's decorrelation estimate
+  does not meet its own validity assumption. A second new flag,
+  ITERATIVE_ERROR_UNBOUNDED, fires whenever a primary monitor's geometric-tail
+  estimator declined for any reason (no structure to extrapolate, too little
+  data, or genuine stagnation): the monitor can still pass, and a reason names
+  it, since the remaining iterative error was never actually bounded.
+  Confidence is capped at Medium only when that monitor is also still moving
+  at an appreciable fraction of its tolerance — a settled monitor barely
+  moving keeps its High rating, because the estimator declines for every
+  noisy signal and a cap that always fires would carry no information. The static-monitor
+  escape hatch's denial (for a monitor creeping toward its asymptote with
+  noise on top) now measures how far the monitor has moved across its whole
+  record rather than within the trailing window alone, which no longer
+  under-reads the remaining approach as the creep rate approaches one. A data
+  set or monitor set with no residual (or QoI monitor) history at all is no
+  longer treated the same as one where that evidence existed and was then
+  destroyed by an integrity failure — the former can still reach CONVERGED,
+  with a reason noting the verdict rests on the other evidence alone, while
+  the latter still holds the verdict at "still converging". Unsteady runs are
+  reported as not yet supported rather than assessed with steady tests; a run
+  whose solver regime cannot be determined at all is refused the same way,
+  since assessing an unknown regime as steady would risk a confident wrong
+  answer on a case that may actually be transient. A **Residual drop** control
+  sits under the tolerance selector: 3 decades is the published ASME
+  requirement and the default, but whether a run whose loads are settled well
+  inside tolerance counts as converged with a shallower residual drop is an
+  engineering judgement, so the requirement is yours to set. Turbulence
+  equations keep their weaker bar and are never held to a stricter one than the
+  primary equations. Reads cached data only —
+  no STAR-CCM+ re-run.
+- Extraction now records solver precision, residual normalization mode, and the
+  unsteady solver parameters. Convergence assessment refuses a data set
+  outright — rather than assessing it at reduced confidence — when its solver
+  regime cannot be determined at all; a cached result or portable CSV old
+  enough to carry no properties whatsoever falls into that case and needs
+  re-extraction before it can be assessed.
+
+### Fixes
+- **Convergence tool: the auto-primary default now prefers an aggregate
+  monitor over its per-element siblings.** A monitor whose name matches a
+  force keyword (force, drag, lift, moment, cd, cl) is auto-marked primary
+  when the user hasn't set it by hand, and primary monitors alone gate the
+  headline verdict. A data set that reports both a total ("Downforce ALL")
+  and its per-element contributors ("Downforce wing front 1", "Downforce
+  wing rear 1", ...) matched every one of them, so the verdict rode on
+  whichever sub-component happened to be noisiest — a real 40-monitor
+  car-aero run had 36 primaries and its headline state was set by
+  `Downforce undertray Monitor` rather than the `Downforce ALL Monitor` the
+  engineer actually cared about. Auto-selection now prefers monitors whose
+  name matches a new, configurable aggregate keyword (ALL, Total, Sum,
+  Overall, Combined — `plot_classification.aggregate_keywords` in Settings,
+  matched as a whole word so "Wall" doesn't match "ALL") among the
+  force-keyword matches; when at least one aggregate is detected, only the
+  aggregate(s) are primary and the per-element monitors are still assessed
+  and can still raise warnings, they just don't gate. When no aggregate is
+  detectable, every force-keyword match is primary, exactly as before. A new
+  INFO reason names which monitors were auto-selected and why (or that no
+  aggregate was found and every match was kept), and a user can still tick
+  or untick any monitor by hand in the Convergence window, which overrides
+  the auto choice either way.
+- **Convergence tool: an oscillating residual no longer reads as DIVERGING.**
+  The sustained-growth rung fit only the last 50 iterations and trusted its
+  slope regardless of fit quality; on a residual that oscillates around a
+  plateau, that window lands on whatever phase the record happens to end on,
+  so the slope was oscillation phase, not trend (r^2 as low as 0.03), and
+  whether DIVERGED fired depended on where the run happened to stop. The
+  slope is now trusted only when the tail fit actually explains the data
+  (new `s_div_min_r2` threshold, default 0.5); genuine divergence, which
+  fits cleanly, is still caught within 50 iterations as before.
+- **Convergence tool: an oscillating residual could still misfire as
+  DIVERGING even with the r^2 floor above.** The floor alone was
+  insufficient: a half-cycle of an oscillation is itself well fitted by a
+  straight line, so its r^2 lands wherever the phase happens to put it — a
+  real STAR-CCM+ run measured tail-fit r^2 as high as 0.61 on residuals that
+  were only oscillating about a flat plateau, well above the 0.5 floor, and
+  the run's terminal state read DIVERGED though nothing was diverging.
+  Sustained growth now also requires the tail window's median to have
+  shifted relative to the block immediately preceding it (new
+  `s_div_level_ratio` threshold, default 3.0): an oscillation returns to its
+  prior level, a genuine divergence does not. Measured across 18 real
+  oscillating residual series the worst level-shift ratio was 1.71; a 0.05
+  decades/iteration synthetic divergence measured 10.6, so 3.0 separates the
+  two comfortably. Divergence growing slower than ~0.02 decades/iteration is
+  not separable from oscillation within one 50-iteration window and is left
+  to the growth-vs-reference rung to catch as it continues.
+- **Convergence tool: the convergence index no longer collapses to a false
+  0.00.** Whenever a primary monitor's remaining iterative error could not
+  be bounded at all, the index arithmetic divided by infinity and always
+  landed on exactly 0.0 — indistinguishable from a monitor that was
+  genuinely measured and found hopeless, and the first thing a real run
+  exposed as "the tool looks broken". The index is now the worst *finite*
+  margin among primary monitors; a new `unbounded_primary_count` field on
+  the assessment records how many monitors could not be bounded, the
+  binding-constraint string names the true worst offender and says so when
+  it is one of them, and the index is `None` (not 0.0) only when every
+  primary monitor is unbounded. The Convergence window's verdict card,
+  summary table and per-monitor gate table all render this honestly instead
+  of printing a misleading "0.00".
+- **Convergence tool: an unbounded gate no longer erases a monitor's four
+  other good margins.** The previous fix excluded an unbounded *monitor*
+  from the run-level index, but `MonitorAssessment.margin` itself was still
+  the minimum over all five of that monitor's gates — and an unbounded
+  gate's margin is exactly 0.0, so it still overwhelmed the other four,
+  perfectly measurable margins whenever every primary monitor had one. Two
+  of three real runs hit exactly this: every primary monitor had a good
+  drift, band, two-halves and window margin, yet the index still reported
+  "None" because the iterative gate alone was unbounded on all of them. A
+  monitor's margin is now the minimum over only its finite-valued gates, so
+  the run-level index is once again simply the worst primary monitor's
+  margin. `unbounded_primary_count` and the ITERATIVE_ERROR_UNBOUNDED flag
+  are unchanged, and the binding-constraint string is tighter: it names the
+  monitor and gate compactly, adding "(iterative error unbounded)" as a
+  short suffix only when the worst monitor is itself one of them, instead of
+  a full sentence.
+- **Convergence tool: RESTART_SUSPECTED no longer fires on a single
+  turbulence spike.** The restart heuristic flagged any single-iteration
+  ratio above 10x on any residual, including turbulence equations (Tke,
+  Sdr, ...), which spike by nature; a real run tripped it on one 31x Sdr
+  spike with a strictly increasing iteration index and no restart at all.
+  The check now only considers primary-class equations, and requires the
+  jump to persist (the median of several following samples must still sit
+  above the pre-jump level by the same factor) rather than firing on a
+  single sample that returns to baseline right after.
+- **Convergence tool: a residual no longer reads CONVERGING on a slope with
+  no explanatory power.** The state ladder's last rung trusted the
+  main-window fit's slope outright once it crossed `-s_flat`, with no check
+  on how well that fit explained the data — the third occurrence of a
+  pattern this tool has now hit three times (a rho, then a divergence
+  slope, now a convergence slope, each trusted past a threshold with no
+  fit-quality condition). A real run had four primary residuals all flat
+  within their own noise (r^2 <= 0.02) with three landing STALLED and the
+  fourth reading CONVERGING purely because its noise-driven slope crossed
+  the threshold by 0.000019, producing both an inconsistency between
+  equations doing the same thing and a false claim of progress ("still
+  converging at 0.01 decades per 100 iterations") extrapolated from a fit
+  explaining under 2% of the variance. CONVERGING now also requires the
+  main-window fit to clear a new `s_conv_min_r2` threshold (default 0.5,
+  shared with the `iterations_to_target` projection gate so the state and
+  the projection cannot disagree); below it the residual falls through to
+  the same STALLED/PLATEAU_LOW split its flat siblings use. Checked against
+  a synthetic decay with realistic per-iteration noise (r^2 in the 0.5-0.8
+  range) to confirm the floor does not reject a genuinely converging-but-
+  noisy residual, only ones with no resolvable trend at all.
+
 ## [2.7.0] — 2026-07-25
 
 ### New Features
