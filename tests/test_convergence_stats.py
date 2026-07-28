@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 
+from starpost.core.convergence import stats
 from starpost.core.convergence.stats import (
     autocorrelation,
     decorrelation_factor,
@@ -183,3 +184,99 @@ def test_autocorrelation_of_a_constant_is_finite():
     """Zero variance must not produce NaN — it returns lag-0 only."""
     rho = autocorrelation(np.full(100, 5.0))
     assert math.isfinite(rho[0])
+
+
+# --- memoisation of the expensive primitives --------------------------------
+
+def _window(seed: int = 0, n: int = 600) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    return (100.0 + 2.0 * (1.0 - np.exp(-np.arange(n) / 200.0))
+            + rng.normal(scale=1e-6, size=n))
+
+
+def test_the_pairwise_statistics_are_memoised_on_content():
+    """theil_sen_slope and mann_kendall are O(n^2) in the window and together
+    are 81% of a ten-data-set assessment pass (measured). The Convergence
+    window re-assesses every loaded data set on every edit, and neither
+    statistic depends on the tolerance or residual-drop values being edited,
+    so the repeat work is pure waste.
+
+    Keyed on array *content*, not identity: each re-assessment rebuilds its
+    arrays from the cached SimResult, so identity-keying would never hit."""
+    stats.clear_caches()
+    y = _window()
+    x = np.arange(y.size, dtype=float)
+
+    first_ts = stats.theil_sen_slope(x, y)
+    first_mk = stats.mann_kendall(y)
+    assert stats.cache_info()["misses"] == 2
+    assert stats.cache_info()["hits"] == 0
+
+    # Equal-valued but distinct array objects, as a re-assessment produces.
+    assert stats.theil_sen_slope(x.copy(), y.copy()) == first_ts
+    assert stats.mann_kendall(y.copy()) == first_mk
+    assert stats.cache_info()["hits"] == 2
+    assert stats.cache_info()["misses"] == 2
+
+
+def test_the_cache_distinguishes_different_data():
+    """A memo that confused two different windows would silently report one
+    monitor's trend for another — the worst failure this module could have."""
+    stats.clear_caches()
+    y = _window()
+    x = np.arange(y.size, dtype=float)
+    other = y.copy()
+    other[300] += 5.0        # one sample differs
+
+    assert stats.theil_sen_slope(x, other) != stats.theil_sen_slope(x, y)
+    # A decreasing window of the same length must not pick up the increasing
+    # one's result: same shape and dtype, opposite trend.
+    assert stats.mann_kendall(y[::-1].copy()).s == -stats.mann_kendall(y).s
+
+    # Two windows that merely *differ* need not differ in every derived
+    # statistic -- both of these are strictly monotonic, so both score the
+    # maximal S -- but they must occupy separate cache entries rather than
+    # one standing in for the other.
+    stats.clear_caches()
+    stats.mann_kendall(y)
+    stats.mann_kendall(_window(seed=1))
+    assert stats.cache_info()["misses"] == 2
+    assert stats.cache_info()["hits"] == 0
+
+
+def test_the_cache_is_bounded(monkeypatch):
+    """A long session must not accumulate windows without limit. The eviction
+    itself is what is under test, so the cap is lowered rather than filling
+    the production-sized one."""
+    monkeypatch.setattr(stats, "_CACHE_MAX_ENTRIES", 16)
+    stats.clear_caches()
+    for seed in range(60):
+        stats.mann_kendall(_window(seed=seed, n=40))
+    assert stats.cache_info()["entries"] == 16
+
+
+def test_the_cache_evicts_least_recently_used_first():
+    """Eviction order matters: every re-assessment walks the data sets in the
+    same order, so evicting the most recent entry would guarantee a miss on
+    the next pass."""
+    stats.clear_caches()
+    windows = [_window(seed=s, n=40) for s in range(3)]
+    for w in windows:
+        stats.mann_kendall(w)
+    stats.mann_kendall(windows[0])          # windows[0] is now most recent
+    keys = list(stats._cache)
+    assert keys[-1] == ("mann_kendall", (stats._array_key(windows[0]),))
+    assert keys[0] == ("mann_kendall", (stats._array_key(windows[1]),))
+
+
+def test_memoised_results_match_the_uncached_computation():
+    """The memo must be invisible: same numbers, cached or not."""
+    y = _window(seed=3)
+    x = np.arange(y.size, dtype=float)
+    stats.clear_caches()
+    uncached_ts, uncached_mk = stats.theil_sen_slope(x, y), stats.mann_kendall(y)
+    uncached_dec = stats.decorrelation_factor(y)
+    cached_ts, cached_mk = stats.theil_sen_slope(x, y), stats.mann_kendall(y)
+    cached_dec = stats.decorrelation_factor(y)
+    assert (cached_ts, cached_mk, cached_dec) == (uncached_ts, uncached_mk,
+                                                  uncached_dec)

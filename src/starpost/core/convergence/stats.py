@@ -7,10 +7,86 @@ PyInstaller bundle.
 """
 from __future__ import annotations
 
+import functools
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
+
+# --- memoisation ------------------------------------------------------------
+#
+# The Convergence window re-assesses *every* loaded data set on *every* edit,
+# and the two pairwise statistics below are O(n^2) in the trailing window: on
+# ten real car-aero exports they were 81% of a 1.67 s pass, making a single
+# checkbox tick or keystroke visibly laggy. Neither depends on the tolerance or
+# residual-drop values the user edits, so that work was being repeated to
+# produce byte-identical numbers (verified across 207 monitors at 0.1%/3
+# decades vs 0.05%/6 decades: every statistic identical).
+#
+# Memoising a *pure* function cannot go stale, which is why the cache lives
+# here rather than in the GUI: same input, same output, so there is no
+# invalidation to get wrong. The key is the array's exact bytes, not its id --
+# each re-assessment rebuilds its arrays from the cached SimResult, so
+# identity-keying would never hit -- and not a hash digest, because a collision
+# would silently attribute one monitor's trend to another.
+# Sized from measurement: ten real car-aero exports produce 621 entries and
+# 3.35 MB of keys, i.e. ~62 entries and ~0.34 MB per data set. 4096 covers a
+# ~66-data-set workspace for ~22 MB worst case. Generous on purpose — an LRU
+# under a cyclic scan (every pass walks every data set in the same order)
+# degrades to *zero* hits the moment the working set exceeds the cap, rather
+# than degrading gracefully, so the cap wants headroom over the realistic
+# workspace rather than to sit near it.
+_CACHE_MAX_ENTRIES = 4096
+_cache: OrderedDict = OrderedDict()
+_hits = 0
+_misses = 0
+
+
+def _array_key(value) -> tuple:
+    """Exact, hashable identity for one argument."""
+    if isinstance(value, np.ndarray):
+        return (value.shape, value.dtype.str, value.tobytes())
+    return (type(value).__name__, value)
+
+
+def _memoise(func: Callable) -> Callable:
+    """Cache a pure array function on the exact content of its arguments.
+
+    Bounded LRU: a long session assessing many data sets must not accumulate
+    windows without limit. Entries are small results keyed by window bytes,
+    so the cap is on entry count."""
+    @functools.wraps(func)
+    def wrapper(*args):
+        global _hits, _misses
+        key = (func.__name__, tuple(_array_key(a) for a in args))
+        if key in _cache:
+            _cache.move_to_end(key)
+            _hits += 1
+            return _cache[key]
+        result = func(*args)
+        _misses += 1
+        _cache[key] = result
+        if len(_cache) > _CACHE_MAX_ENTRIES:
+            _cache.popitem(last=False)
+        return result
+
+    wrapper.__wrapped__ = func
+    return wrapper
+
+
+def clear_caches() -> None:
+    """Drop every memoised result and reset the counters."""
+    global _hits, _misses
+    _cache.clear()
+    _hits = _misses = 0
+
+
+def cache_info() -> dict:
+    """Hits, misses and current size, for tests and diagnostics."""
+    return {"hits": _hits, "misses": _misses, "entries": len(_cache),
+            "max_entries": _CACHE_MAX_ENTRIES}
 
 
 @dataclass(frozen=True)
@@ -80,6 +156,7 @@ def ols_fit(x: np.ndarray, y: np.ndarray) -> OlsFit:
     return OlsFit(slope=slope, intercept=intercept, r2=r2, sigma=sigma, n=n)
 
 
+@_memoise
 def theil_sen_slope(x: np.ndarray, y: np.ndarray) -> float:
     """Median of all pairwise slopes: breakdown-resistant, so a spike cannot
     drag the trend estimate the way it drags OLS. O(n^2) in pairs, which is why
@@ -100,6 +177,7 @@ def theil_sen_slope(x: np.ndarray, y: np.ndarray) -> float:
     return float(np.median((y[j] - y[i])[ok] / dx[ok]))
 
 
+@_memoise
 def mann_kendall(y: np.ndarray) -> MannKendall:
     """Mann-Kendall trend test with the standard tie-corrected variance and
     continuity correction.
@@ -170,6 +248,7 @@ def autocorrelation(y: np.ndarray, max_lag: int | None = None) -> np.ndarray:
     return out
 
 
+@_memoise
 def decorrelation_factor(y: np.ndarray) -> Decorrelation:
     """D_N = 1 + 2 * sum(rho_tau) truncated at the first zero crossing.
 
@@ -261,6 +340,7 @@ def student_t_cdf(t: float, df: float) -> float:
     return 1.0 - tail if t > 0 else tail
 
 
+@functools.lru_cache(maxsize=256)
 def student_t_ppf(p: float, df: float) -> float:
     """Inverse CDF of Student's t, by bisection on the CDF.
 

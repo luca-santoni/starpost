@@ -414,6 +414,7 @@ def test_lowering_the_required_residual_drop_can_clear_a_stalled_verdict(app):
         dlg._assessments["/tmp/a.sim"].binding_constraint
 
     dlg._d_min.setValue(2.0)
+    dlg._flush_pending_reassess()
 
     assert dlg._assessments["/tmp/a.sim"].state is ConvergenceState.CONVERGED
     dlg.close()
@@ -444,6 +445,7 @@ def test_changing_the_required_residual_drop_keeps_the_selected_data_set(app):
                                  make_result("/tmp/b.sim", drifting=True)))
     dlg._summary.selectRow(1)
     dlg._d_min.setValue(4.0)
+    dlg._flush_pending_reassess()
     assert dlg._summary.currentRow() == 1
     dlg.close()
 
@@ -622,4 +624,63 @@ def test_the_custom_tolerance_row_greys_out_unless_that_preset_is_picked(app):
     dlg._preset.setCurrentText("Production (0.05%)")
     assert dlg._custom.isEnabled() is False
     assert dlg._custom_label.isEnabled() is False
+    dlg.close()
+
+
+def test_typing_in_a_spin_box_coalesces_into_one_reassessment(app, monkeypatch):
+    """QDoubleSpinBox emits valueChanged once per keystroke, and every
+    re-assessment walks *all* loaded data sets. Typing "0.2534" therefore ran
+    four full passes — measured at 6.7 s on ten real car-aero exports, with
+    the window locked throughout. A burst now collapses into one pass once
+    typing stops."""
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
+                                 make_result("/tmp/b.sim", drifting=True)))
+    calls = []
+    real_assess = module.assess
+
+    def counting_assess(*args, **kwargs):
+        calls.append(1)
+        return real_assess(*args, **kwargs)
+
+    monkeypatch.setattr(module, "assess", counting_assess)
+
+    for value in (3.5, 4.0, 4.5, 5.0):
+        dlg._d_min.setValue(value)
+    # Still mid-burst: no work has been done yet.
+    assert calls == []
+
+    dlg._flush_pending_reassess()
+    # One pass, i.e. one assess() per loaded data set — not four passes.
+    assert len(calls) == 2
+    # The pass uses the value typed last, not the first one seen.
+    assert dlg._config_for(dlg._results[0]).d_min == pytest.approx(5.0)
+    dlg.close()
+
+
+def test_a_discrete_edit_still_reassesses_immediately(app, monkeypatch):
+    """Only the spin boxes debounce. A preset choice, a checkbox and a bulk
+    button are each a single deliberate action with no burst to coalesce, so
+    they must not make the user wait out a timer."""
+    from PySide6.QtCore import Qt
+
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    calls = []
+    real_assess = module.assess
+
+    def counting_assess(*args, **kwargs):
+        calls.append(1)
+        return real_assess(*args, **kwargs)
+
+    monkeypatch.setattr(module, "assess", counting_assess)
+
+    dlg._preset.setCurrentText("Production (0.05%)")
+    assert len(calls) == 1
+    dlg._clear_btn.click()
+    assert len(calls) == 2
+    dlg._monitor_table.item(0, 0).setCheckState(Qt.CheckState.Checked)
+    assert len(calls) == 3
     dlg.close()

@@ -70,6 +70,21 @@ All notable changes to StarPost are recorded here. Versions follow the
   verdict reads "no primary QoI declared" at Low confidence until you tick one.
 
 ### Fixes
+- **Convergence window: editing is no longer laggy.** Every edit — a checkbox,
+  a tolerance keystroke, a residual-drop step — re-ran the full assessment of
+  *every* loaded data set on the GUI thread. With ten data sets loaded that was
+  1.7 s per edit, and because a spin box emits a change per keystroke, typing
+  a four-digit tolerance ran four complete passes and froze the window for
+  close to seven seconds. Two things changed. The expensive per-monitor
+  statistics (the Theil-Sen slope and the Mann-Kendall trend test, together
+  81% of a pass) are now memoised on the data they are computed from: they do
+  not depend on the tolerance or residual-drop values being edited, so the
+  same numbers were being recomputed from scratch on every keystroke. And the
+  two spin boxes now wait for a pause in typing before re-assessing, instead
+  of firing on each digit. Ticking a checkbox went from 1.7 s to 0.19 s;
+  typing stays responsive throughout and settles about 1.2 s after you stop.
+  No verdict changes — the cached statistics are identical, which is checked
+  against all ten reference data sets.
 - **Disabled fields and their labels now actually look disabled.** The
   Convergence window's custom-tolerance box is only live when the Tolerance
   preset is *Custom*, but it and its "Custom" label rendered exactly like the
