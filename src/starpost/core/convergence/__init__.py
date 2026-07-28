@@ -103,6 +103,38 @@ def _select_auto_primary(
     return {s.name for s in chosen}, bool(aggregates), matches
 
 
+def _is_zero_qoi(y: np.ndarray) -> bool:
+    """True when a QoI monitor is exactly zero at every iteration — a part not
+    present on this configuration (a car-aero export routinely carries 14-29
+    of 40 monitors this way), not a real quantity of interest. Assessing one
+    anyway falls the reference-scale ladder all the way to its degenerate 1.0
+    fallback and raises warnings about a monitor that was never real.
+
+    Deliberately an exact-zero test, not a small-magnitude threshold: a
+    monitor genuinely near zero — a small mass flow, a tiny imbalance, a
+    coefficient at 1e-6 — is a real result, and silently dropping it from the
+    verdict without telling the user is exactly the failure this tool exists
+    to avoid. Losing nothing to that risk costs only that a monitor sitting
+    at, say, 1e-12 is still assessed as harmless noise. Applied to QoI
+    monitors only (see the loop in ``assess`` below); a residual series is
+    never tested against this, since a healthy residual can legitimately
+    settle at ~1e-6 and must not be discarded."""
+    return y.size == 0 or not bool(np.any(y))
+
+
+def _zero_monitor_reason(count: int) -> Optional[Reason]:
+    if count <= 0:
+        return None
+    plural = "s" if count != 1 else ""
+    return Reason(
+        severity=Severity.INFO, target="run",
+        message=(f"{count} monitor{plural} skipped: every value is exactly "
+                 "zero at every iteration (typically a part not present in "
+                 "this configuration), so they were excluded from assessment "
+                 "rather than assigned a fabricated reference scale."),
+    )
+
+
 def _auto_primary_reason(
     auto_primary_names: set[str],
     used_aggregates: bool,
@@ -148,10 +180,18 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
     classification = classification or _DEFAULT_CLASSIFICATION
 
     metadata = read_metadata(result.properties)
-    residual_signals, qoi_signals = collect_signals(result, classification)
+    residual_signals, all_qoi_signals = collect_signals(result, classification)
+    # QoI monitors that are exactly zero at every iteration (see
+    # _is_zero_qoi) are excluded before anything else touches them: never
+    # assessed, never auto-primary candidates, never in the returned
+    # ConvergenceAssessment.monitors at all. Residual signals are untouched —
+    # the exact-zero rule never applies to them (a healthy residual can
+    # legitimately sit at ~1e-6).
+    zero_qoi_count = sum(1 for s in all_qoi_signals if _is_zero_qoi(s.y))
+    qoi_signals = [s for s in all_qoi_signals if not _is_zero_qoi(s.y)]
 
     def finish(state, residuals, monitors, integrity_errors, restart_seen,
-               segments, auto_primary_reason: Optional[Reason] = None
+               segments, info_reasons: Optional[list[Reason]] = None
                ) -> ConvergenceAssessment:
         if state is ConvergenceState.UNSTEADY_UNSUPPORTED:
             flags, index, unbounded_count = [], None, 0
@@ -183,10 +223,10 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
             )
         reasons = build_reasons(state, residuals, monitors, flags, config,
                                 metadata, integrity_errors)
-        # INFO severity, so it belongs at the tail of build_reasons' own
+        # INFO severity, so these belong at the tail of build_reasons' own
         # severity-sorted output — appended rather than re-sorted in.
-        if auto_primary_reason is not None:
-            reasons.append(auto_primary_reason)
+        for reason in info_reasons or []:
+            reasons.append(reason)
         return ConvergenceAssessment(
             sim_path=result.sim_path,
             sim_name=result.sim_name,
@@ -211,7 +251,13 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
     # checked before "the regime is not steady" — a data set with no monitor
     # histories at all is not usefully described as "unsteady" or "regime
     # unknown", whatever its metadata says.
-    if not residual_signals and not qoi_signals:
+    # Checked against every collected QoI signal, not the zero-filtered list:
+    # a data set whose only monitors are identically-zero parts did have
+    # monitor histories, just none worth assessing, which is a different,
+    # milder situation than "nothing was found at all" (see roll_up/
+    # confidence_of's "no primary QoI declared" path below for how that
+    # case actually reads).
+    if not residual_signals and not all_qoi_signals:
         return finish(ConvergenceState.INTEGRITY_FAIL, [], [],
                       ["no monitor histories were found in this data set"],
                       False, 1)
@@ -286,7 +332,12 @@ def assess(result, config: Optional[ConvergenceConfig] = None,
         monitors.append(assess_monitor(signal.name, segment.y, config,
                                        is_primary=is_primary))
 
+    info_reasons = [
+        r for r in (
+            _zero_monitor_reason(zero_qoi_count),
+            _auto_primary_reason(auto_primary_names, used_aggregates,
+                                 force_matches, config),
+        ) if r is not None
+    ]
     return finish(ConvergenceState.CONVERGING, residuals, monitors,
-                  integrity_errors, restart_seen, segments,
-                  _auto_primary_reason(auto_primary_names, used_aggregates,
-                                      force_matches, config))
+                  integrity_errors, restart_seen, segments, info_reasons)

@@ -46,6 +46,7 @@ THRESHOLD_PROVENANCE: dict[str, str] = {
     "mk_trend_z": "[D]",
     "mk_trend_departure_fraction": "[D]",
     "iterative_unbounded_confidence_fraction": "[D]",
+    "window_relax_ci_fraction": "[D]",
 }
 
 
@@ -197,6 +198,53 @@ class ConvergenceConfig:
     window_fraction: float = 0.2   # window is max(window_min, fraction * N)
     gamma: float = 5.0             # mean/sigma separation to use |mean| as scale
     lambda_ind: int = 20           # independent samples required in the window
+    window_relax_ci_fraction: float = 0.25
+                                   # A safety factor of 4 on the source theory's
+                                   # own criterion (t * SEM_eff <= eps). The
+                                   # factor is not decoration: at the bare
+                                   # criterion (1.0) this route admits a strongly
+                                   # autocorrelated record whose mean is known
+                                   # only to 87% of tolerance — marginal, not
+                                   # settled — while a real well-converged monitor
+                                   # sits at 5-11%. 0.25 separates those by more
+                                   # than 2x on each side rather than sitting
+                                   # against either. An earlier 0.10 was tighter
+                                   # than any evidence supported and refused a run
+                                   # whose mean was known to 10.5% of tolerance.
+                                   # The t-quantile self-limits too: at n_eff = 5,
+                                   # t(0.975, 4) is 2.78, so a poorly sampled
+                                   # window is penalised automatically.
+                                   #
+                                   # The n_eff >= lambda_ind requirement is a proxy
+                                   # for "is the mean known to within tolerance?" —
+                                   # on a very smooth, well-settled monitor,
+                                   # smoothness itself is high autocorrelation, so
+                                   # the proxy can be unsatisfiable even though the
+                                   # quantity it stands in for passes comfortably.
+                                   # The window gate also passes when: (1) the
+                                   # window meets its length floor; (2) the
+                                   # confidence half-width on the mean,
+                                   # t(1-alpha/2, nu_eff) * std/sqrt(n_eff) with
+                                   # nu_eff = max(n_eff - 1, 1), is no more than
+                                   # this fraction of tolerance; and (3) the
+                                   # immediately preceding equal-length block's
+                                   # mean agrees with the window's mean to within
+                                   # tolerance. Condition (3) is what still catches
+                                   # a brief flat stretch inside a slow
+                                   # oscillation: that case shows a *different*
+                                   # mean in the preceding block, where a
+                                   # genuinely settled monitor agrees to a small
+                                   # fraction of tolerance across the two blocks.
+                                   # alpha = 0.05 (the same 95% convention the
+                                   # band gate's [97.5, 2.5] percentiles already
+                                   # use in this module; there is no separate
+                                   # named alpha constant to reuse). Measured on
+                                   # a real, well-settled car-aero downforce
+                                   # monitor: n_eff = 4.7 against lambda_ind = 20,
+                                   # confidence half-width 0.0199 x tolerance,
+                                   # preceding-block agreement 0.026 x tolerance
+                                   # across 1000 iterations — comfortably inside
+                                   # this floor on both counts.
     n_eff_min: float = 30.0        # effective samples for a High-confidence verdict
     n_eff_floor: float = 10.0      # below this, confidence is Low
     tau0_over_n_warn: float = 0.05

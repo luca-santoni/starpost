@@ -80,6 +80,16 @@ def _margin_sort_key(monitor: MonitorAssessment):
     return (1, monitor.margin)
 
 
+def _join_names(names: list[str]) -> str:
+    """"a", "a and b", "a, b and c" -- the English list a non-primary
+    monitor's rolled-up failed-gate reason names its gates with."""
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} and {names[1]}"
+    return ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
 def _series_label(msg: str) -> str:
     """The series-name prefix of an integrity message, formatted
     ``"<series>: <detail>"``. Not every integrity message has that shape —
@@ -440,28 +450,52 @@ def build_reasons(state: ConvergenceState, residuals,
         ))
 
     for monitor in monitors:
-        severity = Severity.ERROR if monitor.is_primary else Severity.WARNING
-        for gate in monitor.gates:
-            if gate.passed:
-                continue
-            reasons.append(Reason(
-                severity=severity, target=monitor.name,
-                message=(f"{monitor.name} fails the {gate.name} gate: "
-                         f"{gate.value:.4g} against a limit of {gate.limit:.4g} "
-                         f"({gate.detail})."),
-                suggested_action=_action_for(gate.name, monitor, config),
-            ))
-        marginal = [
-            g for g in monitor.gates
-            if g.passed and config.marginal_low <= g.margin <= config.marginal_high
-        ]
-        for gate in marginal:
-            reasons.append(Reason(
-                severity=Severity.WARNING, target=monitor.name,
-                message=(f"{monitor.name} passes the {gate.name} gate only "
-                         f"marginally (margin {gate.margin:.2f})."),
-                suggested_action="Continue a little longer to build margin.",
-            ))
+        if monitor.is_primary:
+            # Primary monitors gate the verdict, so they keep their full
+            # per-gate detail exactly as before: one Reason per failed gate,
+            # and one per gate passing only marginally.
+            for gate in monitor.gates:
+                if gate.passed:
+                    continue
+                reasons.append(Reason(
+                    severity=Severity.ERROR, target=monitor.name,
+                    message=(f"{monitor.name} fails the {gate.name} gate: "
+                             f"{gate.value:.4g} against a limit of "
+                             f"{gate.limit:.4g} ({gate.detail})."),
+                    suggested_action=_action_for(gate.name, monitor, config),
+                ))
+            marginal = [
+                g for g in monitor.gates
+                if g.passed and config.marginal_low <= g.margin <= config.marginal_high
+            ]
+            for gate in marginal:
+                reasons.append(Reason(
+                    severity=Severity.WARNING, target=monitor.name,
+                    message=(f"{monitor.name} passes the {gate.name} gate only "
+                             f"marginally (margin {gate.margin:.2f})."),
+                    suggested_action="Continue a little longer to build margin.",
+                ))
+        else:
+            # Non-primary monitors do not gate the verdict, and a real
+            # car-aero export can carry dozens of them (per-element siblings
+            # of an auto-primary aggregate) -- one Reason per failed gate per
+            # monitor buried the handful of reasons that actually matter
+            # under a hundred-plus warnings. Rolled up to at most one Reason
+            # per monitor, naming which gates failed; a marginal *pass* is
+            # dropped entirely, since marginality on a monitor that does not
+            # gate anything is noise, not a warning. The per-gate numbers
+            # are still reachable in the QoI gates tab.
+            failed_names = [g.name for g in monitor.gates if not g.passed]
+            if failed_names:
+                plural = "s" if len(failed_names) > 1 else ""
+                reasons.append(Reason(
+                    severity=Severity.WARNING, target=monitor.name,
+                    message=(f"{monitor.name} fails the "
+                             f"{_join_names(failed_names)} gate{plural}. It "
+                             "is not a primary monitor, so this does not "
+                             "gate the verdict; see the QoI gates tab for "
+                             "per-gate values."),
+                ))
         if monitor.passed and monitor.is_primary:
             reasons.append(Reason(
                 severity=Severity.INFO, target=monitor.name,

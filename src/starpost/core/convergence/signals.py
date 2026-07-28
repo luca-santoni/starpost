@@ -171,16 +171,30 @@ def collect_signals(result, classification: dict
 
     Each PlotSeries inside a residual plot is one equation. Reports are not
     considered: they are final scalars with no history, so the QoI layer
-    necessarily runs on monitor plots."""
+    necessarily runs on monitor plots.
+
+    A monitor is de-duplicated by name within each class. STAR-CCM+ routinely
+    exports the same monitor in more than one plot — a real car-aero export
+    carries "Downforce ALL Monitor" both in the grouped "Downforce plots" and
+    again in its own "Downforce ALL Monitor Plot" — and assessing it twice
+    listed it twice in the window and let one monitor weigh twice in the
+    roll-up. The first occurrence wins; the series are the same data."""
     residuals: list[MonitorSignal] = []
     qois: list[MonitorSignal] = []
+    seen: set[tuple[bool, str]] = set()
     for plot in result.plots:
-        target = residuals if _is_residual(plot, classification) else qois
+        is_residual = _is_residual(plot, classification)
+        target = residuals if is_residual else qois
         for series in plot.series:
             if not series.y or len(series.x) != len(series.y):
                 continue
+            name = series.name or plot.name
+            key = (is_residual, name)
+            if key in seen:
+                continue
+            seen.add(key)
             target.append(MonitorSignal(
-                name=series.name or plot.name,
+                name=name,
                 plot=plot.name,
                 x=np.asarray(series.x, dtype=float),
                 y=np.asarray(series.y, dtype=float),

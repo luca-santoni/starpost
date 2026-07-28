@@ -97,6 +97,7 @@ from starpost.core.convergence.stats import (
     decorrelation_factor,
     mann_kendall,
     ols_fit,
+    student_t_ppf,
     theil_sen_slope,
 )
 
@@ -109,6 +110,12 @@ GATE_WINDOW = "window adequacy"
 # Detrended scatter below this fraction of the tolerance counts as no
 # fluctuation at all, so D_N is taken as 1 rather than estimated from dust.
 _NEGLIGIBLE_FRACTION = 0.01
+
+# Significance level for the window gate's relaxed-route confidence interval
+# (config.window_relax_ci_fraction). Not a ConvergenceConfig field: it is the
+# same 95% convention the band gate's own [97.5, 2.5] percentiles already use
+# in this module, reused rather than duplicated as a second named constant.
+_CI_ALPHA = 0.05
 
 
 def _margin(limit: float, value: float) -> float:
@@ -178,7 +185,59 @@ def assess_monitor(name: str, y: np.ndarray, config,
         decorrelation = decorrelation_factor(detrended)
         d_n, tau0_over_n = decorrelation.d_n, decorrelation.tau0_over_n
     n_eff = n_window / d_n
-    window_ok = length_ok and n_eff >= config.lambda_ind
+    lambda_ok = n_eff >= config.lambda_ind
+    window_ok = length_ok and lambda_ok
+    window_margin = (n_eff / config.lambda_ind) if length_ok else 0.0
+
+    # The n_eff >= lambda_ind requirement is a proxy for "is the mean known to
+    # within tolerance?", and on a very smooth, well-settled monitor it can be
+    # unsatisfiable on a technicality — smoothness *is* high autocorrelation —
+    # while the quantity the proxy stands in for passes by a wide margin. When
+    # the direct route fails but the window still meets its length floor, try
+    # the quantity itself: the confidence half-width on the mean, well inside
+    # tolerance, *and* the immediately preceding equal-length block agreeing
+    # with the window's mean (see config.window_relax_ci_fraction). That second
+    # condition is what still refuses a brief flat stretch inside a slow
+    # oscillation: such a stretch shows a *different* mean in the block right
+    # before it, where a genuinely settled monitor agrees closely.
+    window_relaxed = False
+    if length_ok and not lambda_ok:
+        window_std = float(window.std())
+        nu_eff = max(n_eff - 1.0, 1.0)
+        sem_eff = window_std / math.sqrt(n_eff) if n_eff > 0 else math.inf
+        t_crit = student_t_ppf(1.0 - _CI_ALPHA / 2.0, nu_eff)
+        ci_half_width = t_crit * sem_eff
+        ci_limit = config.window_relax_ci_fraction * eps
+        ci_ok = ci_half_width <= ci_limit
+        ci_margin = _margin(ci_limit, ci_half_width)
+
+        if start >= n_window:
+            preceding = y[start - n_window:start]
+            preceding_mean = float(preceding.mean())
+            window_mean = float(window.mean())
+            departure = abs(window_mean - preceding_mean)
+            preceding_ok = departure <= eps
+            preceding_margin = _margin(eps, departure)
+            preceding_detail = (
+                f"preceding block mean {preceding_mean:.6g} vs. window mean "
+                f"{window_mean:.6g} (departure {departure:.4g} against a "
+                f"tolerance of {eps:.4g})"
+            )
+        else:
+            # Too little record to supply a preceding block of equal length.
+            # Conservative: the relaxation is refused, not assumed to hold.
+            preceding_ok = False
+            preceding_margin = 0.0
+            preceding_detail = "record too short for a preceding equal-length block"
+
+        window_relaxed = ci_ok and preceding_ok
+        if window_relaxed:
+            window_ok = True
+            window_margin = min(ci_margin, preceding_margin)
+        window_relax_detail = (
+            f"relaxation: CI half-width {ci_half_width:.4g} vs. limit "
+            f"{ci_limit:.4g}; {preceding_detail}"
+        )
 
     # --- gate 1: projected drift over another window-length ----------------
     projected_drift = n_window * abs(fit.slope)
@@ -253,6 +312,16 @@ def assess_monitor(name: str, y: np.ndarray, config,
             f"single-iteration change instead ({iterative.reason})"
         )
 
+    window_detail = f"{n_window} samples, D_N = {d_n:.3g}, {n_eff:.1f} effective"
+    if window_relaxed:
+        window_detail += (
+            f"; passed via the mean-precision relaxation, not the "
+            f"{config.lambda_ind:.0f}-independent-sample requirement "
+            f"({window_relax_detail})"
+        )
+    elif not lambda_ok and length_ok:
+        window_detail += f" (relaxation not met: {window_relax_detail})"
+
     gates = [
         GateResult(
             name=GATE_DRIFT, passed=projected_drift <= eps,
@@ -279,9 +348,8 @@ def assess_monitor(name: str, y: np.ndarray, config,
         GateResult(
             name=GATE_WINDOW, passed=window_ok,
             value=n_eff, limit=float(config.lambda_ind),
-            margin=(n_eff / config.lambda_ind) if length_ok else 0.0,
-            detail=(f"{n_window} samples, D_N = {d_n:.3g}, "
-                    f"{n_eff:.1f} effective"),
+            margin=window_margin,
+            detail=window_detail,
         ),
     ]
 

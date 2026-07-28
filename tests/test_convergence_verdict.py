@@ -12,12 +12,13 @@ from starpost.core.convergence.models import (
     Confidence,
     ConvergenceState,
     MetadataField,
+    MonitorAssessment,
     Provenance,
     RunMetadata,
     Severity,
 )
 from starpost.core.convergence.steady import assess_monitor
-from starpost.core.convergence.verdict import roll_up
+from starpost.core.convergence.verdict import build_reasons, roll_up
 from starpost.data.models import (
     MonitorPlot,
     PlotKind,
@@ -207,6 +208,190 @@ def test_an_auto_selected_reason_is_not_added_when_every_match_is_overridden():
     a = assess(result, primary(), CLASSIFICATION)
     info = [r for r in a.reasons if r.severity is Severity.INFO]
     assert not any("auto-selected" in r.message.lower() for r in info)
+
+
+# --- C2: identically-zero QoI monitors are excluded, exact-zero rule only --
+#
+# A real car-aero export carries 14-29 of 40 monitors identically zero (parts
+# not present on that car). The rule is deliberately exact-zero, not a small-
+# magnitude threshold: a monitor genuinely near zero (a small mass flow, a
+# tiny imbalance, a coefficient at 1e-6) is a real result, and a threshold
+# would silently discard it from the verdict with no trace -- exactly the
+# failure this tool exists to avoid. An exact-zero test cannot make that
+# mistake; the only cost is that a monitor at, say, 1e-12 is still assessed
+# as harmless noise.
+
+def _result_with_extra_qoi(extra_name: str, extra_y: np.ndarray, *,
+                           extra_plot_kind=PlotKind.FORCE) -> SimResult:
+    """A healthy Drag + Continuity data set with one extra QoI monitor
+    series appended, for probing what the empty-monitor filter does with it."""
+    n = 3000
+    plots = [
+        MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                   series=[PlotSeries(name="Drag", x=list(map(float, range(n))),
+                                      y=qoi_with_geometric_decay(n).tolist())]),
+        MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                   series=[PlotSeries(name="Continuity",
+                                      x=list(map(float, range(n))),
+                                      y=healthy_residual(n).tolist())]),
+        MonitorPlot(name="Extra Monitor Plot", kind=extra_plot_kind,
+                   series=[PlotSeries(name=extra_name,
+                                      x=list(map(float, range(extra_y.size))),
+                                      y=extra_y.tolist())]),
+    ]
+    groups = [
+        PropertyGroup(section="continuum", name="Physics 1",
+                      entries=[("models", "Steady; Segregated Flow")]),
+        PropertyGroup(section="convergence", name="",
+                      entries=[("precision", "double"),
+                               ("residual_normalization", "auto")]),
+    ]
+    return SimResult(sim_path="/tmp/extra.sim", plots=plots,
+                     properties=SimProperties(groups=groups))
+
+
+def test_c2_an_identically_zero_monitor_is_excluded_from_assessment():
+    result = _result_with_extra_qoi("Downforce wing front 3 Monitor",
+                                    np.zeros(3000))
+    a = assess(result, primary(), CLASSIFICATION)
+    assert {m.name for m in a.monitors} == {"Drag"}
+    assert a.state is ConvergenceState.CONVERGED
+    skip_reasons = [r for r in a.reasons if "skipped" in r.message.lower()]
+    assert len(skip_reasons) == 1
+    assert skip_reasons[0].severity is Severity.INFO
+    assert "1 monitor skipped" in skip_reasons[0].message
+    assert "exactly zero" in skip_reasons[0].message.lower()
+
+
+def test_c2_a_zero_monitor_cannot_be_resurrected_as_primary_by_an_override():
+    """A zero monitor is invisible to the whole pipeline: even an explicit
+    per-monitor override naming it has nothing to act on."""
+    result = _result_with_extra_qoi("Downforce wing front 3 Monitor",
+                                    np.zeros(3000))
+    config = ConvergenceConfig(monitors={
+        "Drag": MonitorConfig(is_primary=True),
+        "Downforce wing front 3 Monitor": MonitorConfig(is_primary=True),
+    })
+    a = assess(result, config, CLASSIFICATION)
+    assert {m.name for m in a.monitors} == {"Drag"}
+
+
+def test_c2_a_near_zero_but_genuinely_nonzero_monitor_is_still_assessed():
+    """The case an magnitude threshold would have wrongly discarded: a real
+    signal oscillating at 1e-7, never exactly zero. Must survive the filter
+    and be assessed like any other QoI monitor."""
+    n = 3000
+    near_zero = 1e-7 * np.sin(np.arange(n, dtype=float) / 13.0 + 0.3)
+    assert not np.any(near_zero == 0.0)          # sanity: genuinely never zero
+    result = _result_with_extra_qoi("Side Force Monitor", near_zero)
+    a = assess(result, primary(), CLASSIFICATION)
+    assert {m.name for m in a.monitors} == {"Drag", "Side Force Monitor"}
+    assert not any("skipped" in r.message.lower() for r in a.reasons)
+
+
+def test_c2_the_exact_zero_rule_never_applies_to_residuals():
+    """The residual carve-out: Sdr routinely sits at ~1e-6, below where a
+    magnitude threshold would have lived, but the exact-zero rule only ever
+    touches QoI monitors -- a real, healthy residual must survive."""
+    n = 3000
+    tiny_but_real = 1e-6 * (1.0 + 0.01 * np.sin(np.arange(n, dtype=float) / 7.0))
+    result = SimResult(
+        sim_path="/tmp/sdr.sim",
+        plots=[
+            MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                       series=[PlotSeries(name="Drag",
+                                          x=list(map(float, range(n))),
+                                          y=qoi_with_geometric_decay(n).tolist())]),
+            MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL, series=[
+                PlotSeries(name="Continuity", x=list(map(float, range(n))),
+                          y=healthy_residual(n).tolist()),
+                PlotSeries(name="Sdr", x=list(map(float, range(n))),
+                          y=tiny_but_real.tolist()),
+            ]),
+        ],
+        properties=SimProperties(groups=[
+            PropertyGroup(section="continuum", name="P",
+                         entries=[("models", "Steady; Segregated Flow")]),
+            PropertyGroup(section="convergence", name="",
+                         entries=[("precision", "double"),
+                                  ("residual_normalization", "auto")]),
+        ]),
+    )
+    a = assess(result, primary(), CLASSIFICATION)
+    assert "Sdr" in {r.name for r in a.residuals}
+
+
+def test_c2_multiple_zero_monitors_are_counted_and_pluralised():
+    n = 3000
+    plots = [
+        MonitorPlot(name="Drag Monitor Plot", kind=PlotKind.FORCE,
+                   series=[PlotSeries(name="Drag", x=list(map(float, range(n))),
+                                      y=qoi_with_geometric_decay(n).tolist())]),
+        MonitorPlot(name="Residuals", kind=PlotKind.RESIDUAL,
+                   series=[PlotSeries(name="Continuity",
+                                      x=list(map(float, range(n))),
+                                      y=healthy_residual(n).tolist())]),
+        MonitorPlot(name="Zero Monitors", kind=PlotKind.FORCE, series=[
+            PlotSeries(name="Wing Front 3", x=list(map(float, range(n))),
+                      y=np.zeros(n).tolist()),
+            PlotSeries(name="Wing Front 4", x=list(map(float, range(n))),
+                      y=np.zeros(n).tolist()),
+            PlotSeries(name="Wing Side 1", x=list(map(float, range(n))),
+                      y=np.zeros(n).tolist()),
+        ]),
+    ]
+    groups = [
+        PropertyGroup(section="continuum", name="Physics 1",
+                      entries=[("models", "Steady; Segregated Flow")]),
+        PropertyGroup(section="convergence", name="",
+                      entries=[("precision", "double"),
+                               ("residual_normalization", "auto")]),
+    ]
+    result = SimResult(sim_path="/tmp/multi_zero.sim", plots=plots,
+                       properties=SimProperties(groups=groups))
+    a = assess(result, primary(), CLASSIFICATION)
+    assert {m.name for m in a.monitors} == {"Drag"}
+    skip_reasons = [r for r in a.reasons if "skipped" in r.message.lower()]
+    assert len(skip_reasons) == 1
+    assert "3 monitors skipped" in skip_reasons[0].message
+
+
+def test_c2_a_dataset_with_only_zero_monitors_and_a_residual_is_not_integrity_fail():
+    """The early 'was anything at all collected' check in assess() is tested
+    against every collected QoI signal, not the zero-filtered list, so a data
+    set that had monitor histories -- just none worth assessing -- is not
+    confused with one where nothing was found. With a residual present the
+    run still proceeds past INTEGRITY_FAIL (a data set with *only* zero
+    monitors and no residual at all has nothing left for roll_up to certify
+    anything on, which is the case the next test pins)."""
+    result = _result_with_extra_qoi("Downforce wing front 3 Monitor",
+                                    np.zeros(3000))
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert a.state is not ConvergenceState.INTEGRITY_FAIL
+    assert any("skipped" in r.message.lower() for r in a.reasons)
+
+
+def test_c2_a_dataset_with_only_zero_monitors_and_no_residual_has_nothing_left():
+    """The degenerate edge case: strip the residual too, so after the
+    zero-monitor exclusion literally nothing survives to assess. roll_up's
+    own pre-existing rule ('no residuals and no monitors at all') still
+    applies here -- this is correctly INTEGRITY_FAIL, not a regression, and
+    the skip reason must still be visible even in that terminal state."""
+    n = 3000
+    result = SimResult(
+        sim_path="/tmp/all_zero.sim",
+        plots=[MonitorPlot(name="Zero Monitors", kind=PlotKind.FORCE, series=[
+            PlotSeries(name="Wing Front 3", x=list(map(float, range(n))),
+                      y=np.zeros(n).tolist()),
+        ])],
+        properties=SimProperties(groups=[PropertyGroup(
+            section="continuum", name="P",
+            entries=[("models", "Steady; Segregated Flow")])]),
+    )
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    assert a.state is ConvergenceState.INTEGRITY_FAIL
+    assert a.monitors == []
+    assert any("skipped" in r.message.lower() for r in a.reasons)
 
 
 # --- end-to-end states -----------------------------------------------------
@@ -994,6 +1179,184 @@ def test_f7_series_label_falls_back_to_run_for_a_colonless_message():
 
     assert _series_label("Drag: fewer than 2 points") == "Drag"
     assert _series_label("no monitor histories were found in this data set") == "run"
+
+
+# --- C3: non-primary monitor reasons are rolled up to at most one each ----
+#
+# The Reasons list was unusable on a real 40-monitor car-aero export: a
+# handful of real errors buried under a hundred-plus per-gate warnings from
+# per-element monitors that do not gate the verdict. Primary monitors keep
+# their full per-gate detail; non-primary monitors get at most one rolled-up
+# Reason naming which gates failed, and marginal-pass warnings are dropped
+# for them entirely.
+
+def _monitor_with_failed_gates(name: str, failed: set[str],
+                               is_primary: bool = False) -> MonitorAssessment:
+    """A MonitorAssessment whose gates are forced to fail exactly the named
+    subset, independent of steady.py's own gate math -- this section tests
+    verdict.build_reasons' roll-up logic, not which gates a given signal
+    happens to trip."""
+    from starpost.core.convergence.models import GateResult
+
+    base = assess_monitor(name, np.full(3000, 42.0), ConvergenceConfig(),
+                          is_primary=is_primary)
+    base.gates = [
+        GateResult(name=g.name, passed=g.name not in failed, value=g.value,
+                  limit=g.limit, margin=(0.5 if g.name in failed else g.margin),
+                  detail=g.detail)
+        for g in base.gates
+    ]
+    return base
+
+
+def test_c3_a_non_primary_monitor_gets_one_reason_naming_several_failed_gates():
+    from starpost.core.convergence.steady import GATE_BAND, GATE_DRIFT, GATE_ITERATIVE
+
+    monitor = _monitor_with_failed_gates(
+        "Downforce wing front 1 Monitor",
+        {GATE_DRIFT, GATE_BAND, GATE_ITERATIVE},
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    own = [r for r in reasons if r.target == monitor.name]
+    assert len(own) == 1
+    assert own[0].severity is Severity.WARNING
+    assert "fails the" in own[0].message.lower()
+    assert "drift" in own[0].message and "band" in own[0].message
+    assert "iterative error" in own[0].message
+    assert "gates" in own[0].message   # plural: three gates failed
+
+
+def test_c3_a_non_primary_monitor_failing_one_gate_uses_the_singular():
+    from starpost.core.convergence.steady import GATE_WINDOW
+
+    monitor = _monitor_with_failed_gates(
+        "Downforce wing front 1 Monitor", {GATE_WINDOW},
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    own = [r for r in reasons if r.target == monitor.name]
+    assert len(own) == 1
+    assert "window adequacy gate." in own[0].message
+    assert "gates." not in own[0].message
+
+
+def test_c3_a_non_primary_monitor_with_no_failed_gates_gets_no_rolled_up_reason():
+    monitor = _monitor_with_failed_gates(
+        "Downforce wing front 1 Monitor", set(),
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    assert not any(r.target == monitor.name for r in reasons)
+
+
+def test_c3_marginal_passes_are_dropped_entirely_for_non_primary_monitors():
+    """A marginal *pass* used to get its own WARNING reason for every
+    monitor, primary or not. Marginality on a monitor that does not gate the
+    verdict is noise and must not appear at all."""
+    from starpost.core.convergence.models import GateResult
+    from starpost.core.convergence.steady import GATE_BAND
+
+    monitor = assess_monitor("Downforce wing front 1 Monitor",
+                             np.full(3000, 42.0), ConvergenceConfig(),
+                             is_primary=False)
+    monitor.gates = [
+        GateResult(name=g.name, passed=True, value=g.value, limit=g.limit,
+                  margin=(1.0 if g.name == GATE_BAND else g.margin),
+                  detail=g.detail)
+        for g in monitor.gates
+    ]
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    assert not any("marginally" in r.message.lower() for r in reasons)
+    assert not any(r.target == monitor.name for r in reasons)
+
+
+def test_c3_primary_monitors_keep_full_per_gate_detail_unrolled():
+    """The contrast case: the same three failed gates on a primary monitor
+    still produce one Reason each, with severity ERROR, exactly as before.
+
+    Asserted over the per-gate reasons rather than over every reason naming
+    this monitor: the helper builds its monitor from a constant series, so the
+    iterative estimator legitimately declines and contributes its own
+    ITERATIVE_ERROR_UNBOUNDED line as well. That extra reason is the honest
+    backstop working, not a roll-up leak, so it must not be counted here."""
+    from starpost.core.convergence.steady import GATE_BAND, GATE_DRIFT, GATE_ITERATIVE
+
+    monitor = _monitor_with_failed_gates(
+        "Drag", {GATE_DRIFT, GATE_BAND, GATE_ITERATIVE}, is_primary=True,
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    per_gate = [r for r in reasons
+                if r.target == monitor.name and "fails the" in r.message]
+    assert len(per_gate) == 3
+    assert all(r.severity is Severity.ERROR for r in per_gate)
+    assert all(r.suggested_action for r in per_gate)
+    # Each failed gate is named individually rather than summarised together.
+    for gate in (GATE_DRIFT, GATE_BAND, GATE_ITERATIVE):
+        assert sum(gate in r.message for r in per_gate) == 1, gate
+
+
+def test_c3_marginal_passes_are_still_reported_for_primary_monitors():
+    from starpost.core.convergence.models import GateResult
+    from starpost.core.convergence.steady import GATE_BAND
+
+    monitor = assess_monitor("Drag", np.full(3000, 42.0), ConvergenceConfig(),
+                             is_primary=True)
+    monitor.gates = [
+        GateResult(name=g.name, passed=True, value=g.value, limit=g.limit,
+                  margin=(1.0 if g.name == GATE_BAND else g.margin),
+                  detail=g.detail)
+        for g in monitor.gates
+    ]
+    reasons = build_reasons(ConvergenceState.CONVERGING, [], [monitor], [],
+                            ConvergenceConfig())
+    assert any("marginally" in r.message.lower() and r.target == "Drag"
+              for r in reasons)
+
+
+def test_c3_end_to_end_reason_count_stays_low_on_a_large_non_primary_set():
+    """The reproduction shape from the review: one aggregate primary monitor
+    plus 35 failing per-element non-primary siblings. Before the fix this
+    produced dozens of reasons for the non-primary monitors alone (one per
+    failed gate, plus marginal-pass noise); after the fix, at most one
+    Reason per non-primary monitor."""
+    n, window = 3000, 600
+    eps = ConvergenceConfig().tolerance_fraction * 100.0
+    drifting = 100.0 + (4.0 * eps / window) * np.arange(n, dtype=float)
+    names = ["Downforce ALL Monitor"] + [
+        f"Downforce wing front {i} Monitor" for i in range(1, 36)
+    ]
+    plots = [MonitorPlot(
+        name="Force plots", kind=PlotKind.FORCE,
+        series=[PlotSeries(name=names[0], x=list(map(float, range(n))),
+                           y=qoi_with_geometric_decay(n).tolist())]
+              + [PlotSeries(name=name, x=list(map(float, range(n))),
+                            y=drifting.tolist()) for name in names[1:]],
+    ), MonitorPlot(
+        name="Residuals", kind=PlotKind.RESIDUAL,
+        series=[PlotSeries(name="Continuity", x=list(map(float, range(n))),
+                           y=healthy_residual(n).tolist())],
+    )]
+    groups = [PropertyGroup(section="continuum", name="Physics 1",
+                            entries=[("models", "Steady; Segregated Flow")]),
+             PropertyGroup(section="convergence", name="",
+                          entries=[("precision", "double"),
+                                   ("residual_normalization", "auto")])]
+    result = SimResult(sim_path="/tmp/big.sim", plots=plots,
+                       properties=SimProperties(groups=groups))
+    a = assess(result, ConvergenceConfig(), CLASSIFICATION)
+    non_primary_names = {m.name for m in a.monitors if not m.is_primary}
+    assert len(non_primary_names) == 35
+    non_primary_reasons = [r for r in a.reasons if r.target in non_primary_names]
+    # At most one reason per non-primary monitor -- not one per failed gate.
+    assert len(non_primary_reasons) <= 35
+    counts: dict[str, int] = {}
+    for r in non_primary_reasons:
+        counts[r.target] = counts.get(r.target, 0) + 1
+    assert all(c == 1 for c in counts.values())
+    assert not any("marginally" in r.message.lower() for r in non_primary_reasons)
 
 
 # --- reasons ---------------------------------------------------------------
