@@ -4,9 +4,10 @@ Working notes for anyone picking up the Convergence tool. Covers what exists,
 what is known broken, which design decisions are load-bearing, and the traps
 that have already cost time.
 
-Current as of branch `feat/convergence-tool`, 33 commits ahead of `main`,
-**unpushed**. Full suite green (`python scripts/run_tests.py`, 40 files);
-220 analysis tests plus 26 GUI tests; `ruff check .` clean.
+Current as of branch `feat/convergence-bulk-primary`, which adds the Monitors
+list's bulk primary-selection buttons on top of `feat/convergence-tool` (merged
+to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 40
+files); `ruff check .` clean.
 
 ---
 
@@ -300,6 +301,15 @@ discarded.
 **Aggregate monitors are preferred as auto-primary.** With 36 force-keyword
 monitors, ticking them all made the headline hostage to the noisiest
 sub-component rather than `Downforce ALL`.
+
+**`MonitorConfig.is_primary` is tri-state, not a bool.** `None` means "no
+opinion — let `_select_auto_primary` decide". Collapsing it back to a plain
+`bool` silently kills the auto rule: the mere existence of a MonitorConfig
+would again read as an explicit override, so editing one monitor's tolerance
+would freeze its primary state as a side effect, and the Convergence window's
+"Reset to auto" button would have no value to write. `_auto_primary_reason`
+keys on the same distinction, so it would also stop naming monitors that carry
+an unrelated override.
 
 ---
 

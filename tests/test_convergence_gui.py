@@ -514,3 +514,93 @@ def test_failed_extractions_are_skipped(app):
     dlg = open_dialog(store)
     assert dlg._summary.rowCount() == 1
     dlg.close()
+
+
+def test_select_all_marks_every_monitor_primary(app):
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim")))
+    dlg._select_all_btn.click()
+    assessment = dlg._current()
+    assert {m.name for m in assessment.monitors if m.is_primary} == {
+        "Downforce ALL Monitor", "Downforce wing front 1 Monitor"}
+    dlg.close()
+
+
+def test_clear_leaves_no_primary_and_says_so_rather_than_erroring(app):
+    """Clearing every primary is a valid state, not a failure: it is the
+    midpoint of "clear, then tick the one I want". The verdict reports it
+    honestly instead of forcing a minimum selection."""
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim")))
+    dlg._clear_btn.click()
+    assert not any(m.is_primary for m in dlg._current().monitors)
+    assert "no primary QoI declared" in dlg._verdict_binding.text()
+    assert "Low" in dlg._verdict_confidence.text()
+    dlg.close()
+
+
+def test_reset_to_auto_restores_the_aggregate_preferred_choice_after_a_clear(app):
+    """Without a tri-state override there would be no way back to the tool's
+    own choice short of closing and reopening the window."""
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim")))
+    dlg._clear_btn.click()
+    assert not any(m.is_primary for m in dlg._current().monitors)
+    dlg._reset_btn.click()
+    assert {m.name for m in dlg._current().monitors if m.is_primary} == {
+        "Downforce ALL Monitor"}
+    dlg.close()
+
+
+def test_reset_to_auto_keeps_a_tolerance_override(app):
+    """Reset hands back the *primary* choice only. The button sits in a
+    primary-selection group, so silently discarding an unrelated per-monitor
+    tolerance edit would be scope the label does not advertise."""
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim")))
+    path = dlg._results[0].sim_path
+    assert dlg._monitor_table.item(0, 1).text() == "Downforce ALL Monitor"
+    dlg._monitor_table.item(0, 2).setText("0.2 %")
+    dlg._reset_btn.click()
+    assert dlg._monitor_configs[path]["Downforce ALL Monitor"].tolerance_fraction == (
+        pytest.approx(0.002))
+    aggregate = next(m for m in dlg._current().monitors
+                     if m.name == "Downforce ALL Monitor")
+    assert aggregate.tolerance_fraction == pytest.approx(0.002)
+    assert aggregate.is_primary is True
+    dlg.close()
+
+
+def test_a_bulk_click_re_assesses_once_not_once_per_monitor(app, monkeypatch):
+    """The buttons write the configuration and re-assess once. Driving the
+    checkboxes instead would emit itemChanged per row, and _on_monitor_edited
+    re-assesses *every* loaded data set — 2 monitors x 2 sims here, but 40 x
+    10 on a real workspace, i.e. 400 assessments for one click."""
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_aggregate_and_element_result("/tmp/a.sim"),
+                                 make_aggregate_and_element_result("/tmp/b.sim")))
+    calls = []
+    real_assess = module.assess
+
+    def counting_assess(*args, **kwargs):
+        calls.append(1)
+        return real_assess(*args, **kwargs)
+
+    monkeypatch.setattr(module, "assess", counting_assess)
+    dlg._select_all_btn.click()
+    # One assess() per loaded data set, for exactly one re-assessment pass.
+    assert len(calls) == 2
+    dlg.close()
+
+
+def test_the_bulk_buttons_are_disabled_with_no_data_sets_loaded(app):
+    dlg = open_dialog(store_with())
+    assert dlg._select_all_btn.isEnabled() is False
+    assert dlg._clear_btn.isEnabled() is False
+    assert dlg._reset_btn.isEnabled() is False
+    dlg.close()
+
+
+def test_the_bulk_buttons_are_enabled_once_a_data_set_is_loaded(app):
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    assert dlg._select_all_btn.isEnabled() is True
+    assert dlg._clear_btn.isEnabled() is True
+    assert dlg._reset_btn.isEnabled() is True
+    dlg.close()
