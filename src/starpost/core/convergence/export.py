@@ -12,6 +12,7 @@ heavy and the convergence package is reachable from the startup path.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Callable, Iterable
 
 from starpost.core.convergence.models import ConvergenceAssessment, MonitorAssessment
@@ -204,3 +205,54 @@ TABLES: tuple[tuple[str, str, Callable], ...] = (
     ("residuals", "Residuals", residuals_frame),
     ("reasons", "Reasons", reasons_frame),
 )
+
+
+def write_assessment(assessments: Iterable[ConvergenceAssessment],
+                     path: Path | str, fmt: str) -> list[Path]:
+    """Write the four tables and return the paths actually written.
+
+    ``fmt`` decides the packaging and the contents, not ``path``'s suffix: the
+    window takes it from the save dialog's selected filter, and a mismatched
+    typed extension must not silently change what is inside the file.
+
+    xlsx/ods get one file with four sheets. csv/tsv hold one table per file,
+    so they get four siblings named from the stem — ``study.csv`` becomes
+    ``study-summary.csv``, ``study-qoi-gates.csv``, ``study-residuals.csv``,
+    ``study-reasons.csv``. The name given is not itself written; four files
+    named as a set read better in a folder than one bare name plus three
+    suffixed ones, and the caller reports the real names back to the user.
+    """
+    fmt = fmt.lower()
+    if fmt not in SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported convergence export format: {fmt!r} "
+            f"(expected one of {', '.join(sorted(SUPPORTED_FORMATS))})"
+        )
+    assessments = list(assessments)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if fmt in _SHEET_FORMATS:
+        return _write_sheets(assessments, path, fmt)
+    return _write_delimited(assessments, path, fmt)
+
+
+def _write_sheets(assessments: list[ConvergenceAssessment], path: Path,
+                  fmt: str) -> list[Path]:
+    import pandas as pd
+
+    with pd.ExcelWriter(path, engine=_SHEET_FORMATS[fmt]) as writer:
+        for _slug, sheet, builder in TABLES:
+            builder(assessments).to_excel(writer, sheet_name=sheet, index=False)
+    return [path]
+
+
+def _write_delimited(assessments: list[ConvergenceAssessment], path: Path,
+                     fmt: str) -> list[Path]:
+    separator = _DELIMITED_FORMATS[fmt]
+    written: list[Path] = []
+    for slug, _sheet, builder in TABLES:
+        target = path.with_name(f"{path.stem}-{slug}.{fmt}")
+        builder(assessments).to_csv(target, sep=separator, index=False)
+        written.append(target)
+    return written

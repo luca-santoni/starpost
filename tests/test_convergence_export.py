@@ -178,3 +178,71 @@ def test_iterative_error_text_matches_the_three_cases():
     assert with_gate(0.00123, True) == "0.00123"
     assert with_gate(0.00123, False) == "0.00123 (largest change)"
     assert with_gate(math.inf, False) == "unbounded"
+
+
+# --- writing ---------------------------------------------------------------
+
+def test_csv_writes_four_suffixed_siblings(assessments, tmp_path):
+    """A delimited format holds one table, so the four tables become four
+    files named as a set."""
+    written = export.write_assessment(assessments, tmp_path / "study.csv", "csv")
+
+    assert [p.name for p in written] == [
+        "study-summary.csv", "study-qoi-gates.csv",
+        "study-residuals.csv", "study-reasons.csv",
+    ]
+    for path in written:
+        assert path.exists() and path.stat().st_size > 0
+    # The name the user typed is not itself written; the set is suffixed.
+    assert not (tmp_path / "study.csv").exists()
+
+
+def test_tsv_is_tab_delimited(assessments, tmp_path):
+    written = export.write_assessment(assessments, tmp_path / "study.tsv", "tsv")
+    header = written[0].read_text().splitlines()[0]
+    assert "\t" in header
+    assert header.startswith("Data set")
+
+
+def test_xlsx_writes_one_file_with_four_named_sheets(assessments, tmp_path):
+    import pandas as pd
+
+    written = export.write_assessment(assessments, tmp_path / "study.xlsx", "xlsx")
+
+    assert len(written) == 1
+    assert written[0] == tmp_path / "study.xlsx"
+    sheets = pd.read_excel(written[0], sheet_name=None, engine="openpyxl")
+    assert list(sheets) == ["Summary", "QoI gates", "Residuals", "Reasons"]
+    assert len(sheets["Summary"]) == 2
+    assert list(sheets["Summary"]["Data set"]) == ["a", "b"]
+
+
+def test_ods_writes_one_file_with_four_named_sheets(assessments, tmp_path):
+    import pandas as pd
+
+    written = export.write_assessment(assessments, tmp_path / "study.ods", "ods")
+
+    assert len(written) == 1
+    sheets = pd.read_excel(written[0], sheet_name=None, engine="odf")
+    assert list(sheets) == ["Summary", "QoI gates", "Residuals", "Reasons"]
+
+
+def test_an_unsupported_format_raises_without_writing_anything(assessments, tmp_path):
+    """Fail before writing rather than leaving a partial set on disk."""
+    with pytest.raises(ValueError, match="pdf"):
+        export.write_assessment(assessments, tmp_path / "study.pdf", "pdf")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_format_argument_wins_over_the_path_suffix(assessments, tmp_path):
+    """The window takes the format from the save dialog's selected filter, so
+    a mismatched typed extension must not silently change the contents."""
+    written = export.write_assessment(assessments, tmp_path / "study.ods", "csv")
+    assert [p.name for p in written][0] == "study-summary.csv"
+
+
+def test_exporting_no_data_sets_still_writes_headers(tmp_path):
+    """An empty export is an empty table, not a corrupt file."""
+    written = export.write_assessment([], tmp_path / "empty.csv", "csv")
+    assert len(written) == 4
+    assert written[0].read_text().strip().startswith("Data set,State,Confidence")
