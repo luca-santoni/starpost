@@ -62,7 +62,7 @@ def summary_frame(assessments: Iterable[ConvergenceAssessment]):
     columns = ["Data set", "State", "Confidence", "Confidence rule",
                "Convergence index", "Unbounded primary monitors",
                "Binding constraint", "Flags", "Segments", "Integrity errors",
-               "Tolerance (%)", "Required residual drop (decades)"]
+               "Tolerance (%, primary monitor)", "Required residual drop (decades)"]
     rows = []
     for a in assessments:
         thresholds = a.thresholds_used
@@ -77,7 +77,7 @@ def summary_frame(assessments: Iterable[ConvergenceAssessment]):
             "Flags": "; ".join(f.value for f in a.flags),
             "Segments": a.n_segments,
             "Integrity errors": "; ".join(a.integrity_errors),
-            "Tolerance (%)": _tolerance_percent(a),
+            "Tolerance (%, primary monitor)": _tolerance_percent(a),
             "Required residual drop (decades)": _threshold(thresholds, "d_min"),
         })
     return _frame(rows, columns)
@@ -99,10 +99,16 @@ def _tolerance_percent(assessment: ConvergenceAssessment):
     ``tolerance_fraction`` is not in ``thresholds_used`` — it is a
     per-monitor field on ``MonitorAssessment`` (``ConvergenceConfig`` allows a
     per-monitor override via ``MonitorConfig``), not one of the global
-    thresholds in ``THRESHOLD_PROVENANCE``. Read it off the primary monitor,
-    which is the one the verdict is judged against; fall back to the first
-    monitor if none is marked primary, and to None if there are no monitors
-    at all.
+    thresholds in ``THRESHOLD_PROVENANCE``. There is no single run-level
+    tolerance to report, because StarPost lets a monitor's row in the
+    Monitors table override the global preset. Read it off the primary
+    monitor instead: primary monitors are what gate the verdict, so that is
+    the resolved value that actually produced this row's state, index and
+    binding constraint. Reporting the global preset would be misleading —
+    an override on the primary monitor would make an overridden row look
+    comparable to a plain one, which is exactly what this column exists to
+    prevent. Fall back to the first monitor if none is marked primary, and
+    to None if the assessment has no monitors at all.
     """
     if not assessment.monitors:
         return None

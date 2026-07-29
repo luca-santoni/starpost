@@ -86,15 +86,44 @@ def test_summary_records_the_settings_the_assessment_used(assessments):
     is misleading precisely because it looks comparable, so the settings
     travel with the verdict."""
     frame = export.summary_frame(assessments)
-    assert frame.loc[0, "Tolerance (%)"] == pytest.approx(0.1)
+    assert frame.loc[0, "Tolerance (%, primary monitor)"] == pytest.approx(0.1)
     assert frame.loc[0, "Required residual drop (decades)"] == pytest.approx(3.0)
 
     strict = assess(_result("/tmp/a.sim"),
                     ConvergenceConfig(tolerance_fraction=5e-4, d_min=4.0),
                     CLASSIFICATION)
     other = export.summary_frame([strict])
-    assert other.loc[0, "Tolerance (%)"] == pytest.approx(0.05)
+    assert other.loc[0, "Tolerance (%, primary monitor)"] == pytest.approx(0.05)
     assert other.loc[0, "Required residual drop (decades)"] == pytest.approx(4.0)
+
+
+def test_the_summary_tolerance_follows_the_primary_monitor_override():
+    """The tolerance StarPost applies is per-monitor: the Monitors table's
+    Tolerance cell overrides the global preset. The summary reports the
+    primary monitor's resolved value because that is the number that produced
+    this row's verdict — reporting the global preset would let an overridden
+    row look comparable to a non-overridden one, which is the exact confusion
+    this column exists to prevent."""
+    from starpost.core.convergence.config import MonitorConfig
+
+    config = ConvergenceConfig(
+        tolerance_fraction=1e-3,
+        monitors={"Drag": MonitorConfig(is_primary=True, tolerance_fraction=5e-4)},
+    )
+    a = assess(_result("/tmp/a.sim"), config, CLASSIFICATION)
+    frame = export.summary_frame([a])
+    # 0.05%, the override that judged the primary monitor -- not the 0.1%
+    # global preset it superseded.
+    assert frame.loc[0, "Tolerance (%, primary monitor)"] == pytest.approx(0.05)
+
+
+def test_the_summary_tolerance_is_blank_when_there_are_no_monitors():
+    """An assessment with no QoI monitors has no tolerance to report, and must
+    say so rather than inventing one."""
+    a = assess(_result("/tmp/a.sim"), ConvergenceConfig(), CLASSIFICATION)
+    a.monitors = []
+    frame = export.summary_frame([a])
+    assert frame.loc[0, "Tolerance (%, primary monitor)"] is None
 
 
 def test_gates_has_one_row_per_monitor_across_data_sets(assessments):
