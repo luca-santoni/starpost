@@ -23,6 +23,7 @@ from starpost.core.convergence.models import (
     ConvergenceState,
     EquationClass,
     MonitorAssessment,
+    Provenance,
     Reason,
     ResidualState,
     RunMetadata,
@@ -464,6 +465,26 @@ def build_reasons(state: ConvergenceState, residuals,
                     if residual.iterations_to_target else None
                 ),
             ))
+
+    if metadata is not None and metadata.precision.known and \
+            metadata.precision.provenance is Provenance.DERIVED:
+        # The precision that sets the machine-precision floor is read from the
+        # server running the extraction, because nothing in STAR-CCM+ records
+        # the arithmetic of the run that actually produced the residuals. The
+        # two agree wherever one build is installed, which is the normal case
+        # — but MACHINE_PRECISION is the strongest terminal state this module
+        # awards, so the evidence it rests on is stated rather than implied.
+        reasons.append(Reason(
+            severity=Severity.INFO, target="run",
+            message=(f"Solver precision was taken as {metadata.precision.value} "
+                     "from the server that extracted this data set, which "
+                     "STAR-CCM+ does not record per simulation. That sets the "
+                     "arithmetic floor the residuals are judged against."),
+            suggested_action=("If this case was solved at a different "
+                              "precision from the one StarPost extracts with, "
+                              "treat any machine-precision verdict as "
+                              "unconfirmed."),
+        ))
 
     if (monitors and not residuals
             and AdvisoryFlag.NO_RESIDUAL_EVIDENCE not in flags):

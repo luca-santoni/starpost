@@ -600,10 +600,26 @@ public class extract_all extends StarMacro {
         return "";
     }
 
-    // [V] Verify against the local 2506 help. If the accessor is absent this
-    // returns "", and the tool reports PRECISION_UNKNOWN rather than guessing.
+    // Arithmetic precision of the server running this macro.
+    //
+    // isDoublePrecision() lives on star.common.SystemInformation, reached via
+    // Simulation.getSystemInformation() -- NOT on Simulation itself, which was
+    // the earlier guess and always returned null (verified against a real
+    // 20.04.007-R8 install: Simulation has 144 methods and none of them
+    // mention precision).
+    //
+    // What this measures is worth being exact about: SystemInformation
+    // describes the *currently running server*, so this is the precision of
+    // the extraction run, not of the run that solved the case. Nothing in the
+    // Java API records the latter -- a sweep of all 48,847 classes across the
+    // 143 STAR modules found isDoublePrecision in exactly one place, this one.
+    // The reader therefore treats the value as derived rather than extracted
+    // (see core/convergence/metadata.py) and says so in its reasons. Still
+    // "" when unresolvable, so the tool reports PRECISION_UNKNOWN rather than
+    // guessing.
     private String precisionOf(Simulation sim) {
-        Object dp = invokeQuiet(sim, "isDoublePrecision");
+        Object info = invokeQuiet(sim, "getSystemInformation");
+        Object dp = invokeQuiet(info, "isDoublePrecision");
         if (dp instanceof Boolean) {
             return ((Boolean) dp).booleanValue() ? "double" : "single";
         }
@@ -650,7 +666,13 @@ public class extract_all extends StarMacro {
         return found == null ? "" : found;
     }
 
-    // [V] The auto-normalization reference window (STAR-CCM+ default 5).
+    // The auto-normalization reference window (STAR-CCM+ default 5).
+    //
+    // getAutoNormalizeIndex() lives on star.base.report.PlotableMonitor, which
+    // ResidualMonitor inherits through ScalarMonitor. The earlier guesses --
+    // getNormalizationIterations and getNumberOfSamples -- exist nowhere in
+    // the API (verified across all 143 STAR modules), which is why this always
+    // came back empty and the reader silently fell back to its default of 5.
     private String autoNormSampleCountOf(Simulation sim) {
         try {
             Object mgr = invokeQuiet(sim, "getMonitorManager");
@@ -662,10 +684,7 @@ public class extract_all extends StarMacro {
                 if (!simpleName(m).contains("Residual")) {
                     continue;
                 }
-                Object n = invokeQuiet(m, "getNormalizationIterations");
-                if (n == null) {
-                    n = invokeQuiet(m, "getNumberOfSamples");
-                }
+                Object n = invokeQuiet(m, "getAutoNormalizeIndex");
                 if (n != null) {
                     return String.valueOf(n);
                 }

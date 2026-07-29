@@ -1589,3 +1589,40 @@ def test_the_high_confidence_rule_does_not_assert_a_sample_count_the_monitor_lac
                                      ConvergenceConfig())
     assert confidence is Confidence.HIGH
     assert "at least 30 effective samples" in rule
+
+
+# --- precision provenance is stated, not implied ---------------------------
+
+def test_a_derived_precision_says_where_it_came_from():
+    """The precision that sets the machine-precision floor is read off the
+    server running the extraction, because STAR-CCM+ records the solving run's
+    arithmetic nowhere. MACHINE_PRECISION is the strongest terminal state this
+    module awards, so the reasons name the evidence rather than letting a
+    derived value pass for a measured one."""
+    metadata = RunMetadata(
+        solver_regime=MetadataField("steady", Provenance.EXTRACTED),
+        solver_type=MetadataField("coupled", Provenance.EXTRACTED),
+        precision=MetadataField("double", Provenance.DERIVED),
+        residual_normalization=MetadataField("auto", Provenance.EXTRACTED),
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGED, [], [], [],
+                            ConvergenceConfig(), metadata)
+    own = [r for r in reasons if "Solver precision was taken as" in r.message]
+    assert len(own) == 1
+    assert own[0].severity is Severity.INFO
+    assert "double" in own[0].message
+    assert "extracted this data set" in own[0].message
+
+
+def test_an_extracted_precision_needs_no_such_caveat():
+    """If a future release does record the solving run's own precision, the
+    value stops being a proxy and the caveat must stop appearing with it."""
+    metadata = RunMetadata(
+        solver_regime=MetadataField("steady", Provenance.EXTRACTED),
+        solver_type=MetadataField("coupled", Provenance.EXTRACTED),
+        precision=MetadataField("double", Provenance.EXTRACTED),
+        residual_normalization=MetadataField("auto", Provenance.EXTRACTED),
+    )
+    reasons = build_reasons(ConvergenceState.CONVERGED, [], [], [],
+                            ConvergenceConfig(), metadata)
+    assert not [r for r in reasons if "Solver precision was taken as" in r.message]

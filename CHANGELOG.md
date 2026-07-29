@@ -80,6 +80,21 @@ All notable changes to StarPost are recorded here. Versions follow the
   already on screen — no STAR-CCM+ re-run and no re-analysis.
 
 ### Fixes
+- **Convergence tool: solver precision is captured again, so a well-converged
+  run can reach High confidence.** The extraction macro asked STAR-CCM+ for the
+  arithmetic precision using an accessor that does not exist, so every data set
+  came back with the precision unknown — which capped confidence at Medium and
+  permanently suppressed the machine-precision verdict. The value now comes
+  from the right place and is verified against a real solved case. Combined
+  with the window-adequacy fix below, the reference well-converged run reports
+  **converged at High confidence**, which nothing on real data had reached
+  before. One caveat, which the tool states in its own reasons rather than
+  leaving implicit: STAR-CCM+ records the precision of the *running* session,
+  not of the run that solved the case, so on a machine with both a single- and
+  a double-precision install the reported value describes whichever one
+  StarPost extracts with. A separate metadata value, the residual
+  auto-normalization window, is still not being captured; it falls back to
+  STAR-CCM+'s own default of 5 and affects only the residual reference level.
 - **Convergence tool: a well-settled run is no longer reported at Low
   confidence for a reason its own gate had already dismissed.** The
   window-adequacy gate has a relaxed route, because its "at least 20

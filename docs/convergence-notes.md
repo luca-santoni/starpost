@@ -163,20 +163,55 @@ that, deliberately.
 
 Ranked by what a user would notice.
 
-### 5.1 `precision` is never captured on a real install — `PRECISION_UNKNOWN` is permanent
+### 5.1 `precision` — RESOLVED. `auto_norm_sample_count` — still open
 
-The macro's probe `invokeQuiet(sim, "isDoublePrecision")` returns empty against
-real STAR-CCM+ 2506 — that accessor does not exist on `Simulation`. Confirmed
-on all ten exports. `auto_norm_sample_count` is likewise empty.
+**Precision is captured now.** The old probe called `isDoublePrecision` on
+`Simulation`, which has no such method (verified: `Simulation` exposes 144
+methods and not one mentions precision). The accessor lives on
+`star.common.SystemInformation`, reached via `Simulation
+.getSystemInformation()`. Found by sweeping all 48,847 classes across the 143
+STAR modules of a real 20.04.007-R8 install; `isDoublePrecision` appears in
+exactly two of them, and only one is reachable from a Simulation.
 
-Consequence: `PRECISION_UNKNOWN` on every data set, the machine-precision
-verdict (`CONVERGED_MACHINE`) is permanently suppressed, and confidence is
-capped at Medium by the missing-metadata rule.
+Verified live: extracting `SDM27-REDESIGN-UTONLY.sim` now yields
+`precision = 'double'`.
 
-The degradation is working as designed — no wrong answer, just a suppressed
-one. **Fix is one line in `propsConvergence` once the correct 2506 accessor is
-identified.** Needs the local Simcenter help; it could not be checked from
-here. Everything in that macro section is marked `[V]` for the same reason.
+**Read what it measures carefully.** `SystemInformation` describes the server
+*running the macro* — StarPost's extraction run — not the run that solved the
+case. Nothing in the Java API records the latter. The two agree wherever one
+build is installed (this machine has only the `-R8` double-precision build),
+which is the normal case. At a site with both builds installed StarPost never
+passes `-dp`, so it would extract in single and could report `single` for a
+case solved in double — which would grant a false `CONVERGED_MACHINE`, the
+strongest verdict this module makes. That is why the value is recorded with
+`Provenance.DERIVED` rather than `EXTRACTED` (see `metadata._proxy_field`) and
+why an INFO reason states where it came from. Do not "tidy" that to EXTRACTED.
+
+Effect on the ten reference exports: only `2500Iter_Bodywork` changes, and it
+reaches **CONVERGED / High** — the first High ever seen on real data. It took
+both this and the window-relaxation confidence fix; either alone leaves it at
+Medium.
+
+**`auto_norm_sample_count` is still empty, and the reason is not yet known.**
+The old probe called `getNormalizationIterations` / `getNumberOfSamples`, which
+exist nowhere in the API. The right accessor is `getAutoNormalizeIndex()` on
+`star.base.report.PlotableMonitor`, which `ResidualMonitor` inherits through
+`ScalarMonitor`. That is now what the macro calls — and it *still* returns
+empty on a real run.
+
+What makes this odd, and worth recording rather than re-deriving: the macro
+reaches those monitors through the same loop and the same
+`simpleName(m).contains("Residual")` filter that `residualNormalizationOf`
+uses, and that one succeeds (`residual_normalization = 'auto'`). Both
+`getNormalizeOption` and `getAutoNormalizeIndex` are public methods declared on
+the same public `PlotableMonitor`, called on the same objects. One works, one
+does not, so the call is presumably throwing inside `invokeQuiet`, which
+swallows it. Resolving it needs a diagnostic run that dumps the runtime class
+and the actual exception — not another guess at the name.
+
+Impact is second-order: the value sets how many leading samples form the
+residual reference `r_ref`, and the reader falls back to STAR-CCM+'s own
+default of 5.
 
 ### 5.2 A short record reads as `SLOW_DRIFT` when it is simply early
 

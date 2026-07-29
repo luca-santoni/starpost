@@ -8,9 +8,12 @@ field records where its value came from:
     derived    inferred from data already in the properties CSV
     absent     unavailable — the dependent verdict is suppressed, not guessed
 
-The precision field is deliberately never derived. Nothing already extracted
-implies the build precision, and defaulting it to double would permanently
-misclassify every single-precision run as STALLED.
+The precision field is never *guessed*: defaulting it to double would
+permanently misclassify every single-precision run as STALLED. It is, however,
+now derived rather than extracted — the macro can read the arithmetic of the
+server running the extraction, which stands in for the arithmetic of the run
+that solved the case. See ``_proxy_field`` for why that distinction is
+recorded rather than glossed over.
 """
 from __future__ import annotations
 
@@ -56,6 +59,22 @@ def _field(props: Optional[SimProperties], key: str,
     return _ABSENT
 
 
+def _proxy_field(props: Optional[SimProperties], key: str) -> MetadataField:
+    """A value the macro did read, but which only stands in for the quantity
+    we actually want — so it is DERIVED rather than EXTRACTED.
+
+    Precision is the case this exists for. ``SystemInformation
+    .isDoublePrecision()`` reports the arithmetic of the server *running the
+    extraction*, and what the assessment needs is the arithmetic of the run
+    that produced the residuals. Nothing in the STAR-CCM+ Java API records the
+    latter. The two agree wherever one build is installed, which is the normal
+    case, so the value is worth having — but it is inferred from a proxy, and
+    the provenance has to say that rather than implying the solve was read
+    directly."""
+    value = _extracted(props, key)
+    return MetadataField(value, Provenance.DERIVED) if value else _ABSENT
+
+
 def _model_text(props: Optional[SimProperties]) -> str:
     """Every continuum's enabled-models list, lowercased and concatenated."""
     if props is None:
@@ -99,15 +118,20 @@ def read_metadata(props: Optional[SimProperties]) -> RunMetadata:
     "Steady"/"Implicit Unsteady" and "Segregated Flow"/"Coupled Flow" — reliable
     enough to branch the whole analysis on."""
     models = _model_text(props)
+    # int(float(...)) rather than a bare int(), matching _int above: the macro
+    # emits whatever String.valueOf gives for the accessor's return, and a
+    # "5.0" would otherwise fall back to the default instead of parsing. Until
+    # this probe was fixed the value was always empty, so the difference never
+    # showed.
     sample_count = _extracted(props, "auto_norm_sample_count")
     try:
-        auto_norm = int(sample_count) if sample_count else 5
-    except ValueError:
+        auto_norm = int(float(sample_count)) if sample_count else 5
+    except (TypeError, ValueError):
         auto_norm = 5
     return RunMetadata(
         solver_regime=_field(props, "solver_regime", _match(models, _REGIME_KEYWORDS)),
         solver_type=_field(props, "solver_type", _match(models, _SOLVER_TYPE_KEYWORDS)),
-        precision=_field(props, "precision"),
+        precision=_proxy_field(props, "precision"),
         residual_normalization=_field(props, "residual_normalization"),
         auto_norm_sample_count=auto_norm,
         cell_count=_int(props, "mesh", "cell_count"),
