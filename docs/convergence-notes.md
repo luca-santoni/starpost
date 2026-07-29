@@ -383,8 +383,8 @@ scope by decision, not oversight:
   (`OSCILLATORY_SUSPECTED`: no drift, wide band) but there is no periodogram and
   no `CONVERGED_OSCILLATORY` state.
 - **`NONPHYSICAL` sentinel bounds** — needs user-supplied physical limits.
-- **Export of the assessment** and the evidence plot with the trailing window
-  shaded.
+- **The evidence plot** with the trailing window shaded. (Export of the
+  assessment itself is now implemented — see `core/convergence/export.py`.)
 - **Restart detection is heuristic** — index resets are caught; a restart that
   continued the iteration count monotonically is not.
 

@@ -10,7 +10,7 @@ binding constraint — the one string that tells the engineer what to do next.
 """
 from __future__ import annotations
 
-import math
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
@@ -19,11 +19,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QTableWidget,
@@ -41,8 +43,7 @@ from starpost.core.convergence.config import (
     ConvergenceConfig,
     MonitorConfig,
 )
-from starpost.core.convergence.steady import GATE_ITERATIVE
-
+from starpost.core.convergence.export import iterative_error_text, write_assessment
 _PRESET_LABELS = {
     "Screening (0.1%)": TOLERANCE_PRESETS["screening"],
     "Production (0.05%)": TOLERANCE_PRESETS["production"],
@@ -62,6 +63,16 @@ _GATE_COLUMNS = ("Monitor", "Primary", "Mean", "Band (95%)", "Drift",
 # the duration. Long enough to swallow a burst of typing, short enough that a
 # deliberate single edit still feels immediate.
 _SPIN_DEBOUNCE_MS = 250
+
+# Save-dialog filters, mapped to the format write_assessment expects. The
+# selected filter decides the format — not the typed suffix — so a mismatch
+# cannot silently write one format's contents under another's name.
+_EXPORT_FILTERS = {
+    "CSV file (*.csv)": "csv",
+    "Tab-separated file (*.tsv)": "tsv",
+    "Excel workbook (*.xlsx)": "xlsx",
+    "OpenDocument spreadsheet (*.ods)": "ods",
+}
 
 
 class ConvergenceDialog(QDialog):
@@ -190,6 +201,20 @@ class ConvergenceDialog(QDialog):
         )
         self._reset_btn.clicked.connect(lambda: self._set_all_primary(None))
 
+        # Export sits with the data-set table it acts on — it writes every
+        # loaded data set, not the selected row, because the summary table is
+        # a cross-run comparison.
+        self._export_btn = QPushButton("Export assessment…")
+        self._export_btn.setToolTip(
+            "Write the assessment of every loaded data set to a table "
+            "(csv, tsv, xlsx or ods)."
+        )
+        self._export_btn.clicked.connect(self._on_export)
+
+        export_row = QHBoxLayout()
+        export_row.addWidget(self._export_btn)
+        export_row.addStretch(1)
+
         buttons = QHBoxLayout()
         for button in (self._select_all_btn, self._clear_btn, self._reset_btn):
             buttons.addWidget(button)
@@ -200,6 +225,7 @@ class ConvergenceDialog(QDialog):
         box.addLayout(form)
         box.addWidget(QLabel("Data sets"))
         box.addWidget(self._summary)
+        box.addLayout(export_row)
         box.addWidget(QLabel("Monitors"))
         box.addWidget(self._monitor_table)
         box.addLayout(buttons)
@@ -367,6 +393,7 @@ class ConvergenceDialog(QDialog):
                         # sim_path rather than by index, which can shift.
                         item.setData(Qt.ItemDataRole.UserRole, result.sim_path)
                     self._summary.setItem(row, column, item)
+            self._set_export_enabled(bool(self._results))
         finally:
             self._updating = False
 
@@ -380,6 +407,7 @@ class ConvergenceDialog(QDialog):
         self._residual_table.setRowCount(0)
         self._gate_table.setRowCount(0)
         self._set_bulk_buttons_enabled(False)
+        self._set_export_enabled(False)
 
     def _current(self):
         row = self._summary.currentRow()
@@ -544,6 +572,48 @@ class ConvergenceDialog(QDialog):
         for button in (self._select_all_btn, self._clear_btn, self._reset_btn):
             button.setEnabled(enabled)
 
+    def _set_export_enabled(self, enabled: bool) -> None:
+        self._export_btn.setEnabled(enabled)
+
+    def _on_export(self) -> None:
+        """Write every loaded data set's assessment to a table.
+
+        Reads the assessments already held — this never re-runs assess(). The
+        format comes from the dialog's selected filter rather than the typed
+        suffix, so a mismatch cannot silently write one format's contents
+        under another's name."""
+        if not self._results:
+            return
+        start = self._settings.default_output_dir or ""
+        if start:
+            start = str(Path(start) / "convergence-assessment.csv")
+        chosen, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export convergence assessment", start,
+            ";;".join(_EXPORT_FILTERS),
+        )
+        if not chosen:
+            return
+        fmt = _EXPORT_FILTERS.get(selected_filter, "csv")
+        path = Path(chosen)
+        if path.suffix.lower() != f".{fmt}":
+            path = path.with_suffix(f".{fmt}")
+
+        assessments = [self._assessments[r.sim_path] for r in self._results
+                       if r.sim_path in self._assessments]
+        try:
+            written = write_assessment(assessments, path, fmt)
+        except Exception as exc:      # noqa: BLE001 - surfaced to the user
+            QMessageBox.critical(
+                self, "Export failed",
+                f"Could not write the convergence assessment:\n\n{exc}",
+            )
+            return
+        names = "\n".join(p.name for p in written)
+        QMessageBox.information(
+            self, "Export complete",
+            f"Wrote {len(written)} file(s) to {written[0].parent}:\n\n{names}",
+        )
+
     def _on_monitor_edited(self, item: QTableWidgetItem) -> None:
         if self._updating:
             return
@@ -570,19 +640,10 @@ class ConvergenceDialog(QDialog):
 def _iterative_cell(monitor) -> str:
     """The QoI-gates table's 'Iterative error' cell.
 
-    ``monitor.iterative.u_iter`` is None whenever the geometric-tail estimator
-    declined, which is common (a settled monitor, or now, per the
-    Mann-Kendall check in ``steady.assess_monitor``, a creeping one). But the
-    iterative gate can still be the binding constraint, so showing a blank
-    there while the verdict names it as binding is confusing. Show the gate's
-    own value instead — the quantity actually tested against the tolerance —
-    and mark it when it is not the geometric-tail estimate."""
-    gate = next(g for g in monitor.gates if g.name == GATE_ITERATIVE)
-    if monitor.iterative.valid:
-        return f"{gate.value:.4g}"
-    if not math.isfinite(gate.value):
-        return "unbounded"
-    return f"{gate.value:.4g} (largest change)"
+    The rule itself lives in core/convergence/export.py so the window and the
+    exported table cannot drift apart — see iterative_error_text there for why
+    the gate's own value is shown rather than u_iter."""
+    return iterative_error_text(monitor)
 
 
 def _margin_cell(monitor) -> str:

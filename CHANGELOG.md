@@ -68,6 +68,16 @@ All notable changes to StarPost are recorded here. Versions follow the
   Reset keeps any tolerance and reference-scale edits; it restores the primary
   ticks only. Clearing every monitor is allowed and reports honestly — the
   verdict reads "no primary QoI declared" at Low confidence until you tick one.
+- **Convergence tool: export the assessment.** An *Export assessment…* button
+  under the Data sets table writes every loaded data set's verdict to a table,
+  in csv, tsv, xlsx or ods. Four tables come out: a summary row per data set
+  (state, confidence, convergence index, binding constraint, flags — plus the
+  tolerance and residual-drop the assessment used, so rows produced under
+  different settings can't be mistaken for comparable ones), the per-monitor
+  QoI gate numbers, residual health per equation, and the full reasons list
+  with its suggested actions. A spreadsheet gets the four as named sheets in
+  one file; csv and tsv get four files named as a set. Reads the assessment
+  already on screen — no STAR-CCM+ re-run and no re-analysis.
 
 ### Fixes
 - **Convergence tool: a well-settled run is no longer reported at Low

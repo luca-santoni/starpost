@@ -684,3 +684,91 @@ def test_a_discrete_edit_still_reassesses_immediately(app, monkeypatch):
     dlg._monitor_table.item(0, 0).setCheckState(Qt.CheckState.Checked)
     assert len(calls) == 3
     dlg.close()
+
+
+def test_the_export_button_follows_the_loaded_data_sets(app):
+    dlg = open_dialog(store_with())
+    assert dlg._export_btn.isEnabled() is False
+    dlg.close()
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    assert dlg._export_btn.isEnabled() is True
+    dlg.close()
+
+
+def test_exporting_writes_the_four_tables(app, monkeypatch, tmp_path):
+    """The window exports every loaded data set, not just the selected row:
+    the summary is a cross-run comparison."""
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim"),
+                                 make_result("/tmp/b.sim", drifting=True)))
+    target = tmp_path / "study.csv"
+    monkeypatch.setattr(
+        module.QFileDialog, "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(target), "CSV file (*.csv)")),
+    )
+    shown: list[str] = []
+    monkeypatch.setattr(module.QMessageBox, "information",
+                        staticmethod(lambda *a, **k: shown.append(a[2])))
+
+    dlg._on_export()
+
+    written = sorted(p.name for p in tmp_path.iterdir())
+    assert written == ["study-qoi-gates.csv", "study-reasons.csv",
+                       "study-residuals.csv", "study-summary.csv"]
+    # Parse rather than substring-match: a bare "a" appears in almost any CSV.
+    import csv as csv_module
+
+    with (tmp_path / "study-summary.csv").open() as fh:
+        rows = list(csv_module.DictReader(fh))
+    assert [r["Data set"] for r in rows] == ["a", "b"]
+    assert shown and "study-summary.csv" in shown[0]
+    dlg.close()
+
+
+def test_every_save_filter_maps_to_a_format_the_writer_supports():
+    """The dialog offers four filters and the writer accepts four formats;
+    a filter naming a format the writer rejects would fail only at the moment
+    the user tried to save."""
+    from starpost.core.convergence.export import SUPPORTED_FORMATS
+    from starpost.gui.views.convergence_dialog import _EXPORT_FILTERS
+
+    assert set(_EXPORT_FILTERS.values()) == set(SUPPORTED_FORMATS)
+
+
+def test_a_cancelled_save_dialog_writes_nothing(app, monkeypatch, tmp_path):
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    monkeypatch.setattr(module.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: ("", "")))
+    dlg._on_export()
+    assert list(tmp_path.iterdir()) == []
+    dlg.close()
+
+
+def test_an_export_failure_is_reported_rather_than_swallowed(app, monkeypatch,
+                                                             tmp_path):
+    """Silently failing an export is worse than failing slowly — the user
+    would believe they have a record they do not have."""
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    monkeypatch.setattr(
+        module.QFileDialog, "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(tmp_path / "x.csv"), "CSV file (*.csv)")),
+    )
+
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(module, "write_assessment", boom)
+    errors: list[str] = []
+    monkeypatch.setattr(module.QMessageBox, "critical",
+                        staticmethod(lambda *a, **k: errors.append(a[2])))
+
+    dlg._on_export()
+
+    assert errors and "disk full" in errors[0]
+    dlg.close()
