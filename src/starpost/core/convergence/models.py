@@ -207,6 +207,15 @@ class MonitorAssessment:
     # unreachable case where every one of the monitor's gates is unbounded.
     margin: Optional[float] = None
     binding_gate: str = ""
+    # Which route the window-adequacy gate took. True means the direct
+    # n_eff >= lambda_ind requirement was not met but the relaxed route was:
+    # the confidence half-width on the mean is well inside tolerance and the
+    # preceding equal-length block agrees (see steady.py). That matters beyond
+    # display, because n_eff is only ever a *proxy* for "is the mean known to
+    # within tolerance", and the relaxed route measures that quantity
+    # directly — so confidence_of must not turn round and cap the verdict on
+    # the proxy the gate has just set aside.
+    window_relaxed: bool = False
 
     @property
     def passed(self) -> bool:

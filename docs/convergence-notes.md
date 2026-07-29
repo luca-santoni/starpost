@@ -83,7 +83,7 @@ K-Omega SST, 40 monitors each). This is the current state:
 
 | sim | state | conf | index | binding |
 |---|---|---|---|---|
-| 2500Iter_Bodywork | CONVERGED | Low | 2.383 | Drag ALL: window adequacy |
+| 2500Iter_Bodywork | CONVERGED | Medium | 2.383 | Drag ALL: window adequacy |
 | FW-006-hood-tires | CONVERGING | Low | 0.261 | Downforce ALL: window adequacy |
 | Baseline-RW-18-heave | SLOW_DRIFT | Low | 0.009 | Downforce ALL: band |
 | SDM24 Rad-1-Shroud-Sus-v2 | STALLED | Low | 0.155 | Continuity: only 1.8 of 3 decades |
@@ -297,6 +297,18 @@ configuration. The rule is **exactly zero**, not a threshold: a 1e-5 threshold
 would silently discard a monitor whose values are legitimately small. **Never
 apply this to residuals** — `Sdr` sits at ~1e-6 in real data and would be
 discarded.
+
+**A relaxed window-gate pass is not re-punished in the confidence rule.**
+`n_eff >= lambda_ind` is only ever a *proxy* for "is the mean known to within
+tolerance", and the window gate's relaxed route measures that quantity
+directly because the proxy is unsatisfiable on a very smooth monitor. So
+`confidence_of` skips its `n_eff` floor for a monitor whose gate took that
+route (`MonitorAssessment.window_relaxed`). Without this the tool contradicted
+itself on the same number: `2500Iter_Bodywork`, the only CONVERGED run in the
+reference set, read "CONVERGED / Low — only 5 effective samples" while both its
+primary monitors passed that gate at margins of 4.40 and 2.38. The floor is
+untouched for a monitor that never needed the relaxation, and a barely-relaxed
+pass is still caught by the marginal-margin check.
 
 **Aggregate monitors are preferred as auto-primary.** With 36 force-keyword
 monitors, ticking them all made the headline hostage to the noisiest

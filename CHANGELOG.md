@@ -70,6 +70,20 @@ All notable changes to StarPost are recorded here. Versions follow the
   verdict reads "no primary QoI declared" at Low confidence until you tick one.
 
 ### Fixes
+- **Convergence tool: a well-settled run is no longer reported at Low
+  confidence for a reason its own gate had already dismissed.** The
+  window-adequacy gate has a relaxed route, because its "at least 20
+  independent samples" requirement is unsatisfiable on a very smooth monitor —
+  smoothness *is* high autocorrelation — and that route instead measures the
+  thing the requirement stands in for: whether the mean is known to well
+  inside tolerance, and whether the preceding stretch of the run agrees with
+  it. The confidence rule then applied the original sample-count floor
+  regardless, so a monitor that had just been forgiven on that number was
+  still marked down for it. On a real 2500-iteration export that produced
+  "converged, Low confidence — only 5 effective samples" while both of its
+  primary monitors cleared the gate with margins of 4.4 and 2.4. The floor
+  still applies in full to any monitor that did not need the relaxation, and a
+  monitor that only barely clears it is still reported as marginal.
 - **Convergence window: editing is no longer laggy.** Every edit — a checkbox,
   a tolerance keystroke, a residual-drop step — re-ran the full assessment of
   *every* loaded data set on the GUI thread. With ten data sets loaded that was
