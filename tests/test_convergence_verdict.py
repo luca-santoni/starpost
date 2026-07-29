@@ -1499,3 +1499,93 @@ def test_the_package_is_qt_free_and_never_reruns_star_ccm():
         assert "PySide6" not in text, f"{path.name} imports Qt"
         assert "pyqtgraph" not in text, f"{path.name} imports pyqtgraph"
         assert "starccm_runner" not in text, f"{path.name} reaches for the runner"
+
+
+# --- the confidence rule must respect the window gate's relaxed route ------
+#
+# The window-adequacy gate has a relaxed route because n_eff >= lambda_ind is
+# an unsatisfiable proxy on a very smooth monitor: smoothness *is* high
+# autocorrelation. That route substitutes a direct measurement of the quantity
+# the proxy stands for — the confidence half-width on the mean, plus agreement
+# with the preceding equal-length block. confidence_of applied the raw n_eff
+# floor regardless, so a monitor whose gate had just been forgiven on exactly
+# that number was still capped at Low over it.
+
+def _full_metadata() -> RunMetadata:
+    extracted = Provenance.EXTRACTED
+    return RunMetadata(
+        solver_regime=MetadataField("steady", extracted),
+        solver_type=MetadataField("coupled", extracted),
+        precision=MetadataField("double", extracted),
+        residual_normalization=MetadataField("auto", extracted),
+    )
+
+
+def _relaxed_route_monitor(n_eff: float, window_relaxed: bool) -> MonitorAssessment:
+    """A monitor that passes every gate comfortably, with its window-adequacy
+    route and effective-sample count forced. Built this way rather than from a
+    signal because the point under test is the confidence rule, not which
+    route a particular signal happens to take through steady.py."""
+    from starpost.core.convergence.models import GateResult
+
+    base = assess_monitor("Downforce ALL Monitor", np.full(3000, 42.0),
+                          ConvergenceConfig(), is_primary=True)
+    base.gates = [GateResult(name=g.name, passed=True, value=g.value,
+                             limit=g.limit, margin=4.0, detail=g.detail)
+                  for g in base.gates]
+    base.margin = 4.0
+    base.n_eff = n_eff
+    base.window_relaxed = window_relaxed
+    return base
+
+
+def test_a_relaxed_window_pass_is_not_then_punished_for_its_low_n_eff():
+    """Regression for the real 2500Iter_Bodywork export — the only CONVERGED
+    run in the reference set — which read "CONVERGED / Low — only 5 effective
+    samples" while both of its primary monitors passed the window gate via the
+    relaxed route at margins of 4.40 and 2.38."""
+    from starpost.core.convergence.verdict import confidence_of
+
+    monitor = _relaxed_route_monitor(n_eff=4.7, window_relaxed=True)
+    confidence, rule = confidence_of(_full_metadata(), [], [monitor], [],
+                                     ConvergenceConfig())
+    assert "only 5 effective samples" not in rule
+    assert confidence is not Confidence.LOW
+    # With complete metadata and every gate clear, nothing is left to cap it.
+    assert confidence is Confidence.HIGH
+
+
+def test_a_monitor_that_never_needed_the_relaxation_keeps_the_n_eff_floor():
+    """The floor is not being deleted. A monitor whose window gate did *not*
+    take the relaxed route has had no direct measurement substituted for the
+    proxy, so too few effective samples still caps confidence at Low."""
+    from starpost.core.convergence.verdict import confidence_of
+
+    monitor = _relaxed_route_monitor(n_eff=4.7, window_relaxed=False)
+    confidence, rule = confidence_of(_full_metadata(), [], [monitor], [],
+                                     ConvergenceConfig())
+    assert "only 5 effective samples" in rule
+    assert confidence is Confidence.LOW
+
+
+def test_the_high_confidence_rule_does_not_assert_a_sample_count_the_monitor_lacks():
+    """The rule string is the tool's audit trail (see confidence_of's own
+    docstring), and export.summary_frame writes it to disk beside a gates row
+    showing the real N_eff. A relaxed monitor with n_eff far below n_eff_min
+    must not have the High rule claim '30 effective samples' it does not
+    have; the rule must instead name the monitor that took the relaxation. A
+    monitor that cleared the floor normally must still see that claim."""
+    from starpost.core.convergence.verdict import confidence_of
+
+    relaxed_monitor = _relaxed_route_monitor(n_eff=4.5, window_relaxed=True)
+    confidence, rule = confidence_of(_full_metadata(), [], [relaxed_monitor], [],
+                                     ConvergenceConfig())
+    assert confidence is Confidence.HIGH
+    assert "at least 30 effective samples" not in rule
+    assert "Downforce ALL Monitor" in rule
+
+    ordinary_monitor = _relaxed_route_monitor(n_eff=600.0, window_relaxed=False)
+    confidence, rule = confidence_of(_full_metadata(), [], [ordinary_monitor], [],
+                                     ConvergenceConfig())
+    assert confidence is Confidence.HIGH
+    assert "at least 30 effective samples" in rule

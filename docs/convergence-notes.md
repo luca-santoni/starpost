@@ -4,9 +4,9 @@ Working notes for anyone picking up the Convergence tool. Covers what exists,
 what is known broken, which design decisions are load-bearing, and the traps
 that have already cost time.
 
-Current as of branch `feat/convergence-bulk-primary`, which adds the Monitors
+Current as of branch `feat/convergence-export`, which adds the Monitors
 list's bulk primary-selection buttons on top of `feat/convergence-tool` (merged
-to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 40
+to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 41
 files); `ruff check .` clean.
 
 ---
@@ -83,7 +83,7 @@ K-Omega SST, 40 monitors each). This is the current state:
 
 | sim | state | conf | index | binding |
 |---|---|---|---|---|
-| 2500Iter_Bodywork | CONVERGED | Low | 2.383 | Drag ALL: window adequacy |
+| 2500Iter_Bodywork | CONVERGED | Medium | 2.383 | Drag ALL: window adequacy |
 | FW-006-hood-tires | CONVERGING | Low | 0.261 | Downforce ALL: window adequacy |
 | Baseline-RW-18-heave | SLOW_DRIFT | Low | 0.009 | Downforce ALL: band |
 | SDM24 Rad-1-Shroud-Sus-v2 | STALLED | Low | 0.155 | Continuity: only 1.8 of 3 decades |
@@ -242,6 +242,11 @@ Recorded during development, deliberately not fixed:
   collide. Not seen in real data.
 - `binding_constraint` on a `CONVERGED` run names the *tightest passing* gate.
   Informative, but the word "binding" implies something is blocking.
+- `export.py` `iterative_error_text` looks up its gate with an unguarded
+  `next(...)`, matching the long-standing pattern in `verdict._gate`, so a
+  hand-built `MonitorAssessment` lacking that gate would raise
+  `StopIteration`. Unreachable via `assess_monitor`, which always produces
+  all five gates.
 
 ---
 
@@ -297,6 +302,18 @@ configuration. The rule is **exactly zero**, not a threshold: a 1e-5 threshold
 would silently discard a monitor whose values are legitimately small. **Never
 apply this to residuals** — `Sdr` sits at ~1e-6 in real data and would be
 discarded.
+
+**A relaxed window-gate pass is not re-punished in the confidence rule.**
+`n_eff >= lambda_ind` is only ever a *proxy* for "is the mean known to within
+tolerance", and the window gate's relaxed route measures that quantity
+directly because the proxy is unsatisfiable on a very smooth monitor. So
+`confidence_of` skips its `n_eff` floor for a monitor whose gate took that
+route (`MonitorAssessment.window_relaxed`). Without this the tool contradicted
+itself on the same number: `2500Iter_Bodywork`, the only CONVERGED run in the
+reference set, read "CONVERGED / Low — only 5 effective samples" while both its
+primary monitors passed that gate at margins of 4.40 and 2.38. The floor is
+untouched for a monitor that never needed the relaxation, and a barely-relaxed
+pass is still caught by the marginal-margin check.
 
 **Aggregate monitors are preferred as auto-primary.** With 36 force-keyword
 monitors, ticking them all made the headline hostage to the noisiest
@@ -371,8 +388,8 @@ scope by decision, not oversight:
   (`OSCILLATORY_SUSPECTED`: no drift, wide band) but there is no periodogram and
   no `CONVERGED_OSCILLATORY` state.
 - **`NONPHYSICAL` sentinel bounds** — needs user-supplied physical limits.
-- **Export of the assessment** and the evidence plot with the trailing window
-  shaded.
+- **The evidence plot** with the trailing window shaded. (Export of the
+  assessment itself is now implemented — see `core/convergence/export.py`.)
 - **Restart detection is heuristic** — index resets are caught; a restart that
   continued the iteration count monotonically is not.
 

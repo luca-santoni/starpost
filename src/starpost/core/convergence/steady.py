@@ -396,4 +396,5 @@ def assess_monitor(name: str, y: np.ndarray, config,
         gates=gates,
         margin=margin,
         binding_gate=binding.name,
+        window_relaxed=window_relaxed,
     )

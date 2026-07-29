@@ -287,10 +287,25 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
         medium.append(f"series dropped during preconditioning ({dropped})")
 
     for monitor in primary:
-        if monitor.n_eff < config.n_eff_floor:
-            low.append(f"{monitor.name}: only {monitor.n_eff:.0f} effective samples")
-        elif monitor.n_eff < config.n_eff_min:
-            medium.append(f"{monitor.name}: {monitor.n_eff:.0f} effective samples")
+        # n_eff is a *proxy* for "is the mean known to within tolerance". When
+        # the window gate took its relaxed route it measured that quantity
+        # directly (confidence half-width on the mean, plus agreement with the
+        # preceding block) precisely because the proxy is unsatisfiable on a
+        # very smooth monitor — smoothness is high autocorrelation. Re-applying
+        # the proxy here contradicted the gate on the same number: the real
+        # 2500Iter_Bodywork export read "CONVERGED / Low — only 5 effective
+        # samples" while both its primary monitors passed that gate at margins
+        # of 4.40 and 2.38. The gate remains the arbiter of window adequacy;
+        # if it passed only barely, the marginal-margin check below still
+        # catches it, and a monitor that never needed the relaxation keeps the
+        # floor in full.
+        if not monitor.window_relaxed:
+            if monitor.n_eff < config.n_eff_floor:
+                low.append(
+                    f"{monitor.name}: only {monitor.n_eff:.0f} effective samples")
+            elif monitor.n_eff < config.n_eff_min:
+                medium.append(
+                    f"{monitor.name}: {monitor.n_eff:.0f} effective samples")
         if monitor.n_window < config.window_min:
             low.append(f"{monitor.name}: window shorter than {config.window_min}")
         if (monitor.margin is not None
@@ -322,9 +337,15 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
         return Confidence.LOW, "Low — " + "; ".join(low)
     if medium:
         return Confidence.MEDIUM, "Medium — " + "; ".join(medium)
+    relaxed = [m.name for m in primary if m.window_relaxed]
+    if relaxed:
+        samples = ("the mean of " + ", ".join(relaxed) + " known to well "
+                   "inside tolerance (window-adequacy relaxation)")
+    else:
+        samples = f"at least {config.n_eff_min:.0f} effective samples"
     return Confidence.HIGH, (
         "High — metadata complete, at least one primary QoI, "
-        f"at least {config.n_eff_min:.0f} effective samples, no marginal gate"
+        f"{samples}, no marginal gate"
     )
 
 

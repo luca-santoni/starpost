@@ -68,8 +68,32 @@ All notable changes to StarPost are recorded here. Versions follow the
   Reset keeps any tolerance and reference-scale edits; it restores the primary
   ticks only. Clearing every monitor is allowed and reports honestly — the
   verdict reads "no primary QoI declared" at Low confidence until you tick one.
+- **Convergence tool: export the assessment.** An *Export assessment…* button
+  under the Data sets table writes every loaded data set's verdict to a table,
+  in csv, tsv, xlsx or ods. Four tables come out: a summary row per data set
+  (state, confidence, convergence index, binding constraint, flags — plus the
+  tolerance and residual-drop the assessment used, so rows produced under
+  different settings can't be mistaken for comparable ones), the per-monitor
+  QoI gate numbers, residual health per equation, and the full reasons list
+  with its suggested actions. A spreadsheet gets the four as named sheets in
+  one file; csv and tsv get four files named as a set. Reads the assessment
+  already on screen — no STAR-CCM+ re-run and no re-analysis.
 
 ### Fixes
+- **Convergence tool: a well-settled run is no longer reported at Low
+  confidence for a reason its own gate had already dismissed.** The
+  window-adequacy gate has a relaxed route, because its "at least 20
+  independent samples" requirement is unsatisfiable on a very smooth monitor —
+  smoothness *is* high autocorrelation — and that route instead measures the
+  thing the requirement stands in for: whether the mean is known to well
+  inside tolerance, and whether the preceding stretch of the run agrees with
+  it. The confidence rule then applied the original sample-count floor
+  regardless, so a monitor that had just been forgiven on that number was
+  still marked down for it. On a real 2500-iteration export that produced
+  "converged, Low confidence — only 5 effective samples" while both of its
+  primary monitors cleared the gate with margins of 4.4 and 2.4. The floor
+  still applies in full to any monitor that did not need the relaxation, and a
+  monitor that only barely clears it is still reported as marginal.
 - **Convergence window: editing is no longer laggy.** Every edit — a checkbox,
   a tolerance keystroke, a residual-drop step — re-ran the full assessment of
   *every* loaded data set on the GUI thread. With ten data sets loaded that was
