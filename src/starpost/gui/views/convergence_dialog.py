@@ -43,7 +43,12 @@ from starpost.core.convergence.config import (
     ConvergenceConfig,
     MonitorConfig,
 )
-from starpost.core.convergence.export import iterative_error_text, write_assessment
+from starpost.core.convergence.export import (
+    SUPPORTED_FORMATS,
+    iterative_error_text,
+    write_assessment,
+)
+
 _PRESET_LABELS = {
     "Screening (0.1%)": TOLERANCE_PRESETS["screening"],
     "Production (0.05%)": TOLERANCE_PRESETS["production"],
@@ -595,8 +600,10 @@ class ConvergenceDialog(QDialog):
             return
         fmt = _EXPORT_FILTERS.get(selected_filter, "csv")
         path = Path(chosen)
-        if path.suffix.lower() != f".{fmt}":
+        if path.suffix.lower().lstrip(".") in SUPPORTED_FORMATS:
             path = path.with_suffix(f".{fmt}")
+        elif path.suffix.lower() != f".{fmt}":
+            path = path.with_name(f"{path.name}.{fmt}")
 
         assessments = [self._assessments[r.sim_path] for r in self._results
                        if r.sim_path in self._assessments]

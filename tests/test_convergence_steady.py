@@ -478,6 +478,31 @@ def test_gate_values_are_in_physical_units_not_fractions():
     assert gate(a, GATE_BAND).limit == pytest.approx(a.tolerance_abs)
 
 
+# --- window-adequacy relaxation: the producer side of window_relaxed ------
+
+def test_a_smooth_settled_monitor_passes_the_window_gate_via_the_relaxation():
+    """A slow, small oscillation about a settled mean: highly autocorrelated,
+    so n_eff falls far below lambda_ind, while the mean itself is pinned well
+    inside tolerance. That is the case the relaxed route exists for, and the
+    flag is what tells confidence_of not to re-apply the n_eff floor."""
+    y = 100.0 + 0.01 * np.sin(2 * np.pi * np.arange(3000) / 400.0)
+    m = assess_monitor("Downforce ALL", y, ConvergenceConfig(), is_primary=True)
+    assert m.window_relaxed is True
+    assert m.n_eff < ConvergenceConfig().lambda_ind
+    g = gate(m, GATE_WINDOW)
+    assert g.passed is True
+
+
+def test_an_ordinary_monitor_clears_the_window_gate_without_the_relaxation():
+    """Enough independent samples to satisfy the direct requirement, so the
+    relaxation is never consulted and the flag stays False."""
+    rng = np.random.default_rng(0)
+    y = 100.0 + rng.normal(scale=0.001, size=3000)
+    m = assess_monitor("Drag", y, ConvergenceConfig(), is_primary=True)
+    assert m.window_relaxed is False
+    assert m.n_eff >= ConvergenceConfig().lambda_ind
+
+
 def test_a_per_monitor_tolerance_override_is_honoured():
     config = ConvergenceConfig(
         monitors={"Drag": MonitorConfig(is_primary=True, tolerance_fraction=1e-6)}

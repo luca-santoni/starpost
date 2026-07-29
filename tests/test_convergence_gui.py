@@ -727,6 +727,29 @@ def test_exporting_writes_the_four_tables(app, monkeypatch, tmp_path):
     dlg.close()
 
 
+def test_a_typed_filename_containing_dots_keeps_its_stem(app, monkeypatch, tmp_path):
+    """Path.with_suffix replaces the last dotted segment, so a typed name
+    like 'study-2026.07.28' would have been silently truncated to
+    'study-2026.07.csv'. The dialog must recognise that '.28' is not a format
+    it knows and append the chosen extension instead of replacing it."""
+    import starpost.gui.views.convergence_dialog as module
+
+    dlg = open_dialog(store_with(make_result("/tmp/a.sim")))
+    target = tmp_path / "study-2026.07.28"
+    monkeypatch.setattr(
+        module.QFileDialog, "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(target), "CSV file (*.csv)")),
+    )
+    monkeypatch.setattr(module.QMessageBox, "information",
+                        staticmethod(lambda *a, **k: None))
+
+    dlg._on_export()
+
+    written = sorted(p.name for p in tmp_path.iterdir())
+    assert "study-2026.07.28-summary.csv" in written
+    dlg.close()
+
+
 def test_every_save_filter_maps_to_a_format_the_writer_supports():
     """The dialog offers four filters and the writer accepts four formats;
     a filter naming a format the writer rejects would fail only at the moment

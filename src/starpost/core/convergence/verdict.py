@@ -337,9 +337,15 @@ def confidence_of(metadata: RunMetadata, residuals, monitors: list[MonitorAssess
         return Confidence.LOW, "Low — " + "; ".join(low)
     if medium:
         return Confidence.MEDIUM, "Medium — " + "; ".join(medium)
+    relaxed = [m.name for m in primary if m.window_relaxed]
+    if relaxed:
+        samples = ("the mean of " + ", ".join(relaxed) + " known to well "
+                   "inside tolerance (window-adequacy relaxation)")
+    else:
+        samples = f"at least {config.n_eff_min:.0f} effective samples"
     return Confidence.HIGH, (
         "High — metadata complete, at least one primary QoI, "
-        f"at least {config.n_eff_min:.0f} effective samples, no marginal gate"
+        f"{samples}, no marginal gate"
     )
 
 

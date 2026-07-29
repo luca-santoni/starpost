@@ -84,14 +84,13 @@ def summary_frame(assessments: Iterable[ConvergenceAssessment]):
     return _frame(rows, columns)
 
 
-def _threshold(thresholds: dict, name: str, scale: float = 1.0):
+def _threshold(thresholds: dict, name: str):
     """Pull a value out of ``ConvergenceAssessment.thresholds_used``, whose
     entries are ``(value, provenance)`` pairs."""
     entry = thresholds.get(name)
     if entry is None:
         return None
-    value = entry[0] if isinstance(entry, tuple) else entry
-    return value * scale
+    return entry[0] if isinstance(entry, tuple) else entry
 
 
 def _tolerance_percent(assessment: ConvergenceAssessment):
@@ -110,6 +109,11 @@ def _tolerance_percent(assessment: ConvergenceAssessment):
     comparable to a plain one, which is exactly what this column exists to
     prevent. Fall back to the first monitor if none is marked primary, and
     to None if the assessment has no monitors at all.
+
+    This does not generalise to several primary monitors carrying different
+    overrides: the column shows only the first primary monitor's tolerance,
+    with no indication that the others differ. That is a real limitation of
+    this column, not handled here.
     """
     if not assessment.monitors:
         return None
@@ -123,7 +127,8 @@ def gates_frame(assessments: Iterable[ConvergenceAssessment]):
     columns = ["Data set", "Monitor", "Primary", "Mean", "Std",
                "Reference scale", "Scale source", "Tolerance (abs)",
                "Band (95%)", "Projected drift", "Two-halves delta",
-               "Iterative error", "N_eff", "D_N", "Window start", "Window end",
+               "Iterative error", "N_eff", "Window relaxed", "D_N",
+               "Window start", "Window end",
                "Window samples", "Margin", "Binding gate", "Passed"]
     rows = []
     for a in assessments:
@@ -142,6 +147,7 @@ def gates_frame(assessments: Iterable[ConvergenceAssessment]):
                 "Two-halves delta": m.two_halves_delta,
                 "Iterative error": iterative_error_text(m),
                 "N_eff": m.n_eff,
+                "Window relaxed": m.window_relaxed,
                 "D_N": m.d_n,
                 "Window start": m.window_start,
                 "Window end": m.window_end,
@@ -241,18 +247,23 @@ def _write_sheets(assessments: list[ConvergenceAssessment], path: Path,
                   fmt: str) -> list[Path]:
     import pandas as pd
 
+    # Build every frame before opening the writer: ExcelWriter.__exit__ closes
+    # unconditionally, so a failure partway through building the frames must
+    # not leave a plausible-looking partial workbook on disk.
+    frames = [(sheet, builder(assessments)) for _slug, sheet, builder in TABLES]
     with pd.ExcelWriter(path, engine=_SHEET_FORMATS[fmt]) as writer:
-        for _slug, sheet, builder in TABLES:
-            builder(assessments).to_excel(writer, sheet_name=sheet, index=False)
+        for sheet, frame in frames:
+            frame.to_excel(writer, sheet_name=sheet, index=False)
     return [path]
 
 
 def _write_delimited(assessments: list[ConvergenceAssessment], path: Path,
                      fmt: str) -> list[Path]:
     separator = _DELIMITED_FORMATS[fmt]
+    frames = [(path.with_name(f"{path.stem}-{slug}.{fmt}"), builder(assessments))
+              for slug, _sheet, builder in TABLES]
     written: list[Path] = []
-    for slug, _sheet, builder in TABLES:
-        target = path.with_name(f"{path.stem}-{slug}.{fmt}")
-        builder(assessments).to_csv(target, sep=separator, index=False)
+    for target, frame in frames:
+        frame.to_csv(target, sep=separator, index=False)
         written.append(target)
     return written

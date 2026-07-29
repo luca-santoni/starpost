@@ -1566,3 +1566,26 @@ def test_a_monitor_that_never_needed_the_relaxation_keeps_the_n_eff_floor():
                                      ConvergenceConfig())
     assert "only 5 effective samples" in rule
     assert confidence is Confidence.LOW
+
+
+def test_the_high_confidence_rule_does_not_assert_a_sample_count_the_monitor_lacks():
+    """The rule string is the tool's audit trail (see confidence_of's own
+    docstring), and export.summary_frame writes it to disk beside a gates row
+    showing the real N_eff. A relaxed monitor with n_eff far below n_eff_min
+    must not have the High rule claim '30 effective samples' it does not
+    have; the rule must instead name the monitor that took the relaxation. A
+    monitor that cleared the floor normally must still see that claim."""
+    from starpost.core.convergence.verdict import confidence_of
+
+    relaxed_monitor = _relaxed_route_monitor(n_eff=4.5, window_relaxed=True)
+    confidence, rule = confidence_of(_full_metadata(), [], [relaxed_monitor], [],
+                                     ConvergenceConfig())
+    assert confidence is Confidence.HIGH
+    assert "at least 30 effective samples" not in rule
+    assert "Downforce ALL Monitor" in rule
+
+    ordinary_monitor = _relaxed_route_monitor(n_eff=600.0, window_relaxed=False)
+    confidence, rule = confidence_of(_full_metadata(), [], [ordinary_monitor], [],
+                                     ConvergenceConfig())
+    assert confidence is Confidence.HIGH
+    assert "at least 30 effective samples" in rule

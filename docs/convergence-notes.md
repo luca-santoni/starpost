@@ -4,9 +4,9 @@ Working notes for anyone picking up the Convergence tool. Covers what exists,
 what is known broken, which design decisions are load-bearing, and the traps
 that have already cost time.
 
-Current as of branch `feat/convergence-bulk-primary`, which adds the Monitors
+Current as of branch `feat/convergence-export`, which adds the Monitors
 list's bulk primary-selection buttons on top of `feat/convergence-tool` (merged
-to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 40
+to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 41
 files); `ruff check .` clean.
 
 ---
@@ -242,6 +242,11 @@ Recorded during development, deliberately not fixed:
   collide. Not seen in real data.
 - `binding_constraint` on a `CONVERGED` run names the *tightest passing* gate.
   Informative, but the word "binding" implies something is blocking.
+- `export.py` `iterative_error_text` looks up its gate with an unguarded
+  `next(...)`, matching the long-standing pattern in `verdict._gate`, so a
+  hand-built `MonitorAssessment` lacking that gate would raise
+  `StopIteration`. Unreachable via `assess_monitor`, which always produces
+  all five gates.
 
 ---
 
