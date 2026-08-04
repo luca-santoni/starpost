@@ -245,7 +245,17 @@ def test_extract_macro_exports_convergence_metadata(tmp_path):
                 "time_step", "inner_iterations_per_timestep", "courant_number"):
         assert f'"{key}"' in text, key
     # Reached reflectively: these accessors move between releases.
+    # isDoublePrecision lives on SystemInformation, NOT on Simulation --
+    # calling it directly on the Simulation was the original defect and always
+    # returned null. Verified against a real 20.04.007-R8 install.
+    assert '"getSystemInformation"' in text
     assert '"isDoublePrecision"' in text
+    # The auto-normalization window: getAutoNormalizeIndex on PlotableMonitor,
+    # which ResidualMonitor inherits. The earlier guesses
+    # (getNormalizationIterations, getNumberOfSamples) exist nowhere in the API.
+    assert '"getAutoNormalizeIndex"' in text
+    assert '"getNormalizationIterations"' not in text
+    assert '"getNumberOfSamples"' not in text
     assert '"getMonitorManager"' in text
     assert '"getNormalizeOption"' in text
     assert '"getRawValue"' in text
@@ -281,7 +291,10 @@ def test_convergence_metadata_round_trips_into_run_metadata(tmp_path):
     )
     meta = read_metadata(_parse_properties(csv))
     assert meta.precision.value == "double"
-    assert meta.precision.provenance is Provenance.EXTRACTED
+    # Derived, not extracted: the macro reads the extraction server's
+    # arithmetic as a stand-in for the solving run's, which STAR-CCM+ does not
+    # record. See core/convergence/metadata._proxy_field.
+    assert meta.precision.provenance is Provenance.DERIVED
     assert meta.residual_normalization.value == "auto"
     assert meta.solver_regime.value == "steady"
     assert meta.auto_norm_sample_count == 5

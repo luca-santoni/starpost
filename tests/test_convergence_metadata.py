@@ -90,19 +90,40 @@ def test_extracted_convergence_section_beats_derivation():
     ))
     assert m.solver_regime.value == "implicit_unsteady"
     assert m.solver_regime.provenance is Provenance.EXTRACTED
+    # Precision is the exception: the macro supplies it, but what it reads is
+    # the extraction server's arithmetic standing in for the solve's, so it is
+    # marked derived. See metadata._proxy_field.
     assert m.precision.value == "double"
-    assert m.precision.provenance is Provenance.EXTRACTED
+    assert m.precision.provenance is Provenance.DERIVED
     assert m.residual_normalization.value == "auto"
     assert m.auto_norm_sample_count == 5
 
 
-def test_precision_is_never_derived():
-    """Nothing already in the properties CSV implies build precision, so it
-    stays absent until the macro supplies it."""
+def test_precision_is_never_guessed():
+    """Nothing else in the properties CSV implies the arithmetic precision, so
+    it stays absent until the macro supplies it. Defaulting it to double would
+    permanently misclassify every single-precision run as STALLED."""
     m = read_metadata(props(PropertyGroup(
         section="continuum", name="Physics 1", entries=[("models", "Steady")],
     )))
     assert m.precision.provenance is Provenance.ABSENT
+    assert m.precision.known is False
+
+
+def test_precision_is_derived_because_it_stands_in_for_the_solve():
+    """The macro reads isDoublePrecision() off the server running the
+    extraction; what the assessment needs is the arithmetic of the run that
+    produced the residuals, which STAR-CCM+ records nowhere. The two agree
+    wherever one build is installed, so the value is worth having — but it is
+    a proxy, and the provenance says so rather than implying the solve itself
+    was read. MACHINE_PRECISION is the strongest terminal state this module
+    awards; it should not rest on evidence that looks stronger than it is."""
+    m = read_metadata(props(PropertyGroup(
+        section="convergence", name="", entries=[("precision", "single")],
+    )))
+    assert m.precision.value == "single"
+    assert m.precision.provenance is Provenance.DERIVED
+    assert m.precision.known is True
 
 
 def test_empty_extracted_value_counts_as_absent():
@@ -113,6 +134,17 @@ def test_empty_extracted_value_counts_as_absent():
     )))
     assert m.precision.known is False
     assert m.precision.provenance is Provenance.ABSENT
+
+
+def test_auto_norm_sample_count_tolerates_a_float_spelling():
+    """The macro emits String.valueOf of whatever getAutoNormalizeIndex()
+    returns, so a "5.0" must parse rather than falling back to the default.
+    Until that probe was fixed this value was always empty, so the stricter
+    parse was never exercised."""
+    m = read_metadata(props(PropertyGroup(
+        section="convergence", name="", entries=[("auto_norm_sample_count", "8.0")],
+    )))
+    assert m.auto_norm_sample_count == 8
 
 
 def test_cell_count_and_iteration_are_read_as_integers():

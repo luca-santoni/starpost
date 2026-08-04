@@ -4,10 +4,13 @@ Working notes for anyone picking up the Convergence tool. Covers what exists,
 what is known broken, which design decisions are load-bearing, and the traps
 that have already cost time.
 
-Current as of branch `feat/convergence-export`, which adds the Monitors
-list's bulk primary-selection buttons on top of `feat/convergence-tool` (merged
-to `main` in d2cb6fa). Full suite green (`python scripts/run_tests.py`, 41
-files); `ruff check .` clean.
+Current as of `main` at `ed8a7f4`, plus the unmerged branch
+`fix/solver-precision-probe` (see §11). Full suite green
+(`python scripts/run_tests.py`, 41 files); `ruff check .` clean.
+
+**If you are picking this up on a different machine, read §10 first** — the
+validation method these notes lean on depends on data files that live outside
+the repo, and they will not be there.
 
 ---
 
@@ -79,11 +82,17 @@ Three principles from that design are load-bearing. Do not quietly undo them:
 ## 3. Validation against real data
 
 Ten real car-aero exports were run through the tool (steady coupled RANS,
-K-Omega SST, 40 monitors each). This is the current state:
+K-Omega SST, 40 monitors each). This is the current state.
+
+**The confidence column assumes precision is unknown**, i.e. these CSVs were
+exported before §5.1's fix and still carry an empty `precision`. Re-exporting
+them from the `.sim` files with the fixed macro moves `2500Iter_Bodywork` to
+**High** and leaves the other nine unchanged. Every state and index in the
+table is unaffected either way — those are the values to regress against.
 
 | sim | state | conf | index | binding |
 |---|---|---|---|---|
-| 2500Iter_Bodywork | CONVERGED | Medium | 2.383 | Drag ALL: window adequacy |
+| 2500Iter_Bodywork | CONVERGED | Medium* | 2.383 | Drag ALL: window adequacy |
 | FW-006-hood-tires | CONVERGING | Low | 0.261 | Downforce ALL: window adequacy |
 | Baseline-RW-18-heave | SLOW_DRIFT | Low | 0.009 | Downforce ALL: band |
 | SDM24 Rad-1-Shroud-Sus-v2 | STALLED | Low | 0.155 | Continuity: only 1.8 of 3 decades |
@@ -163,20 +172,55 @@ that, deliberately.
 
 Ranked by what a user would notice.
 
-### 5.1 `precision` is never captured on a real install — `PRECISION_UNKNOWN` is permanent
+### 5.1 `precision` — RESOLVED. `auto_norm_sample_count` — still open
 
-The macro's probe `invokeQuiet(sim, "isDoublePrecision")` returns empty against
-real STAR-CCM+ 2506 — that accessor does not exist on `Simulation`. Confirmed
-on all ten exports. `auto_norm_sample_count` is likewise empty.
+**Precision is captured now.** The old probe called `isDoublePrecision` on
+`Simulation`, which has no such method (verified: `Simulation` exposes 144
+methods and not one mentions precision). The accessor lives on
+`star.common.SystemInformation`, reached via `Simulation
+.getSystemInformation()`. Found by sweeping all 48,847 classes across the 143
+STAR modules of a real 20.04.007-R8 install; `isDoublePrecision` appears in
+exactly two of them, and only one is reachable from a Simulation.
 
-Consequence: `PRECISION_UNKNOWN` on every data set, the machine-precision
-verdict (`CONVERGED_MACHINE`) is permanently suppressed, and confidence is
-capped at Medium by the missing-metadata rule.
+Verified live: extracting `SDM27-REDESIGN-UTONLY.sim` now yields
+`precision = 'double'`.
 
-The degradation is working as designed — no wrong answer, just a suppressed
-one. **Fix is one line in `propsConvergence` once the correct 2506 accessor is
-identified.** Needs the local Simcenter help; it could not be checked from
-here. Everything in that macro section is marked `[V]` for the same reason.
+**Read what it measures carefully.** `SystemInformation` describes the server
+*running the macro* — StarPost's extraction run — not the run that solved the
+case. Nothing in the Java API records the latter. The two agree wherever one
+build is installed (this machine has only the `-R8` double-precision build),
+which is the normal case. At a site with both builds installed StarPost never
+passes `-dp`, so it would extract in single and could report `single` for a
+case solved in double — which would grant a false `CONVERGED_MACHINE`, the
+strongest verdict this module makes. That is why the value is recorded with
+`Provenance.DERIVED` rather than `EXTRACTED` (see `metadata._proxy_field`) and
+why an INFO reason states where it came from. Do not "tidy" that to EXTRACTED.
+
+Effect on the ten reference exports: only `2500Iter_Bodywork` changes, and it
+reaches **CONVERGED / High** — the first High ever seen on real data. It took
+both this and the window-relaxation confidence fix; either alone leaves it at
+Medium.
+
+**`auto_norm_sample_count` is still empty, and the reason is not yet known.**
+The old probe called `getNormalizationIterations` / `getNumberOfSamples`, which
+exist nowhere in the API. The right accessor is `getAutoNormalizeIndex()` on
+`star.base.report.PlotableMonitor`, which `ResidualMonitor` inherits through
+`ScalarMonitor`. That is now what the macro calls — and it *still* returns
+empty on a real run.
+
+What makes this odd, and worth recording rather than re-deriving: the macro
+reaches those monitors through the same loop and the same
+`simpleName(m).contains("Residual")` filter that `residualNormalizationOf`
+uses, and that one succeeds (`residual_normalization = 'auto'`). Both
+`getNormalizeOption` and `getAutoNormalizeIndex` are public methods declared on
+the same public `PlotableMonitor`, called on the same objects. One works, one
+does not, so the call is presumably throwing inside `invokeQuiet`, which
+swallows it. Resolving it needs a diagnostic run that dumps the runtime class
+and the actual exception — not another guess at the name.
+
+Impact is second-order: the value sets how many leading samples form the
+residual reference `r_ref`, and the reader falls back to STAR-CCM+'s own
+default of 5.
 
 ### 5.2 A short record reads as `SLOW_DRIFT` when it is simply early
 
@@ -400,13 +444,168 @@ of the scalar analogue used here. StarPost already owns the macro path.
 
 ---
 
-## 10. Environment notes (user's machine)
+## 10. Environment — and what a new machine has to re-establish
 
-- No system pip/venv; the venv is at `.venv/` and pip was bootstrapped via
-  `get-pip.py`. Use `.venv/bin/python` explicitly.
-- STAR-CCM+ is installed under `/opt/Siemens` and is **not on PATH**.
-- `/tmp` is a 16 GB tmpfs. It has been filled by Chrome temp files
-  (a single 15 GB `.com.google.Chrome.*` file), which breaks command output
-  redirection. Symptom: `ENOSPC` errors from tool calls. Workaround: redirect
-  command output to a file under `$HOME` and read it. Real fix: restart Chrome.
-- No GitHub push credentials — the branch is local only.
+Everything in this section is about the *development machine*, not the repo.
+None of it moves with a `git clone`.
+
+### 10.1 What breaks immediately on a new machine
+
+**The ten reference exports.** §3's table, and every "re-run all ten before
+believing the unit tests" instruction in these notes, depends on portable
+StarPost CSVs that were kept at `~/Downloads/temp output/` on the original
+machine. They are **not in the repo** (they are customer geometry, and large).
+Without them the validation method these notes prescribe does not exist.
+
+Re-establishing it is the first thing to do on a new machine, in order of
+preference:
+
+1. Copy the same ten CSVs across. They are the calibration set every threshold
+   in §7 was measured against; substituting different runs silently changes
+   what "unchanged" means.
+2. Failing that, export a fresh set from real solved cases via the Data tab and
+   **re-record §3's table from scratch**, marking it as a new baseline rather
+   than pretending it is comparable to the old one.
+3. Failing both, the unit tests still pass and still catch a lot — but §4 is
+   explicit that every one of the ten real runs found a defect the synthetic
+   tests had missed. Treat "unit tests green" as much weaker evidence than
+   these notes elsewhere assume.
+
+**The `.sim` files.** Eleven solved cases sat at `~/Downloads/sim files/`.
+These are what let a macro change be verified end to end (§11.2 did exactly
+that for the precision probe). Without at least one, any macro change is
+unverifiable beyond "the accessor exists in the jars".
+
+**The STAR-CCM+ install.** Was `/opt/Siemens/20.04.007-R8/`, **not on PATH**,
+and configured in StarPost via `starccm_path` in `settings.yaml`. Note the
+`-R8` suffix: that is the double-precision build, and it was the only one
+installed. That matters for §5.1 — on a machine with both builds present, the
+precision StarPost reports can differ from the precision a case was solved at.
+
+### 10.2 Local conventions that were machine-specific
+
+- No system pip/venv; the venv was at `.venv/` with pip bootstrapped via
+  `get-pip.py`, so commands used `.venv/bin/python` explicitly. On a machine
+  with a normal Python this is unnecessary — but check before assuming.
+- `/tmp` was a 16 GB tmpfs. It filled at least twice during development
+  (once from Chrome temp files, once losing the session scratch directory
+  mid-run). Two consequences worth keeping in mind anywhere: `ENOSPC` from
+  tool calls means check `df /tmp` before believing the error, and
+  `QPixmap.save()` returns `False` silently when its target directory has
+  vanished — a screenshot step can report success and write nothing, so check
+  the return value.
+
+### 10.3 Reading the STAR-CCM+ Java API without documentation
+
+§5.1 was resolved by reading the installed jars directly rather than the
+Simcenter help. The recipe, since it will be needed again:
+
+```bash
+JAVAP=<install>/jdk/*/bin/javap
+JAR=<install>/star/lib/java/platform/modules/ext/starbase.jar
+$JAVAP -cp "$JAR" star.common.Simulation | grep -i <thing>
+```
+
+To sweep for a name whose owning class is unknown, extract the module jars and
+grep the class files:
+
+```bash
+for j in <install>/star/lib/java/platform/modules/ext/*.jar; do
+  mkdir -p "$(basename $j .jar)" && (cd "$(basename $j .jar)" && unzip -qq -o "$j" '*.class')
+done
+grep -ral "<methodName>" .        # the -a is not optional
+```
+
+**The `-a` is the trap.** `grep -r` silently skips binary files, so a sweep
+without it returns zero matches for names that are definitely present. That
+produced a confident wrong "there is no such accessor anywhere" during the
+§5.1 investigation. **Always run a positive control** — grep for a name you
+know exists (`Simulation`, `getMonitorManager`) and confirm it returns
+non-zero — before trusting any negative result from this method.
+
+---
+
+## 11. State of play at the machine handover
+
+### 11.1 Unmerged work
+
+`fix/solver-precision-probe` (`5c54043`) was complete, tested and verified
+against a real run, but **not merged and not pushed** at handover — and §10 to
+§12 of this document were written on that same branch. So if you are reading
+these three sections at all, the branch survived. If §5.1 instead still
+describes precision as permanently unknown, the branch was lost in the move and
+the fix needs redoing; §5.1's history records what it changed and how the
+accessor was found.
+
+### 11.2 What was proposed and not built
+
+These were the ranked options at handover. Ranking is by user value, and the
+evidence behind each is in the section named.
+
+| # | change | value | effort | risk | see |
+|---|---|---|---|---|---|
+| 1 | **Evidence plot** — monitor history with the trailing window shaded and the tolerance band drawn. The one part of the assessment that still cannot leave the screen; also the fastest way for an engineer to sanity-check a verdict. | High | Medium | Low | §9 |
+| 2 | **`SLOW_DRIFT` on a too-short record** — a healthy run stopped early is labelled pathological. | Medium | Small–Med | **Medium** — a state-ladder change, and §4 records that this module's state changes have repeatedly been right on their reproduction and wrong one step outside it | §5.2 |
+| 3 | **Run-batch integration** — fold a convergence report into the toolbar wizard's `.zip`. Deliberately out of scope for the export work; touches `batch/run.py` and its profile plumbing. | Medium | Medium | Low | export design doc |
+| 4 | **`auto_norm_sample_count`** — still empty on a real run for reasons not yet understood. Needs a diagnostic macro run, not another guess at a name. | Low | Small once diagnosed | Low | §5.1 |
+| 5 | **Non-QoI monitors** — `Solver Iteration Elapsed Time Monitor` is assessed as an engineering quantity. Cannot gate anything, but adds rows and reasons. | Low | Small | Low | §5.4 |
+| 6 | **Convergence-window cold open** — ~2.1 s with ten data sets (the first uncached assessment pass). Per-edit lag is already fixed. | Low | Small | Low | §12 |
+| 7 | **Prose/PDF report per run** — considered during the export design and deferred; the app has no prose-document writer. | Low | Large | Low | export design doc |
+
+### 11.3 The diagnostic that `auto_norm_sample_count` needs
+
+Do not guess another accessor name — `getAutoNormalizeIndex` is confirmed
+present on `PlotableMonitor`, which `ResidualMonitor` inherits, and the macro
+already calls it. The open question is why it comes back empty when
+`getNormalizeOption`, declared on the *same class* and called on the *same
+objects* in the *same loop*, succeeds.
+
+One run of a macro that, for the first monitor whose simple name contains
+"Residual", prints: its runtime class name, the full `getClass().getMethods()`
+list, and the caught exception from `getAutoNormalizeIndex()` (rather than
+`invokeQuiet` swallowing it) will answer it outright. Everything needed is one
+`sim.println` in `autoNormSampleCountOf`.
+
+
+---
+
+## 12. Performance: what the responsiveness rests on
+
+Editing in the Convergence window used to re-run the full assessment of every
+loaded data set on the GUI thread, per edit. With ten data sets that was 1.7 s
+per checkbox tick, and because a spin box emits a change per keystroke, typing
+a four-digit tolerance ran four complete passes — close to seven seconds of
+frozen window. Two things fixed it, and both are load-bearing:
+
+**The pairwise statistics are memoised** (`stats.py`). `theil_sen_slope` and
+`mann_kendall` are O(n²) in the trailing window and together were 81% of a
+pass. Neither depends on the tolerance or residual-drop values being edited —
+verified across 207 monitors at 0.1%/3 decades versus 0.05%/6 decades, every
+statistic byte-identical — so that work was being repeated to produce the same
+numbers. A pass went 1725 ms → 135 ms.
+
+Three properties of that cache are deliberate:
+
+- **It memoises pure functions, and lives with them rather than in the GUI.**
+  Same input, same output, so there is nothing to invalidate and no way for it
+  to go stale. A cache in the dialog keyed on sim paths would have needed
+  invalidation logic and could have served a stale statistic after a reload.
+- **The key is the array's exact bytes** — not its identity, because every
+  pass rebuilds its arrays from the cached `SimResult` so identity would never
+  hit; and not a hash digest, because a collision would attribute one
+  monitor's trend to another.
+- **The cap has headroom on purpose** (4096 entries against ~62 per data set,
+  ~0.34 MB each). An LRU under a cyclic scan — and every pass walks the data
+  sets in the same order — drops to *zero* hits the moment the working set
+  exceeds the cap, rather than degrading gradually. Sizing it near the
+  expected workspace would be worse than useless.
+
+**The spin boxes debounce** (250 ms, `convergence_dialog.py`). Only the spin
+boxes: a preset choice, a checkbox and a bulk button are each one deliberate
+action with no burst to collapse, and a test pins that they stay immediate.
+`_flush_pending_reassess` exists so tests can run the queued pass without an
+event loop.
+
+Still outstanding: opening the window cold is ~2.1 s with ten data sets — the
+first, uncached pass. That is a one-time cost, not the per-edit lag that was
+reported, which is why it was left (see §11.2).
