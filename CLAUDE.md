@@ -77,6 +77,24 @@ STAR-CCM+ CLI instead of parsing them:
 stills). `data/portable.py` reads/writes the shareable per-sim CSV (the Data tab's
 export/import — re-loadable without STAR-CCM+).
 
+### Convergence assessment (`core/convergence/`)
+**Tools → Convergence** judges whether a solved *steady* run converged, and if not, why.
+Qt-free and STAR-CCM+-free: it reads cached `SimResult` data only and never re-invokes
+STAR-CCM+. `assess(result, config, classification)` in `__init__.py` is the **only**
+public entry — do not reimplement analysis in the GUI. Layers: `signals.py`
+(preconditioning) → `residuals.py` (health) → `iterative.py` (remaining error) →
+`steady.py` (five QoI gates) → `verdict.py` (state, confidence, reasons).
+`export.py` shapes an assessment into tables; `gui/views/convergence_dialog.py` is the
+window.
+
+**Before changing anything in this package, read `docs/convergence-notes.md`.** It is the
+handoff doc: which design decisions are load-bearing and must not be quietly undone, the
+recurring bug pattern that has produced five separate confident-wrong verdicts here (a
+fitted slope trusted without checking the fit explains anything), and the real-data
+validation set the thresholds were calibrated against. Unit tests passing is weaker
+evidence than usual in this package — every one of the ten real reference runs found a
+defect the synthetic tests had missed.
+
 ### Batch subsystem (`batch/`)
 Two distinct "batch" concepts — don't conflate them:
 - **Extraction batch** (`queue.py` `BatchWorker`): runs `Job`s (one `.sim` each)
@@ -121,3 +139,13 @@ appearance in the process table / argv is a **deliberate, accepted risk** — do
 - Startup latency matters: several imports are deliberately lazy (e.g. jinja2 in
   `macro_generator._get_env`, pandas). Keep heavy imports off the module top level unless
   they're already on the startup path.
+- Design docs and implementation plans live in `docs/superpowers/specs/` and
+  `docs/superpowers/plans/`, dated and named after the feature. Larger features have one
+  of each; they record why a design is shaped the way it is, which is usually the part
+  that is expensive to re-derive.
+- Reaching into the STAR-CCM+ Java API from the macro is reflective by necessity —
+  accessor names move between releases and a compile-time reference to a moved class
+  kills the whole extraction. When an accessor comes back empty, the name is the first
+  suspect: read it out of the installed jars with `javap` rather than guessing. The
+  recipe, and the `grep -a` trap that produced a confident wrong "no such method exists",
+  are in `docs/convergence-notes.md` §10.3.
