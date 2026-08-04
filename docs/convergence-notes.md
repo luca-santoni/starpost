@@ -457,6 +457,18 @@ StarPost CSVs that were kept at `~/Downloads/temp output/` on the original
 machine. They are **not in the repo** (they are customer geometry, and large).
 Without them the validation method these notes prescribe does not exist.
 
+**Keep them in a folder that is not `default_output_dir`.** On the original
+machine both were `~/Downloads/temp output/`, so an assessment export dropped
+`convergence-assessment-*.csv` straight in beside the ten reference files — and
+`read_sim_csv` then raises `not a StarPost data export` on the first one it
+globs, which reads like a regression in the tool rather than a stray file.
+Either point exports somewhere else or glob defensively:
+
+```python
+files = [p for p in sorted(ref_dir.glob("*.csv"))
+         if not p.name.startswith("convergence-assessment-")]
+```
+
 Re-establishing it is the first thing to do on a new machine, in order of
 preference:
 
